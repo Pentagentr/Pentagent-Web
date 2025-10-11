@@ -85,26 +85,44 @@ class RAGService:
             logger.info("RAG servis başlatılıyor...")
             
             # Environment variables'dan config oluştur
-            config = SearchConfig()
-            config.timeout = 60  # Timeout'u arttır (HuggingFace Space için)
+            qdrant_host = os.getenv('QDRANT_HOST', 'localhost')
+            qdrant_port = int(os.getenv('QDRANT_PORT', '6333'))
+            qdrant_api_key = os.getenv('QDRANT_API_KEY')
+            hf_token = os.getenv('HUGGINGFACE_TOKEN')
+            use_hf_api = os.getenv('USE_HF_INFERENCE_API', 'false').lower() == 'true'
+            
+            logger.info(f"🔧 Environment Config:")
+            logger.info(f"  QDRANT_HOST: {qdrant_host}")
+            logger.info(f"  QDRANT_PORT: {qdrant_port}")
+            logger.info(f"  QDRANT_API_KEY: {'✅ Set' if qdrant_api_key else '❌ Not set'}")
+            logger.info(f"  HUGGINGFACE_TOKEN: {'✅ Set' if hf_token else '❌ Not set'}")
+            logger.info(f"  USE_HF_INFERENCE_API: {use_hf_api}")
+            
+            search_config = SearchConfig(
+                qdrant_host=qdrant_host,
+                qdrant_port=qdrant_port,
+                qdrant_api_key=qdrant_api_key,
+                huggingface_token=hf_token,
+                timeout=60  # HuggingFace Space için uzun timeout
+            )
             
             # Cloud deployment için https kontrolü
-            is_cloud = config.qdrant_api_key is not None or config.qdrant_host.startswith('http')
+            is_cloud = search_config.qdrant_api_key is not None or search_config.qdrant_host.startswith('http')
             if is_cloud:
-                logger.info(f"Qdrant Cloud'a bağlanılıyor: {config.qdrant_host}")
+                logger.info(f"Qdrant Cloud'a bağlanılıyor: {search_config.qdrant_host}")
             else:
-                logger.info(f"Local Qdrant'a bağlanılıyor: {config.qdrant_host}:{config.qdrant_port}")
+                logger.info(f"Local Qdrant'a bağlanılıyor: {search_config.qdrant_host}:{search_config.qdrant_port}")
             
             # Retry mekanizması
             max_retries = 3
             for attempt in range(max_retries):
                 try:
                     logger.info(f"RAG Engine başlatma denemesi {attempt + 1}/{max_retries}")
-                    logger.info(f"Qdrant Host: {config.qdrant_host}")
-                    logger.info(f"Qdrant Port: {config.qdrant_port}")
-                    logger.info(f"HF Token: {'✅ Var' if config.huggingface_token else '❌ Yok'}")
+                    logger.info(f"Qdrant Host: {search_config.qdrant_host}")
+                    logger.info(f"Qdrant Port: {search_config.qdrant_port}")
+                    logger.info(f"HF Token: {'✅ Var' if search_config.huggingface_token else '❌ Yok'}")
                     
-                    self._engine = CVESearchEngine(config)
+                    self._engine = CVESearchEngine(search_config)
                     logger.info("✅ RAG Engine başarıyla oluşturuldu")
                     break
                 except Exception as e:
