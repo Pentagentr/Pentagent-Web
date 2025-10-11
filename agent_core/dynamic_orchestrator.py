@@ -634,6 +634,9 @@ JSON{{
     async def _ai_decide_first_tool(self, target: str, user_task: str = None) -> Dict[str, Any]:
         """AI ile ilk tool'u belirle - Kullanıcı görevine göre"""
         available_tools = self.mcp_server.get_tool_list()['categories']
+        all_tools = set()
+        for cat, tools in available_tools.items():
+            all_tools.update(tools)
         
         # Context bilgilerini hazırla
         target_type = self._classify_target(target)
@@ -674,6 +677,10 @@ JSON{{
         try:
             response = await self._call_gemini(prompt)
             decision = json.loads(response)
+            # Seçilen tool kayıtlı değilse fallback
+            chosen = decision.get('tool')
+            if chosen and chosen not in all_tools and decision.get('action') == 'continue':
+                decision['tool'] = 'enum_tech_detector' if 'http' in str(self.current_target) else 'recon_whois_lookup'
             
             if decision.get("success", False) and decision.get("tool"):
                 return decision
@@ -893,6 +900,9 @@ Sen siber güvenlik uzmanısın. Son tool'un çıktısını analiz edip sonraki 
         try:
             response = await self._call_gemini(prompt)
             decision = json.loads(response)
+            chosen = decision.get('tool')
+            if chosen and chosen not in all_tools and decision.get('action') == 'continue':
+                decision['tool'] = 'enum_tech_detector' if 'http' in str(self.current_target) else 'recon_whois_lookup'
             
             await self.status_callback(f"🧠 Sonraki adım kararı: {decision.get('reasoning', '')}", "ai_reasoning")
             

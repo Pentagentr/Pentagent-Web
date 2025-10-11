@@ -126,6 +126,8 @@ class PentagentMCPServer:
             
             # Infrastructure Tools
             self._register_tool("infra_exposed_panels_finder", self._create_exposed_panels_tool())
+            # Lightweight fallback tools (no heavy deps)
+            self._register_tool("service_fingerprinting", self._create_service_fingerprinting_tool())
             
             logger.info(f"✅ {len(self.tools)} araç başarıyla kaydedildi")
             
@@ -355,6 +357,15 @@ class PentagentMCPServer:
             return InfraReconScanner()
         except ImportError as e:
             logger.error(f"InfraReconScanner import edilemedi: {e}")
+            return None
+
+    def _create_service_fingerprinting_tool(self):
+        """ServiceFingerprintingTool instance'ı oluştur"""
+        try:
+            from tools.service_fingerprinting import ServiceFingerprintingTool
+            return ServiceFingerprintingTool()
+        except ImportError as e:
+            logger.error(f"ServiceFingerprintingTool import edilemedi: {e}")
             return None
     
     def _register_tool(self, tool_name: str, tool_instance: MCPTool):
