@@ -639,14 +639,33 @@ class CVESearchEngine:
             True: Sistem sağlıklı, False: Sorun var
         """
         try:
-            # Qdrant bağlantısını test et (collections endpoint kullan - her zaman var)
-            collections_response = self._client.get_collections()
-            logger.info(f"Qdrant bağlantısı OK - {len(collections_response.collections)} collection bulundu")
-            
-            # Collection'ı kontrol et
-            info = self._client.get_collection(self.config.collection_name)
-            logger.info(f"Health check OK - Collection: {info.points_count} points")
-            return True
+            if self._use_httpx:
+                # httpx ile health check
+                collections_response = self._httpx_client.get(f"{self._base_url}/collections")
+                collections_response.raise_for_status()
+                collections_data = collections_response.json()
+                
+                collection_names = [c['name'] for c in collections_data['result']['collections']]
+                logger.info(f"Qdrant bağlantısı OK - {len(collection_names)} collection bulundu")
+                
+                # Collection detay
+                collection_response = self._httpx_client.get(
+                    f"{self._base_url}/collections/{self.config.collection_name}"
+                )
+                collection_response.raise_for_status()
+                info = collection_response.json()
+                points_count = info['result']['points_count']
+                logger.info(f"Health check OK - Collection: {points_count} points")
+                return True
+            else:
+                # QdrantClient ile health check
+                collections_response = self._client.get_collections()
+                logger.info(f"Qdrant bağlantısı OK - {len(collections_response.collections)} collection bulundu")
+                
+                # Collection'ı kontrol et
+                info = self._client.get_collection(self.config.collection_name)
+                logger.info(f"Health check OK - Collection: {info.points_count} points")
+                return True
             
         except Exception as e:
             logger.error(f"Health check FAILED: {e}")
@@ -663,14 +682,32 @@ class CVESearchEngine:
             İstatistik bilgileri
         """
         try:
-            info = self._client.get_collection(self.config.collection_name)
-            return {
-                "collection_name": self.config.collection_name,
-                "points_count": info.points_count,
-                "vectors_count": info.vectors_count,
-                "indexed_vectors_count": info.indexed_vectors_count,
-                "status": info.status.value if info.status else "unknown"
-            }
+            if self._use_httpx:
+                # httpx ile stats
+                response = self._httpx_client.get(
+                    f"{self._base_url}/collections/{self.config.collection_name}"
+                )
+                response.raise_for_status()
+                data = response.json()
+                info = data['result']
+                
+                return {
+                    "collection_name": self.config.collection_name,
+                    "points_count": info.get('points_count', 0),
+                    "vectors_count": info.get('vectors_count', 0),
+                    "indexed_vectors_count": info.get('indexed_vectors_count', 0),
+                    "status": info.get('status', 'unknown')
+                }
+            else:
+                # QdrantClient ile stats
+                info = self._client.get_collection(self.config.collection_name)
+                return {
+                    "collection_name": self.config.collection_name,
+                    "points_count": info.points_count,
+                    "vectors_count": info.vectors_count,
+                    "indexed_vectors_count": info.indexed_vectors_count,
+                    "status": info.status.value if info.status else "unknown"
+                }
         except Exception as e:
             logger.error(f"Stats getirme hatası: {e}")
             return {}
