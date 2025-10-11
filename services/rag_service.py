@@ -86,15 +86,28 @@ class RAGService:
             
             # Environment variables'dan config oluştur
             config = SearchConfig()
+            config.timeout = 60  # Timeout'u arttır (HuggingFace Space için)
             
             # Cloud deployment için https kontrolü
-            is_cloud = config.qdrant_api_key is not None
+            is_cloud = config.qdrant_api_key is not None or config.qdrant_host.startswith('http')
             if is_cloud:
                 logger.info(f"Qdrant Cloud'a bağlanılıyor: {config.qdrant_host}")
             else:
                 logger.info(f"Local Qdrant'a bağlanılıyor: {config.qdrant_host}:{config.qdrant_port}")
             
-            self._engine = CVESearchEngine(config)
+            # Retry mekanizması
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    self._engine = CVESearchEngine(config)
+                    break
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Bağlantı denemesi {attempt + 1}/{max_retries} başarısız: {e}")
+                        import time
+                        time.sleep(2)
+                    else:
+                        raise
             
             # Health check
             if self._engine.health_check():
