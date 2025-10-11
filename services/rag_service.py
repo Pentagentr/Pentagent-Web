@@ -99,14 +99,25 @@ class RAGService:
             max_retries = 3
             for attempt in range(max_retries):
                 try:
+                    logger.info(f"RAG Engine başlatma denemesi {attempt + 1}/{max_retries}")
+                    logger.info(f"Qdrant Host: {config.qdrant_host}")
+                    logger.info(f"Qdrant Port: {config.qdrant_port}")
+                    logger.info(f"HF Token: {'✅ Var' if config.huggingface_token else '❌ Yok'}")
+                    
                     self._engine = CVESearchEngine(config)
+                    logger.info("✅ RAG Engine başarıyla oluşturuldu")
                     break
                 except Exception as e:
+                    logger.error(f"Bağlantı denemesi {attempt + 1}/{max_retries} başarısız")
+                    logger.error(f"Hata detayı: {str(e)}")
+                    import traceback
+                    logger.error(f"Traceback:\n{traceback.format_exc()}")
+                    
                     if attempt < max_retries - 1:
-                        logger.warning(f"Bağlantı denemesi {attempt + 1}/{max_retries} başarısız: {e}")
                         import time
                         time.sleep(2)
                     else:
+                        logger.error("❌ Tüm denemeler başarısız - RAG servisi devre dışı")
                         raise
             
             # Health check
