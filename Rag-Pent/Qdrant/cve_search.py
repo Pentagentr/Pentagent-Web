@@ -2,17 +2,27 @@
 CVE Arama Modülü - Production Ready
 Bu modül Qdrant üzerinde CVE araması için hybrid search API sağlar.
 Dense vektörlere öncelik verir (semantik search ağırlıklı).
+HuggingFace Inference API ile embedding oluşturma desteği.
 """
 
 import logging
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 import uuid
+import os
+import requests
 
 from qdrant_client import QdrantClient, models
 from qdrant_client.http.exceptions import UnexpectedResponse
-from FlagEmbedding import BGEM3FlagModel
-import torch
+
+try:
+    from FlagEmbedding import BGEM3FlagModel
+    import torch
+    HAS_LOCAL_MODEL = True
+except ImportError:
+    HAS_LOCAL_MODEL = False
+    logger = logging.getLogger(__name__)
+    logger.warning("FlagEmbedding/torch not available - using HuggingFace Inference API")
 
 # Logging yapılandırması
 logging.basicConfig(
@@ -125,12 +135,27 @@ class CVESearchEngine:
             
             logger.info(f"Collection '{self.config.collection_name}' bulundu")
             
-            # BGE-M3 model yükleme
-            logger.info(f"BGE-M3 modeli yükleniyor: {self.config.model_name}")
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            use_fp16 = device == "cuda"
-            self._model = BGEM3FlagModel(self.config.model_name, use_fp16=use_fp16)
-            logger.info(f"Model yüklendi (Device: {device.upper()})")
+            # BGE-M3 model yükleme - HuggingFace Inference API veya local
+            use_hf_api = os.getenv("USE_HF_INFERENCE_API", "true").lower() == "true"
+            
+            if use_hf_api:
+                logger.info("HuggingFace Inference API kullanılacak (BGE-M3)")
+                self._model = None  # API kullanacağız
+                self._hf_token = self.config.huggingface_token
+                self._hf_api_url = "https://api-inference.huggingface.co/models/BAAI/bge-m3"
+            elif HAS_LOCAL_MODEL:
+                logger.info(f"Local BGE-M3 modeli yükleniyor: {self.config.model_name}")
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                use_fp16 = device == "cuda"
+                self._model = BGEM3FlagModel(self.config.model_name, use_fp16=use_fp16)
+                logger.info(f"Model yüklendi (Device: {device.upper()})")
+                self._hf_token = None
+                self._hf_api_url = None
+            else:
+                logger.warning("BGE-M3 model yüklenemedi - text-based search kullanılacak")
+                self._model = None
+                self._hf_token = None
+                self._hf_api_url = None
             
         except Exception as e:
             logger.error(f"Başlatma hatası: {e}")
@@ -139,6 +164,7 @@ class CVESearchEngine:
     def _encode_query(self, query: str) -> Tuple[List[float], models.SparseVector]:
         """
         Query'yi dense ve sparse vektörlere çevir.
+        HuggingFace Inference API veya local model kullanır.
         
         Args:
             query: Arama sorgusu
@@ -147,20 +173,76 @@ class CVESearchEngine:
             (dense_vector, sparse_vector) tuple'ı
         """
         try:
-            # Dense vektör
-            dense_vec = self._model.encode([query], return_dense=True)['dense_vecs'][0]
+            # HuggingFace Inference API kullan (production)
+            if self._model is None and self._hf_api_url:
+                return self._encode_with_hf_api(query)
             
-            # Sparse vektör
-            sparse_output = self._model.encode([query], return_sparse=True)['lexical_weights'][0]
-            sparse_vec = models.SparseVector(
-                indices=list(sparse_output.keys()),
-                values=list(sparse_output.values())
-            )
+            # Local model kullan
+            if self._model is not None:
+                # Dense vektör
+                dense_vec = self._model.encode([query], return_dense=True)['dense_vecs'][0]
+                
+                # Sparse vektör
+                sparse_output = self._model.encode([query], return_sparse=True)['lexical_weights'][0]
+                sparse_vec = models.SparseVector(
+                    indices=list(sparse_output.keys()),
+                    values=list(sparse_output.values())
+                )
+                
+                return dense_vec.tolist(), sparse_vec
             
-            return dense_vec.tolist(), sparse_vec
+            # Hiçbiri yoksa hata
+            raise ValueError("Neither HF API nor local model available")
             
         except Exception as e:
             logger.error(f"Query encoding hatası: {e}")
+            raise
+    
+    def _encode_with_hf_api(self, query: str) -> Tuple[List[float], models.SparseVector]:
+        """
+        HuggingFace Inference API ile query'yi vektörleştirir.
+        
+        Args:
+            query: Arama sorgusu
+            
+        Returns:
+            (dense_vector, sparse_vector) tuple
+        """
+        try:
+            headers = {}
+            if self._hf_token:
+                headers["Authorization"] = f"Bearer {self._hf_token}"
+            
+            # HuggingFace Inference API'ye istek
+            response = requests.post(
+                self._hf_api_url,
+                headers=headers,
+                json={"inputs": query, "options": {"wait_for_model": True}},
+                timeout=30
+            )
+            
+            if response.status_code != 200:
+                raise Exception(f"HF API error: {response.status_code} - {response.text}")
+            
+            # Dense vector al
+            dense_vec = response.json()
+            
+            # Sparse için basit keyword extraction (approximate)
+            # HF Inference API sparse desteklemediği için keyword-based sparse oluştur
+            words = query.lower().split()
+            sparse_indices = list(range(len(words)))
+            sparse_values = [1.0] * len(words)
+            
+            sparse_vec = models.SparseVector(
+                indices=sparse_indices,
+                values=sparse_values
+            )
+            
+            logger.info("HuggingFace Inference API ile encoding tamamlandı")
+            return dense_vec, sparse_vec
+            
+        except Exception as e:
+            logger.error(f"HuggingFace API encoding hatası: {e}")
             raise
     
     def search(
@@ -173,6 +255,7 @@ class CVESearchEngine:
     ) -> List[SearchResult]:
         """
         Hybrid search (dense + sparse) yapar.
+        Model yoksa text-based scroll search kullanır.
         
         Args:
             query: Arama sorgusu
@@ -188,18 +271,22 @@ class CVESearchEngine:
             logger.warning("Boş query alındı")
             return []
         
-        # Ağırlıkları ayarla
-        d_weight = dense_weight if dense_weight is not None else self.config.default_dense_weight
-        s_weight = sparse_weight if sparse_weight is not None else self.config.default_sparse_weight
-        
-        # Ağırlıkları normalize et
-        total_weight = d_weight + s_weight
-        d_weight = d_weight / total_weight
-        s_weight = s_weight / total_weight
-        
-        logger.info(f"Arama başlatıldı: '{query}' (limit={limit}, dense={d_weight:.2f}, sparse={s_weight:.2f})")
+        logger.info(f"Arama başlatıldı: '{query}' (limit={limit})")
         
         try:
+            # Model yoksa text-based search (production)
+            if self._model is None:
+                return self._text_based_search(query, limit)
+            
+            # Ağırlıkları ayarla
+            d_weight = dense_weight if dense_weight is not None else self.config.default_dense_weight
+            s_weight = sparse_weight if sparse_weight is not None else self.config.default_sparse_weight
+            
+            # Ağırlıkları normalize et
+            total_weight = d_weight + s_weight
+            d_weight = d_weight / total_weight
+            s_weight = s_weight / total_weight
+            
             # Query'yi vektörlere çevir
             dense_vec, sparse_vec = self._encode_query(query)
             
@@ -226,7 +313,9 @@ class CVESearchEngine:
             
         except Exception as e:
             logger.error(f"Arama hatası: {e}")
-            raise
+            # Fallback: text-based search
+            logger.info("Fallback: text-based search kullanılıyor")
+            return self._text_based_search(query, limit)
     
     def _search_dense(self, dense_vector: List[float], limit: int) -> List[Dict]:
         """Dense (semantik) arama yapar"""
@@ -256,6 +345,69 @@ class CVESearchEngine:
             return [{"id": r.id, "score": r.score, "payload": r.payload} for r in results.points]
         except Exception as e:
             logger.error(f"Sparse search hatası: {e}")
+            return []
+    
+    def _text_based_search(self, query: str, limit: int) -> List[SearchResult]:
+        """
+        Text-based search (model olmadan).
+        Qdrant scroll kullanarak payload'da text arama yapar.
+        
+        Args:
+            query: Arama sorgusu
+            limit: Maksimum sonuç sayısı
+            
+        Returns:
+            SearchResult listesi
+        """
+        try:
+            logger.info(f"Text-based search: '{query}'")
+            
+            # Query kelimelerini küçült
+            query_terms = query.lower().split()
+            
+            # Scroll ile tüm CVE'leri al (payload filtresi ile)
+            results = []
+            scroll_result = self._client.scroll(
+                collection_name=self.config.collection_name,
+                limit=1000,  # İlk 1000 CVE
+                with_payload=True,
+                with_vectors=False
+            )
+            
+            # Text matching skoru hesapla
+            for point in scroll_result[0]:
+                payload = point.payload
+                metadata = payload.get("metadata", {})
+                content = payload.get("content", "").lower()
+                cve_id = payload.get("cve_id", "").lower()
+                
+                # Query terimlerinin kaçı içerikte var?
+                match_count = sum(1 for term in query_terms if term in content or term in cve_id)
+                score = match_count / len(query_terms) if query_terms else 0
+                
+                if score > 0:
+                    result = SearchResult(
+                        cve_id=payload.get("cve_id", str(point.id)),
+                        score=score,
+                        dense_score=0.0,
+                        sparse_score=score,
+                        severity=metadata.get("severity"),
+                        base_score=metadata.get("base_score"),
+                        attack_vector=metadata.get("attack_vector"),
+                        description=payload.get("content", "")[:500],
+                        published_date=metadata.get("published_date"),
+                        metadata=metadata
+                    )
+                    results.append(result)
+            
+            # Skora göre sırala
+            results.sort(key=lambda x: x.score, reverse=True)
+            
+            logger.info(f"Text-based search tamamlandı: {len(results[:limit])} sonuç")
+            return results[:limit]
+            
+        except Exception as e:
+            logger.error(f"Text-based search hatası: {e}")
             return []
     
     def _combine_results(

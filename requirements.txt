@@ -38,8 +38,8 @@ markdown>=3.4.0
 sqlalchemy>=2.0.0
 # chromadb>=0.4.0  # Not needed, using Qdrant
 qdrant-client>=1.7.0
-FlagEmbedding>=1.2.0
-torch>=2.0.0
+# FlagEmbedding>=1.2.0  # Too heavy - using HuggingFace Inference API instead
+# torch>=2.0.0  # Too heavy - using HuggingFace Inference API instead
 orjson>=3.9.0
 
 # Utilities
