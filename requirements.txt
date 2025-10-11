@@ -6,7 +6,8 @@ aiohttp>=3.8.0
 requests>=2.31.0
 httpx>=0.24.0
 aiofiles>=24.1.0
-# selenium>=4.35.0  # Heavy dependency, commented for Render free tier
+selenium>=4.35.0
+webdriver-manager>=4.0.0
 beautifulsoup4>=4.13.0
 fastapi>=0.109.0
 uvicorn>=0.27.0
@@ -27,6 +28,8 @@ PyJWT>=2.10.1
 shodan>=1.31.0
 boto3>=1.34.0
 builtwith>=1.3.4
+python-whois>=0.8.0
+tldextract>=5.0.0
 
 # Report Generation
 reportlab>=4.0.0

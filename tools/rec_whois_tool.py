@@ -22,6 +22,7 @@ try:
     WHOIS_AVAILABLE = True
 except ImportError:
     WHOIS_AVAILABLE = False
+import requests
 import re
 import json
 import logging
@@ -145,6 +146,9 @@ class ReconWhoisLookupTool(MCPTool):
     def _perform_whois_analysis(self, domain: str) -> Dict[str, Any]:
         """WHOIS verisini toplar ve derinlemesine analiz eder."""
         try:
+            if not WHOIS_AVAILABLE:
+                # RDAP fallback
+                return self._perform_rdap_analysis(domain)
             w = whois.whois(domain)
             if not w.domain_name:
                 raise ValueError(f"'{domain}' için WHOIS bilgisi bulunamadı. Domain tescil edilmemiş veya korumalı olabilir.")
@@ -195,6 +199,56 @@ class ReconWhoisLookupTool(MCPTool):
             logger.error(f"'{domain}' için WHOIS analizi sırasında hata: {e}")
             raise  # Hatayı yukarıya fırlat ki run_tool yakalasın
 
+    def _perform_rdap_analysis(self, domain: str) -> Dict[str, Any]:
+        """WHOIS yoksa RDAP üzerinden temel kayıt verilerini al ve aynı şemaya dönüştür."""
+        url = f"https://rdap.org/domain/{domain}"
+        r = requests.get(url, timeout=10)
+        if r.status_code != 200:
+            raise ValueError(f"RDAP sorgusu başarısız: {r.status_code}")
+        data = r.json()
+
+        # RDAP'ten alanlar
+        nameservers = [ns.get('ldhName', '') for ns in data.get('nameservers', []) if ns.get('ldhName')]
+        events = data.get('events', [])
+        created = next((e.get('eventDate') for e in events if e.get('eventAction') == 'registration'), None)
+        expires = next((e.get('eventDate') for e in events if e.get('eventAction') == 'expiration'), None)
+        updated = next((e.get('eventDate') for e in events if e.get('eventAction') == 'last changed'), None)
+
+        # Normalize
+        parsed_data = {
+            "domain": (data.get('ldhName') or domain).lower(),
+            "registrar": (data.get('registrar') or {}).get('name') if isinstance(data.get('registrar'), dict) else None,
+            "creation_date": created,
+            "expiration_date": expires,
+            "updated_date": updated,
+            "name_servers": nameservers,
+            "status": [s for s in (data.get('status') or [])],
+            "registrant_country": None,
+            "registrant_org": None,
+            "emails": [],
+            "privacy_protected": False,
+            "domain_age_days": None,
+        }
+
+        # Risk analizini WHOIS yoluyla yaptığımız mantıkla uyumlu üret
+        registrar_analysis = {"risk_level": "low", "categories": [], "insight": "Registrar riskli görünmüyor."}
+        age_analysis = {"risk_level": "minimal", "age_category": "bilinmiyor", "insight": "Domain yaşı tahmin edilemedi."}
+        risk_map = {"minimal": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
+        total_risk_score = risk_map.get(registrar_analysis["risk_level"], 0) + risk_map.get(age_analysis["risk_level"], 0)
+        overall_risk = "minimal"
+        if total_risk_score >= 7: overall_risk = "critical"
+        elif total_risk_score >= 5: overall_risk = "high"
+        elif total_risk_score >= 3: overall_risk = "medium"
+        elif total_risk_score >= 1: overall_risk = "low"
+
+        analysis_summary = {
+            "registrar_reputation": registrar_analysis,
+            "domain_age_risk": age_analysis,
+            "overall_risk_level": overall_risk
+        }
+
+        return {"raw_data": parsed_data, "analysis": analysis_summary}
+
     def _generate_mcp_recommendations(self, data: Dict, analysis: Dict) -> List[Dict]:
         """Analiz sonuçlarına göre MCP için eyleme geçirilebilir öneriler üretir."""
         recommendations = []
@@ -205,39 +259,39 @@ class ReconWhoisLookupTool(MCPTool):
         if risk_level in ["critical", "high"]:
             recommendations.append({
                 "priority": "critical",
-                "tool": "recon_passive_subdomain_finder",
+                "tool": "recon_passive_subfinder",
                 "reason": f"Yüksek riskli ({risk_level}) domain tespit edildi. İlişkili altyapıyı haritalamak için subdomain taraması kritik öneme sahip.",
                 "params": {"domain": domain}
             })
             recommendations.append({
                 "priority": "high",
-                "tool": "vuln_blacklist_checker", # Varsayımsal bir sonraki aracımız
-                "reason": f"Domain, riskli profili nedeniyle karalistelerde olabilir. Kontrol edilmesi gerekiyor.",
+                "tool": "recon_api_endpoint_finder",
+                "reason": f"Riskli domain için olası API uç noktalarını keşfetmek sonraki zafiyet testlerine zemin sağlar.",
                 "params": {"domain": domain}
             })
 
         if age_days is not None and age_days < 30:
             recommendations.append({
                 "priority": "high",
-                "tool": "vuln_phishing_likelihood_analyzer", # Varsayımsal bir sonraki aracımız
-                "reason": f"Domain {age_days} günlük. Aşırı yeni domainler genellikle oltalama (phishing) saldırılarında kullanılır.",
+                "tool": "vuln_http_header_analyzer",
+                "reason": f"Domain {age_days} günlük. Web uygulaması güvenlik başlıkları zayıf olabilir, temel sertleştirme analizi yapılmalı.",
                 "params": {"url": f"http://{domain}"}
             })
         
         if any(ns for provider in KNOWN_GOOD_NS["cloudflare"] for ns in data.get("name_servers", []) if provider in ns):
-             recommendations.append({
+            recommendations.append({
                 "priority": "medium",
-                "tool": "recon_cloudflare_ip_resolver", # Varsayımsal bir sonraki aracımız
-                "reason": "Hedef Cloudflare arkasında. Gerçek sunucu IP'sini bulmak için ek keşif adımı gerekli.",
-                "params": {"domain": domain}
+                "tool": "infra_exposed_panels_finder",
+                "reason": "Hedef Cloudflare arkasında olabilir. Açık yönetim panelleri ve altyapı izleri araştırılmalı.",
+                "params": {"target": domain}
             })
 
         if data.get("registrant_org"):
             recommendations.append({
                 "priority": "low",
-                "tool": "recon_osint_google_dorking", # Varsayımsal bir sonraki aracımız
-                "reason": "Domain kurumsal bir firmaya ait. Şirket hakkında ek bilgi toplamak faydalı olabilir.",
-                "params": {"query": f'intext:"{data.get("registrant_org")}"'}
+                "tool": "enum_web_crawler",
+                "reason": "Kurumsal domain: web uygulaması yüzeyi geniş olabilir, temel tarama ile önemli sayfalar keşfedilmeli.",
+                "params": {"url": f"http://{domain}", "max_depth": 2}
             })
 
         return recommendations

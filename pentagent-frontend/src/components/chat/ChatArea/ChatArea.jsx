@@ -183,12 +183,14 @@ const ChatArea = ({ conversationId, isTyping, messages = [], currentScan }) => {
         {/* Scroll anchor */}
         <div ref={messagesEndRef} />
         {showNewMsgHint && (
-          <button
-            onClick={() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); setAutoScroll(true); setShowNewMsgHint(false); }}
-            className="fixed bottom-24 right-8 z-30 px-3 py-2 bg-obsidian-850/90 border border-obsidian-700 rounded-full text-xs text-text-secondary hover:text-text-primary hover:border-platinum-500/40 transition-all shadow-lg"
-          >
-            Yeni mesajlar ↓
-          </button>
+          <div className="sticky bottom-4 w-full flex justify-end pr-6">
+            <button
+              onClick={() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); setAutoScroll(true); setShowNewMsgHint(false); }}
+              className="px-3 py-2 bg-obsidian-850/90 border border-obsidian-700 rounded-full text-xs text-text-secondary hover:text-text-primary hover:border-platinum-500/40 transition-all shadow-lg"
+            >
+              Yeni mesajlar ↓
+            </button>
+          </div>
         )}
       </div>
     </div>
