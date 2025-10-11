@@ -452,38 +452,7 @@ def get_search_engine(config: Optional[SearchConfig] = None) -> CVESearchEngine:
 
 
 if __name__ == "__main__":
-    # Basit kullanım örneği
-    print("CVE Search Engine - Test")
-    print("-" * 50)
-    
-    try:
-        engine = get_search_engine()
-        
-        # Health check
-        if not engine.health_check():
-            print("❌ Sistem sağlık kontrolü başarısız!")
-            exit(1)
-        
-        # Stats
-        stats = engine.get_stats()
-        print(f"✅ Collection: {stats.get('points_count', 0)} CVE yüklü")
-        print()
-        
-        # Test arama
-        query = "SQL injection"
-        print(f"Test sorgusu: '{query}'")
-        results = engine.search(query, limit=3)
-        
-        for i, result in enumerate(results, 1):
-            print(f"\n{i}. {result.cve_id}")
-            print(f"   Score: {result.score:.4f} (Dense: {result.dense_score:.4f}, Sparse: {result.sparse_score:.4f})")
-            print(f"   Severity: {result.severity} | Base Score: {result.base_score}")
-            print(f"   Description: {result.description[:100]}...")
-        
-        print("\n" + "="*50)
-        print("✅ Test başarılı!")
-        
-    except Exception as e:
-        print(f"❌ Hata: {e}")
-        exit(1)
+    # Production ready module
+    print("CVE Search Engine - Production Ready")
+    print("Use: from Qdrant.cve_search import get_search_engine")
 

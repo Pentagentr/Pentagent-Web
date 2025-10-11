@@ -2,6 +2,7 @@
 RAG Servis Modülü
 CVE RAG sistemi ile entegrasyon için servis
 Qdrant üzerinden CVE araması yapar
+Gemini ile optimize query oluşturma
 """
 
 import logging
@@ -9,6 +10,8 @@ import sys
 import os
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
+import google.generativeai as genai
+from config import config
 
 # RAG modülünü import et
 rag_pent_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Rag-Pent')
@@ -197,6 +200,7 @@ class RAGService:
     def analyze_scan_results(self, scan_results: Dict[str, Any]) -> List[CVEResult]:
         """
         Tarama sonuçlarını analiz edip ilgili CVE'leri bul.
+        Gemini ile optimize query oluşturur.
         
         Args:
             scan_results: Tarama sonuçları (vulnerability bilgileri içeren)
@@ -208,8 +212,13 @@ class RAGService:
             return []
         
         try:
-            # Scan sonuçlarından query oluştur
-            query = self._generate_query_from_scan(scan_results)
+            # Gemini ile optimize query oluştur
+            query = self._generate_optimized_query_with_gemini(scan_results)
+            
+            if not query:
+                # Fallback: basit query oluştur
+                logger.warning("Gemini query oluşturamadı, basit query kullanılıyor")
+                query = self._generate_query_from_scan(scan_results)
             
             if not query:
                 logger.warning("Scan sonuçlarından query oluşturulamadı")
@@ -224,9 +233,102 @@ class RAGService:
             logger.error(f"Scan analizi hatası: {e}")
             return []
     
+    def _generate_optimized_query_with_gemini(self, scan_results: Dict[str, Any]) -> str:
+        """
+        Gemini ile optimize RAG query oluştur.
+        Scan sonuçlarını analiz edip en iyi CVE arama sorgusunu üretir.
+        
+        Args:
+            scan_results: Tarama sonuçları
+            
+        Returns:
+            Optimize edilmiş RAG query string
+        """
+        try:
+            # Gemini model başlat
+            genai.configure(api_key=config.GEMINI_API_KEY)
+            model = genai.GenerativeModel('gemini-pro')
+            
+            # Scan sonuçlarını özetle
+            summary = self._summarize_scan_results(scan_results)
+            
+            # Gemini'ye prompt gönder
+            prompt = f"""Based on the following penetration test results, generate an optimized search query for a CVE (Common Vulnerabilities and Exposures) database.
+
+Scan Results:
+{summary}
+
+Requirements:
+- Focus on the most critical vulnerabilities found
+- Include specific technology/software names and versions if available
+- Use terms that would match CVE descriptions
+- Keep it concise (max 100 characters)
+- Prioritize network-facing vulnerabilities
+
+Generate ONLY the search query, nothing else. Example format: "Apache 2.4.49 path traversal remote code execution"
+
+Search Query:"""
+            
+            # Gemini'den yanıt al
+            response = model.generate_content(prompt)
+            query = response.text.strip()
+            
+            # Query'yi temizle
+            query = query.replace('"', '').replace("'", "").strip()
+            
+            logger.info(f"Gemini tarafından optimize edilmiş query: '{query}'")
+            return query
+            
+        except Exception as e:
+            logger.error(f"Gemini query oluşturma hatası: {e}")
+            return ""
+    
+    def _summarize_scan_results(self, scan_results: Dict[str, Any]) -> str:
+        """
+        Scan sonuçlarını Gemini için özet haline getirir.
+        
+        Args:
+            scan_results: Tarama sonuçları
+            
+        Returns:
+            Özet string
+        """
+        summary_parts = []
+        
+        # Target
+        target = scan_results.get("target", "")
+        if target:
+            summary_parts.append(f"Target: {target}")
+        
+        # Vulnerabilities
+        vulnerabilities = scan_results.get("vulnerabilities", [])
+        if vulnerabilities:
+            vuln_list = [f"- {v.get('type', 'Unknown')}" for v in vulnerabilities[:5]]
+            summary_parts.append(f"Vulnerabilities Found:\n" + "\n".join(vuln_list))
+        
+        # Technologies
+        technologies = scan_results.get("technologies", [])
+        if technologies:
+            tech_list = ", ".join(technologies[:5])
+            summary_parts.append(f"Technologies: {tech_list}")
+        
+        # Services
+        services = scan_results.get("services", [])
+        if services:
+            service_list = [f"- {s.get('name', 'Unknown')} (Port {s.get('port', 'N/A')})" 
+                          for s in services[:5]]
+            summary_parts.append(f"Open Services:\n" + "\n".join(service_list))
+        
+        # Summary
+        summary = scan_results.get("summary", "")
+        if summary:
+            summary_parts.append(f"Summary: {summary}")
+        
+        return "\n\n".join(summary_parts) if summary_parts else "No detailed information available"
+    
     def _generate_query_from_scan(self, scan_results: Dict[str, Any]) -> str:
         """
-        Scan sonuçlarından RAG sorgusu oluştur.
+        Basit query oluştur (Gemini fallback için).
         
         Args:
             scan_results: Tarama sonuçları
@@ -311,28 +413,9 @@ def get_rag_service() -> RAGService:
     return _rag_service_instance
 
 
-# Test
+# Production ready - test kodu yok
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    
-    print("RAG Servis Test")
-    print("=" * 50)
-    
-    service = get_rag_service()
-    
-    if service.is_available():
-        print("✅ RAG servisi kullanılabilir")
-        
-        # Stats
-        stats = service.get_stats()
-        print(f"📊 İstatistikler: {stats}")
-        
-        # Test arama
-        results = service.search_cve("SQL injection vulnerability", limit=3)
-        print(f"\n🔍 Test Arama Sonuçları ({len(results)} CVE):")
-        for r in results:
-            print(f"  - {r.cve_id} ({r.severity}): Score={r.score:.4f}")
-    else:
-        print("❌ RAG servisi kullanılamıyor")
-        print("  Qdrant'ın çalıştığından emin olun: docker-compose up -d")
+    print("RAG Service Module - Production Ready")
+    print("Use: from services.rag_service import get_rag_service")
 
