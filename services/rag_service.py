@@ -103,7 +103,7 @@ class RAGService:
                 qdrant_port=qdrant_port,
                 qdrant_api_key=qdrant_api_key,
                 huggingface_token=hf_token,
-                timeout=60  # HuggingFace Space için uzun timeout
+                timeout=30  # Startup için daha kısa timeout
             )
             
             # Cloud deployment için https kontrolü
@@ -113,29 +113,30 @@ class RAGService:
             else:
                 logger.info(f"Local Qdrant'a bağlanılıyor: {search_config.qdrant_host}:{search_config.qdrant_port}")
             
-            # Retry mekanizması
-            max_retries = 3
+            # Retry mekanizması - 2 deneme (total: max 60 saniye)
+            max_retries = 2
             for attempt in range(max_retries):
                 try:
-                    logger.info(f"RAG Engine başlatma denemesi {attempt + 1}/{max_retries}")
-                    logger.info(f"Qdrant Host: {search_config.qdrant_host}")
-                    logger.info(f"Qdrant Port: {search_config.qdrant_port}")
-                    logger.info(f"HF Token: {'✅ Var' if search_config.huggingface_token else '❌ Yok'}")
+                    logger.info(f"🔄 RAG Engine başlatma denemesi {attempt + 1}/{max_retries}")
+                    logger.info(f"  Qdrant Host: {search_config.qdrant_host}")
+                    logger.info(f"  Qdrant Port: {search_config.qdrant_port}")
+                    logger.info(f"  HF Token: {'✅ Var' if search_config.huggingface_token else '❌ Yok'}")
                     
                     self._engine = CVESearchEngine(search_config)
                     logger.info("✅ RAG Engine başarıyla oluşturuldu")
+                    logger.info(f"✅ CVE koleksiyonu hazır: {search_config.collection_name}")
                     break
                 except Exception as e:
-                    logger.error(f"Bağlantı denemesi {attempt + 1}/{max_retries} başarısız")
-                    logger.error(f"Hata detayı: {str(e)}")
-                    import traceback
-                    logger.error(f"Traceback:\n{traceback.format_exc()}")
+                    logger.error(f"❌ Bağlantı denemesi {attempt + 1}/{max_retries} başarısız")
+                    logger.error(f"   Hata: {str(e)}")
                     
                     if attempt < max_retries - 1:
+                        logger.info("   ⏳ 3 saniye sonra tekrar denenecek...")
                         import time
-                        time.sleep(2)
+                        time.sleep(3)
                     else:
-                        logger.warning("❌ Tüm denemeler başarısız - RAG servisi devre dışı bırakıldı")
+                        logger.warning("⚠️ RAG servisi başlatılamadı (HuggingFace Space uyuyor olabilir)")
+                        logger.warning("⚠️ İlk CVE arama isteğinde tekrar denenecek")
                         self._engine = None
                         self._available = False
                         return  # Exception raise etme, devam et
@@ -173,6 +174,11 @@ class RAGService:
         Returns:
             CVEResult listesi
         """
+        # Lazy initialization: engine None ise tekrar başlat
+        if self._engine is None and not self._available:
+            logger.info("🔄 RAG Engine ilk kullanımda başlatılıyor...")
+            self._initialize()
+        
         if not self.is_available():
             logger.warning("RAG servisi kullanılamıyor")
             return []
@@ -220,6 +226,11 @@ class RAGService:
         Returns:
             CVEResult veya None
         """
+        # Lazy initialization
+        if self._engine is None and not self._available:
+            logger.info("🔄 RAG Engine ilk kullanımda başlatılıyor...")
+            self._initialize()
+        
         if not self.is_available():
             return None
         
@@ -252,6 +263,11 @@ class RAGService:
         Returns:
             En alakalı CVE'lerin listesi
         """
+        # Lazy initialization
+        if self._engine is None and not self._available:
+            logger.info("🔄 RAG Engine ilk kullanımda başlatılıyor...")
+            self._initialize()
+        
         if not self.is_available():
             return []
         

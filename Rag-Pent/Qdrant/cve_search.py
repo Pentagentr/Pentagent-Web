@@ -108,12 +108,16 @@ class CVESearchEngine:
                 # Cloud deployment (HuggingFace Space veya diğer)
                 logger.info(f"Cloud Qdrant bağlantısı (URL-based): {self.config.qdrant_host}")
                 
-                # Port'u URL'e ekle (HuggingFace Space için)
+                # HuggingFace Space için port ekleme (sadece .hf.space değilse)
                 full_url = self.config.qdrant_host
-                if self.config.qdrant_port and self.config.qdrant_port != 443:
-                    # Port'u URL'e ekle (sadece 443 değilse)
-                    if ':' not in full_url.split('/')[-1]:  # URL'de port yoksa
-                        full_url = f"{self.config.qdrant_host}:{self.config.qdrant_port}"
+                if '.hf.space' not in full_url:
+                    # HuggingFace Space DEĞİL - port ekle
+                    if self.config.qdrant_port and self.config.qdrant_port != 443:
+                        if ':' not in full_url.split('/')[-1]:
+                            full_url = f"{self.config.qdrant_host}:{self.config.qdrant_port}"
+                else:
+                    # HuggingFace Space - port ekleme, direkt URL kullan
+                    logger.info("HuggingFace Space detected - using direct URL (no port)")
                 
                 logger.info(f"Full Qdrant URL: {full_url}")
                 
