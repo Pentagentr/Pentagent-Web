@@ -241,7 +241,7 @@ const ChatInterface = () => {
   ];
 
   return (
-    <div className="h-full bg-obsidian-950 flex overflow-hidden">
+    <div className="h-full bg-obsidian-950 flex overflow-hidden pt-0">
       {/* Conversation Sidebar */}
       <ConversationSidebar 
         isOpen={sidebarOpen}
@@ -253,25 +253,32 @@ const ChatInterface = () => {
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col min-w-0 max-w-full overflow-hidden">
-        {/* Connection Status Bar (Minimal) */}
-        <div className="h-10 bg-obsidian-900/50 border-b border-obsidian-700 flex items-center justify-end px-6">
+        {/* Status Bar */}
+        <div className="h-12 bg-obsidian-900 border-b border-obsidian-700 flex items-center justify-between px-6">
           <div className="flex items-center gap-3">
+            <Brain className="w-5 h-5 text-platinum-500" />
+            <div>
+              <h2 className="text-sm font-medium text-text-primary">AI Security Assistant</h2>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-4">
             {/* Connection Status */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
               {connectionStatus === 'connected' ? (
                 <>
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-xs text-text-tertiary">Live</span>
+                  <Wifi className="w-4 h-4 text-green-500" />
+                  <span className="text-sm text-green-500">Connected</span>
                 </>
               ) : connectionStatus === 'connecting' ? (
                 <>
                   <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
-                  <span className="text-xs text-text-tertiary">Connecting</span>
+                  <span className="text-sm text-yellow-500">Connecting</span>
                 </>
               ) : (
                 <>
-                  <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
-                  <span className="text-xs text-text-tertiary">Offline</span>
+                  <WifiOff className="w-4 h-4 text-gray-500" />
+                  <span className="text-sm text-gray-500">Disconnected</span>
                 </>
               )}
             </div>
@@ -279,9 +286,9 @@ const ChatInterface = () => {
             {/* Context Panel Toggle */}
             <button
               onClick={() => setContextOpen(!contextOpen)}
-              className="p-1.5 text-text-secondary hover:text-text-primary hover:bg-obsidian-850 rounded transition-all"
+              className="p-2 text-text-secondary hover:text-text-primary hover:bg-obsidian-850 rounded-lg transition-all"
             >
-              <MoreVertical className="w-4 h-4" />
+              <MoreVertical className="w-5 h-5" />
             </button>
           </div>
         </div>
