@@ -1,0 +1,57 @@
+"""
+Configuration Management
+Centralized configuration for the Pentagent system
+"""
+
+import os
+from typing import Optional
+from pathlib import Path
+
+class Config:
+    """Application configuration"""
+    
+    def __init__(self):
+        self.project_root = Path(__file__).parent
+        
+        # API Configuration
+        self.GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'AIzaSyBOKe4Et5zHvAjlOfuFOCZzWOFw5YFZiqk')
+        
+        # Security Research API Keys
+        self.VIRUSTOTAL_API_KEY = os.getenv('VIRUSTOTAL_API_KEY', 'a3613c70e43afc77772f75985a4f7ba228baadd31cceefd6a79902effdaf41c0')
+        self.SHODAN_API_KEY = os.getenv('SHODAN_API_KEY', 'Qs2JRfQuCade7ANke71Rj5iVnL0ddvoM')
+        self.CENSYS_API_TOKEN = os.getenv('CENSYS_API_TOKEN', '6t5uQ4Xx')
+        self.GITHUB_API_TOKEN = os.getenv('GITHUB_API_TOKEN', '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')
+        
+        # Server Configuration
+        self.SERVER_HOST = os.getenv('SERVER_HOST', 'localhost')
+        self.SERVER_PORT = int(os.getenv('SERVER_PORT', '8000'))
+        self.DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
+        
+        # Database Configuration
+        self.DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///./pentagent.db')
+        
+        # Paths
+        self.TOOLS_DIR = self.project_root / 'tools'
+        self.REPORTS_DIR = self.project_root / 'reports'
+        self.LOGS_DIR = self.project_root / 'logs'
+        self.EVIDENCE_DIR = self.project_root / 'evidence'
+        
+        # Create directories if they don't exist
+        for directory in [self.REPORTS_DIR, self.LOGS_DIR, self.EVIDENCE_DIR]:
+            directory.mkdir(exist_ok=True)
+        
+        # Logging Configuration
+        self.LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+        self.LOG_FILE = self.LOGS_DIR / 'pentagent.log'
+        
+        # Tool Configuration
+        self.MAX_CONCURRENT_TOOLS = int(os.getenv('MAX_CONCURRENT_TOOLS', '5'))
+        self.TOOL_TIMEOUT = int(os.getenv('TOOL_TIMEOUT', '300'))  # 5 minutes
+        
+        # Gemini Configuration
+        self.GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.0-flash')
+        self.GEMINI_MAX_TOKENS = int(os.getenv('GEMINI_MAX_TOKENS', '8192'))
+        self.GEMINI_TEMPERATURE = float(os.getenv('GEMINI_TEMPERATURE', '0.1'))
+
+# Global configuration instance
+config = Config()

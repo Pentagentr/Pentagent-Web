@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # Qdrant Vector Database
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: cve_qdrant
+    ports:
+      - "6333:6333"  # REST API
+      - "6334:6334"  # gRPC API
+    volumes:
+      - qdrant_storage:/qdrant/storage
+      - ./qdrant_config:/qdrant/config
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - cve_network
+
+  # CVE Search API (Opsiyonel - production deployment için)
+  # Kullanmak için: docker-compose up -d
+  # Not: Dockerfile.api oluşturulmalı veya bu service comment out bırakılabilir
+  # cve-api:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.api
+  #   container_name: cve_search_api
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     - QDRANT_HOST=qdrant
+  #     - QDRANT_PORT=6333
+  #     - COLLECTION_NAME=cve_collection_hybrid
+  #   depends_on:
+  #     qdrant:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+  #   networks:
+  #     - cve_network
+
+volumes:
+  qdrant_storage:
+    driver: local
+
+networks:
+  cve_network:
+    driver: bridge
+

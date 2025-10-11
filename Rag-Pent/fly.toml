@@ -1,0 +1,53 @@
+# Fly.io configuration for Qdrant
+app = "pentagent-qdrant"
+primary_region = "ams"  # Amsterdam (Avrupa'ya yakın)
+
+[build]
+  dockerfile = "Dockerfile.qdrant"
+
+[env]
+  QDRANT__SERVICE__HTTP_PORT = "8080"
+  QDRANT__SERVICE__GRPC_PORT = "6334"
+  QDRANT__LOG_LEVEL = "INFO"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false  # Uyumasın
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "15s"
+    method = "get"
+    path = "/health"
+    protocol = "http"
+    timeout = "5s"
+
+[mounts]
+  source = "qdrant_data"
+  destination = "/qdrant/storage"
+  initial_size = "3gb"  # Free tier max
+
+# HTTP Service
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+# gRPC Service (opsiyonel)
+[[services]]
+  internal_port = 6334
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 6334
+

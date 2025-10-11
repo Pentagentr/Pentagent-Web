@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Environment
+.env
+.env.local
+
+# Logs & Results
+logs/
+*.log
+session_*.json
+tool_results/
+reports/
+evidence/
+
+# Test files
+test_*.py
+debug_*.py
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+docs/
+
+# Frontend (backend image'ine gerek yok)
+pentagent-frontend/
+node_modules/
+
+# Firebase
+.firebase/
+firebase.json
+.firebaserc
+
+# OS
+.DS_Store
+Thumbs.db
+

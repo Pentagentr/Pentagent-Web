@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+rag_env/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Data files (büyük dosyalar - deployment'a gitmemeli)
+data/
+jsonlar/
+ham_veriler/
+ChromaDB/cve_db/
+ChromaDB/*.jsonl
+
+# Temporary
+*.tmp
+*.log
+*.crdownload
+
+# Documentation (opsiyonel - tutulabilir)
+# README.md
+# PROJECT_FLOW.md
+
+# Test files
+*_test.py
+test_*.py
+
+# OS
+.DS_Store
+Thumbs.db
+

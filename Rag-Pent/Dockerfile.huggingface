@@ -1,0 +1,23 @@
+# HuggingFace Spaces için Qdrant Dockerfile
+FROM qdrant/qdrant:latest
+
+# HuggingFace Spaces default port: 7860
+ENV QDRANT__SERVICE__HTTP_PORT=7860
+ENV QDRANT__SERVICE__GRPC_PORT=6334
+
+# Log level
+ENV QDRANT__LOG_LEVEL=INFO
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:7860/health || exit 1
+
+# Expose HuggingFace port
+EXPOSE 7860 6334
+
+# Persistent storage
+VOLUME ["/qdrant/storage"]
+
+# Start Qdrant
+CMD ["./qdrant"]
+

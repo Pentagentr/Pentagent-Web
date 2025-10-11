@@ -1,0 +1,255 @@
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+@keyframes buttonPress {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+}
+
+/* Basic Animations */
+.animate-fadeIn {
+  animation: fadeIn 300ms ease-out;
+}
+
+.animate-slideUp {
+  animation: slideUp 400ms ease-out;
+}
+
+.animate-slideInLeft {
+  animation: slideInLeft 400ms ease-out;
+}
+
+.animate-slideInRight {
+  animation: slideInRight 400ms ease-out;
+}
+
+.animate-scaleIn {
+  animation: scaleIn 300ms ease-out;
+}
+
+.animate-pulse {
+  animation: pulse 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+.animate-bounce {
+  animation: bounce 0.6s ease-in-out;
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
+}
+
+.animate-buttonPress {
+  animation: buttonPress 0.2s ease-in-out;
+}
+
+.animate-skeleton {
+  animation: skeleton 1.5s ease-in-out infinite;
+}
+
+/* Staggered Animations */
+.stagger-1 { animation-delay: 0ms; }
+.stagger-2 { animation-delay: 100ms; }
+.stagger-3 { animation-delay: 200ms; }
+.stagger-4 { animation-delay: 300ms; }
+.stagger-5 { animation-delay: 400ms; }
+.stagger-6 { animation-delay: 500ms; }
+
+/* Scroll Animations */
+.scroll-fadeIn {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: all 600ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.scroll-fadeIn.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.scroll-slideLeft {
+  opacity: 0;
+  transform: translateX(-50px);
+  transition: all 600ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.scroll-slideLeft.visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.scroll-slideRight {
+  opacity: 0;
+  transform: translateX(50px);
+  transition: all 600ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.scroll-slideRight.visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.scroll-scaleIn {
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 600ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.scroll-scaleIn.visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Micro-interactions */
+.transition-smooth {
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+}
+
+.hover-glow:hover {
+  box-shadow: 0 4px 20px rgba(232, 232, 232, 0.15);
+}
+
+.hover-scale:hover {
+  transform: scale(1.05);
+}
+
+.button-interactive {
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.button-interactive:active {
+  transform: scale(0.95);
+}
+
+.button-interactive:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Loading States */
+.skeleton {
+  background: linear-gradient(90deg, #404045 25%, #2C2C30 50%, #404045 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.skeleton-text {
+  height: 1rem;
+  border-radius: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.skeleton-text:last-child {
+  width: 60%;
+}
+
+.skeleton-circle {
+  border-radius: 50%;
+}
+
+.skeleton-rectangle {
+  border-radius: 0.5rem;
+}
+
+/* Form Validation */
+.input-error {
+  animation: shake 0.5s ease-in-out;
+  border-color: #F43F5E !important;
+}
+
+.input-success {
+  border-color: #10B981 !important;
+}
+
+.input-focus {
+  box-shadow: 0 0 0 3px rgba(232, 232, 232, 0.1);
+}

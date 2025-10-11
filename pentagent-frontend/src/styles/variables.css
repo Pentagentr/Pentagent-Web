@@ -1,0 +1,38 @@
+:root {
+  /* === FOUNDATION COLORS === */
+  /* Ultra dark, layered blacks */
+  --obsidian-950: #0A0A0B;
+  --obsidian-900: #111113;
+  --obsidian-850: #1A1A1D;
+  --obsidian-800: #222225;
+  --obsidian-700: #2C2C30;
+  --obsidian-600: #404045;
+  
+  /* === PLATINUM SILVER (Primary Accent) === */
+  --platinum-500: #E8E8E8;
+  --platinum-400: #F0F0F0;
+  --platinum-600: #D0D0D0;
+  --platinum-700: #B8B8B8;
+  
+  /* === DEEP PURPLE (Secondary Accent) === */
+  --purple-400: #A78BFA;
+  --purple-500: #8B5CF6;
+  --purple-600: #7C3AED;
+  
+  /* === ROSE GOLD (Accent/Danger) === */
+  --rose-400: #FB7185;
+  --rose-500: #F43F5E;
+  --rose-600: #E11D48;
+  
+  /* === TEXT HIERARCHY === */
+  --text-primary: #F8F8F8;
+  --text-secondary: #C0C0C0;
+  --text-tertiary: #808080;
+  --text-disabled: #404040;
+  
+  /* === SEMANTIC COLORS === */
+  --success: #10B981;
+  --error: #F43F5E;
+  --warning: #F59E0B;
+  --info: #8B5CF6;
+}

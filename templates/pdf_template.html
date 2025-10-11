@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Siber Güvenlik Değerlendirme Raporu</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 20px; }
+        .section { margin: 30px 0; }
+        .finding { background: #f5f5f5; padding: 15px; margin: 10px 0; border-left: 4px solid #ff6b6b; }
+        .critical { border-left-color: #e74c3c; }
+        .high { border-left-color: #f39c12; }
+        .medium { border-left-color: #f1c40f; }
+        .low { border-left-color: #27ae60; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Siber Güvenlik Değerlendirme Raporu</h1>
+        <p>Hedef: {{ target }}</p>
+        <p>Tarih: {{ timestamp }}</p>
+    </div>
+    
+    <div class="section">
+        <h2>Yönetici Özeti</h2>
+        <p>{{ executive_summary }}</p>
+    </div>
+    
+    <div class="section">
+        <h2>Bulgular</h2>
+        {{ findings_section }}
+    </div>
+    
+    <div class="section">
+        <h2>Risk Matrisi</h2>
+        {{ risk_matrix }}
+    </div>
+    
+    <div class="section">
+        <h2>Öneriler</h2>
+        {{ recommendations }}
+    </div>
+    
+    <div class="section">
+        <h2>TSE Uyumluluk</h2>
+        {{ tse_compliance }}
+    </div>
+</body>
+</html>
+

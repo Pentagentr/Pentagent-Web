@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+rag_env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Data files (büyük dosyalar)
+*.json.zip
+data/*.json
+data/*.backup
+jsonlar/*.json
+ham_veriler/*.zip
+
+# Vector databases
+ChromaDB/cve_db/
+ChromaDB/*.jsonl
+ChromaDB/last_dataset.json
+qdrant_storage/
+
+# Temporary files
+*.tmp
+*.log
+*.crdownload
+Onaylanmayan*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes
+qdrant_storage/
+
+# Environment variables
+.env
+.env.local
+

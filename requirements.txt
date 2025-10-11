@@ -1,0 +1,57 @@
+# Core Dependencies
+google-generativeai>=0.3.0
+aiohttp>=3.8.0
+
+# Web and HTTP
+requests>=2.31.0
+httpx>=0.24.0
+aiofiles>=24.1.0
+# selenium>=4.35.0  # Heavy dependency, commented for Render free tier
+beautifulsoup4>=4.13.0
+fastapi>=0.109.0
+uvicorn>=0.27.0
+websockets>=12.0
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+pydantic>=2.0.0
+
+# Security Tools
+python-nmap>=0.7.1
+dnspython>=2.3.0
+cryptography>=41.0.0
+python-Wappalyzer>=0.3.1
+packaging>=24.0
+PyJWT>=2.10.1
+shodan>=1.31.0
+boto3>=1.34.0
+builtwith>=1.3.4
+
+# Report Generation
+reportlab>=4.0.0
+jinja2>=3.1.0
+markdown>=3.4.0
+# weasyprint>=59.0  # Heavy dependency, commented for Render free tier
+
+# Database & Vector Store
+sqlalchemy>=2.0.0
+# chromadb>=0.4.0  # Not needed, using Qdrant
+qdrant-client>=1.7.0
+FlagEmbedding>=1.2.0
+torch>=2.0.0
+orjson>=3.9.0
+
+# Utilities
+python-dotenv>=1.0.0
+click>=8.1.0
+rich>=13.0.0
+colorama>=0.4.6
+
+# Testing (commented for production)
+# pytest>=7.4.0
+# pytest-asyncio>=0.21.0
+
+# Development (commented for production)
+# black>=23.0.0
+# flake8>=6.0.0

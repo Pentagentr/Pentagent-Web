@@ -1,0 +1,23 @@
+# Qdrant Docker Image for Fly.io Deployment
+FROM qdrant/qdrant:latest
+
+# Production ayarları
+ENV QDRANT__SERVICE__HTTP_PORT=8080
+ENV QDRANT__SERVICE__GRPC_PORT=6334
+
+# Log level
+ENV QDRANT__LOG_LEVEL=INFO
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+
+# Expose ports
+EXPOSE 8080 6334
+
+# Persistent storage için volume
+VOLUME ["/qdrant/storage"]
+
+# Start Qdrant
+CMD ["./qdrant"]
+

@@ -1,0 +1,27 @@
+# Qdrant Konfigürasyon Dosyası
+# Bu dosya Qdrant'ın performans ve güvenlik ayarlarını içerir
+
+# Storage ayarları
+storage:
+  # Vektörlerin disk üzerinde saklanması için
+  on_disk_payload: true
+  # Performans için cache boyutu
+  payload_cache_size: 1000
+
+# Service ayarları
+service:
+  # HTTP port
+  http_port: 6333
+  # gRPC port  
+  grpc_port: 6334
+  # CORS ayarları
+  enable_cors: true
+  cors_allow_origins: ["*"]
+
+# Logging ayarları
+log_level: INFO
+
+# Cluster ayarları (tek node için)
+cluster:
+  enabled: false
+
