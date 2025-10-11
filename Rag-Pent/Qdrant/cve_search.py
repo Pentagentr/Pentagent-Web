@@ -110,12 +110,13 @@ class CVESearchEngine:
                 
                 # HuggingFace Private Space için token
                 if self.config.huggingface_token:
-                    headers = {"Authorization": f"Bearer {self.config.huggingface_token}"}
+                    logger.info("HuggingFace token ile bağlanılıyor (Private Space)")
+                    # HuggingFace Space için api_key parametresini token olarak kullan
                     self._client = QdrantClient(
                         url=self.config.qdrant_host,
+                        api_key=self.config.huggingface_token,
                         timeout=self.config.timeout,
-                        api_key=None,
-                        headers=headers
+                        prefer_grpc=False  # HTTP kullan
                     )
                 # API key varsa
                 elif self.config.qdrant_api_key:
