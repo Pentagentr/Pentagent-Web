@@ -19,7 +19,7 @@ import Card from '../../common/Card';
 import { pentagentAPI } from '../../../services/pentagentAPI';
 
 const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('cve');
   const [cveResults, setCveResults] = useState([]);
   const [cveLoading, setCveLoading] = useState(false);
   const [cveError, setCveError] = useState('');
@@ -47,9 +47,6 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
   };
 
   const tabs = [
-    { id: 'overview', label: 'Overview', icon: BarChart3 },
-    { id: 'tools', label: 'Tools', icon: Settings },
-    { id: 'findings', label: 'Findings', icon: Shield },
     { id: 'cve', label: 'CVE Suggestions', icon: Database }
   ];
 
@@ -130,131 +127,6 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         
-        {activeTab === 'overview' && (
-          <>
-            {/* Target Info */}
-            <Card variant="default" className="p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Target className="w-4 h-4 text-platinum-500" />
-                <span className="font-medium text-text-primary">Target</span>
-              </div>
-              <p className="text-text-secondary font-mono text-sm">{scanContext.target}</p>
-            </Card>
-
-            {/* Timing */}
-            <Card variant="default" className="p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Clock className="w-4 h-4 text-platinum-500" />
-                <span className="font-medium text-text-primary">Timeline</span>
-              </div>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-text-tertiary">Started:</span>
-                  <span className="text-text-secondary">{scanContext.startTime}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-text-tertiary">Duration:</span>
-                  <span className="text-text-secondary">{scanContext.duration}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-text-tertiary">Status:</span>
-                  <span className="text-success capitalize">{scanContext.status}</span>
-                </div>
-              </div>
-            </Card>
-
-            {/* Risk Score */}
-            <Card variant="default" className="p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <AlertTriangle className="w-4 h-4 text-platinum-500" />
-                <span className="font-medium text-text-primary">Risk Assessment</span>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-rose-500 mb-2">
-                  {scanContext.riskScore}/10
-                </div>
-                <div className="w-full h-2 bg-obsidian-700 rounded-full overflow-hidden mb-2">
-                  <div 
-                    className="h-full bg-gradient-to-r from-rose-500 to-rose-600 rounded-full"
-                    style={{ width: `${(scanContext.riskScore / 10) * 100}%` }}
-                  />
-                </div>
-                <p className="text-xs text-text-tertiary">High Risk</p>
-              </div>
-            </Card>
-
-            {/* Quick Stats */}
-            <Card variant="default" className="p-4">
-              <h4 className="font-medium text-text-primary mb-3">Vulnerability Summary</h4>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="text-center p-2 bg-obsidian-850 rounded-lg">
-                  <div className="text-lg font-bold text-rose-500">{scanContext.findings.critical}</div>
-                  <div className="text-xs text-text-tertiary">Critical</div>
-                </div>
-                <div className="text-center p-2 bg-obsidian-850 rounded-lg">
-                  <div className="text-lg font-bold text-rose-500">{scanContext.findings.high}</div>
-                  <div className="text-xs text-text-tertiary">High</div>
-                </div>
-                <div className="text-center p-2 bg-obsidian-850 rounded-lg">
-                  <div className="text-lg font-bold text-warning">{scanContext.findings.medium}</div>
-                  <div className="text-xs text-text-tertiary">Medium</div>
-                </div>
-                <div className="text-center p-2 bg-obsidian-850 rounded-lg">
-                  <div className="text-lg font-bold text-success">{scanContext.findings.low}</div>
-                  <div className="text-xs text-text-tertiary">Low</div>
-                </div>
-              </div>
-            </Card>
-          </>
-        )}
-
-        {activeTab === 'tools' && (
-          <>
-            <div className="space-y-3">
-              {scanContext.toolsUsed.map((tool, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-obsidian-850 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <span className="text-lg">{tool.icon}</span>
-                    <span className="font-medium text-text-primary">{tool.name}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {tool.status === 'completed' && (
-                      <CheckCircle className="w-4 h-4 text-success" />
-                    )}
-                    {tool.status === 'running' && (
-                      <div className="w-4 h-4 border-2 border-platinum-500 border-t-transparent rounded-full animate-spin" />
-                    )}
-                    {tool.status === 'queued' && (
-                      <Clock className="w-4 h-4 text-text-tertiary" />
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {activeTab === 'findings' && (
-          <>
-            <div className="space-y-3">
-              {Object.entries(scanContext.findings).map(([severity, count]) => (
-                <div key={severity} className="flex items-center justify-between p-3 bg-obsidian-850 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full ${
-                      severity === 'critical' ? 'bg-rose-500' :
-                      severity === 'high' ? 'bg-rose-500' :
-                      severity === 'medium' ? 'bg-warning' :
-                      severity === 'low' ? 'bg-success' : 'bg-text-tertiary'
-                    }`} />
-                    <span className="font-medium text-text-primary capitalize">{severity}</span>
-                  </div>
-                  <span className="text-text-secondary">{count}</span>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
         {activeTab === 'cve' && (
           <>
             {/* CVE Suggestions */}

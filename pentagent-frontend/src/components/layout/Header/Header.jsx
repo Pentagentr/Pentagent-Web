@@ -57,8 +57,16 @@ const Header = ({
           </nav>
         </div>
         
-        {/* Center: Search (optional) - removed for cleaner look */}
-        <div className="flex-1" />
+        {/* Center: CVE Search Button */}
+        <div className="flex-1 flex justify-center">
+          <Link
+            to="/rag-search"
+            className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
+          >
+            <Database className="w-5 h-5" />
+            <span>CVE Ara</span>
+          </Link>
+        </div>
         
         {/* Right: Actions */}
         <div className="flex items-center gap-3">

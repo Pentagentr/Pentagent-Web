@@ -234,7 +234,7 @@ const ChatInterface = () => {
   ];
 
   return (
-    <div className="h-screen bg-obsidian-950 flex">
+    <div className="h-screen bg-obsidian-950 flex overflow-hidden">
       {/* Conversation Sidebar */}
       <ConversationSidebar 
         isOpen={sidebarOpen}
@@ -245,7 +245,7 @@ const ChatInterface = () => {
       />
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col min-w-0 max-w-full">
+      <div className="flex-1 flex flex-col min-w-0 max-w-full overflow-hidden">
         {/* Chat Header */}
         <div className="h-16 bg-obsidian-900 border-b border-obsidian-700 flex items-center justify-between px-6">
           <div className="flex items-center gap-3">
