@@ -6,6 +6,9 @@ import ThinkingAnimation from '../ThinkingAnimation';
 
 const ChatArea = ({ conversationId, isTyping, messages = [], currentScan }) => {
   const messagesEndRef = useRef(null);
+  const listRef = useRef(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [showNewMsgHint, setShowNewMsgHint] = useState(false);
   
   // Props'tan gelen messages'i kullan
   const displayMessages = messages.length > 0 ? messages : [
@@ -16,9 +19,27 @@ const ChatArea = ({ conversationId, isTyping, messages = [], currentScan }) => {
     }
   ];
 
+  // Scroll behavior: only autoscroll if user near bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!listRef.current) return;
+    const el = listRef.current;
+    const threshold = 120; // px from bottom
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+    if (nearBottom || autoScroll) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      setShowNewMsgHint(false);
+    } else {
+      setShowNewMsgHint(true);
+    }
   }, [messages, isTyping]);
+
+  const handleScroll = () => {
+    if (!listRef.current) return;
+    const el = listRef.current;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 4;
+    setAutoScroll(atBottom);
+    if (atBottom) setShowNewMsgHint(false);
+  };
 
   const SystemMessage = ({ children }) => (
     <div className="flex justify-center my-4">
@@ -29,7 +50,7 @@ const ChatArea = ({ conversationId, isTyping, messages = [], currentScan }) => {
   );
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div ref={listRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
       <div className="max-w-3xl mx-auto px-3 py-4 space-y-4">
         
         {/* Welcome Message - show when no messages */}
@@ -56,7 +77,7 @@ const ChatArea = ({ conversationId, isTyping, messages = [], currentScan }) => {
         )}
 
         {/* Messages */}
-        {displayMessages.map((message) => {
+        {displayMessages.map((message, idx) => {
           switch (message.type) {
             case 'user':
               return (
@@ -66,6 +87,7 @@ const ChatArea = ({ conversationId, isTyping, messages = [], currentScan }) => {
                   content={message.content}
                   timestamp={message.timestamp}
                   avatar={message.avatar}
+                  className="animate-slideUp stagger-1"
                 />
               );
               
@@ -77,12 +99,13 @@ const ChatArea = ({ conversationId, isTyping, messages = [], currentScan }) => {
                   content={message.content}
                   timestamp={message.timestamp}
                   thinking={message.thinking}
+                  className="animate-fadeIn"
                 />
               );
               
             case 'ai_thinking':
               return (
-                <div key={message.id} className="flex items-start gap-3">
+                <div key={message.id} className="flex items-start gap-3 animate-fadeIn">
                   <div className="w-8 h-8 bg-gradient-to-br from-platinum-500 to-platinum-600 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Brain className="w-4 h-4 text-obsidian-950 animate-pulse" />
                   </div>
@@ -101,7 +124,7 @@ const ChatArea = ({ conversationId, isTyping, messages = [], currentScan }) => {
               
             case 'ai_reasoning':
               return (
-                <div key={message.id} className="flex items-start gap-3">
+                <div key={message.id} className="flex items-start gap-3 animate-fadeIn">
                   <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Brain className="w-4 h-4 text-white" />
                   </div>
@@ -147,7 +170,7 @@ const ChatArea = ({ conversationId, isTyping, messages = [], currentScan }) => {
 
         {/* Typing Indicator */}
         {isTyping && (
-          <div className="flex items-start gap-4">
+          <div className="flex items-start gap-4 animate-fadeIn">
             <div className="w-10 h-10 bg-gradient-to-br from-platinum-500 to-platinum-600 rounded-xl flex items-center justify-center flex-shrink-0">
               <Brain className="w-5 h-5 text-obsidian-950" />
             </div>
@@ -159,6 +182,14 @@ const ChatArea = ({ conversationId, isTyping, messages = [], currentScan }) => {
 
         {/* Scroll anchor */}
         <div ref={messagesEndRef} />
+        {showNewMsgHint && (
+          <button
+            onClick={() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); setAutoScroll(true); setShowNewMsgHint(false); }}
+            className="fixed bottom-24 right-8 z-30 px-3 py-2 bg-obsidian-850/90 border border-obsidian-700 rounded-full text-xs text-text-secondary hover:text-text-primary hover:border-platinum-500/40 transition-all shadow-lg"
+          >
+            Yeni mesajlar ↓
+          </button>
+        )}
       </div>
     </div>
   );
