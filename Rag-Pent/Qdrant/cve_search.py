@@ -99,28 +99,40 @@ class CVESearchEngine:
         """Qdrant client ve BGE-M3 modelini başlat"""
         try:
             # Qdrant bağlantısı (Cloud veya Local)
-            logger.info(f"Qdrant'a bağlanılıyor: {self.config.qdrant_host}:{self.config.qdrant_port}")
+            logger.info(f"Qdrant'a bağlanılıyor: {self.config.qdrant_host}")
             
-            # HuggingFace Private Space için
-            if self.config.huggingface_token:
-                # HuggingFace Space'e Bearer token ile bağlan
-                headers = {"Authorization": f"Bearer {self.config.huggingface_token}"}
-                self._client = QdrantClient(
-                    url=self.config.qdrant_host,
-                    timeout=self.config.timeout,
-                    https=True,
-                    headers=headers
-                )
-            # Cloud deployment için API key kullan
-            elif self.config.qdrant_api_key:
-                self._client = QdrantClient(
-                    url=self.config.qdrant_host,
-                    api_key=self.config.qdrant_api_key,
-                    timeout=self.config.timeout,
-                    https=self.config.qdrant_https
-                )
+            # URL format kontrolü (https:// ile başlıyorsa Cloud)
+            is_cloud_url = self.config.qdrant_host.startswith('http://') or self.config.qdrant_host.startswith('https://')
+            
+            if is_cloud_url:
+                # Cloud deployment (HuggingFace Space veya diğer)
+                logger.info(f"Cloud Qdrant bağlantısı (URL-based): {self.config.qdrant_host}")
+                
+                # HuggingFace Private Space için token
+                if self.config.huggingface_token:
+                    headers = {"Authorization": f"Bearer {self.config.huggingface_token}"}
+                    self._client = QdrantClient(
+                        url=self.config.qdrant_host,
+                        timeout=self.config.timeout,
+                        api_key=None,
+                        headers=headers
+                    )
+                # API key varsa
+                elif self.config.qdrant_api_key:
+                    self._client = QdrantClient(
+                        url=self.config.qdrant_host,
+                        api_key=self.config.qdrant_api_key,
+                        timeout=self.config.timeout
+                    )
+                else:
+                    # Public cloud Qdrant
+                    self._client = QdrantClient(
+                        url=self.config.qdrant_host,
+                        timeout=self.config.timeout
+                    )
             else:
-                # Local deployment için
+                # Local deployment (host:port format)
+                logger.info(f"Local Qdrant bağlantısı: {self.config.qdrant_host}:{self.config.qdrant_port}")
                 self._client = QdrantClient(
                     host=self.config.qdrant_host,
                     port=self.config.qdrant_port,
