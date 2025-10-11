@@ -1,143 +1,185 @@
-# Pentagent Firebase Deployment Guide
+# 🚀 Pentagent Deployment Rehberi
 
-## 📋 Ön Gereksinimler
+## 📊 Deployment Mimarisi
 
-1. **Firebase CLI Kurulumu:**
-```bash
-npm install -g firebase-tools
+```
+Frontend (Firebase Hosting)
+    ↓ HTTPS
+Backend (Render.com)
+    ↓ HTTPS + WebSocket
+Qdrant (HuggingFace Space - Private)
+    └─ 95,237 CVE Vektörleri
 ```
 
-2. **Firebase Projesi Oluştur:**
-- https://console.firebase.google.com adresine git
-- Yeni proje oluştur
-- Firebase Hosting ve Cloud Functions'ı etkinleştir
+---
 
-3. **Firebase Login:**
-```bash
-firebase login
+## ✅ ADIM 1: Qdrant (HuggingFace Space)
+
+**Durum:** ✅ Tamamlandı
+- **URL:** `https://meryemarpaci-pentagent-qdrant.hf.space`
+- **Status:** Running
+- **Vektörler:** 95,237 CVE
+
+---
+
+## ✅ ADIM 2: Backend (Render.com)
+
+### 2.1. Render.com'da Web Service Oluştur
+
+1. **https://render.com** → GitHub ile giriş yap
+2. **Dashboard → "New +" → "Web Service"**
+3. **Repo seç:** `Pentagent-Web`
+
+### 2.2. Ayarlar
+
+```
+Name: pentagent-backend
+Language: Python 3
+Branch: main
+
+Build Command:
+pip install -r requirements.txt
+
+Start Command:
+uvicorn web_api:app --host 0.0.0.0 --port $PORT
+
+Instance Type: Free
 ```
 
-## 🚀 Deployment Adımları
+### 2.3. Environment Variables
 
-### 1. Backend (Cloud Functions / Cloud Run)
+```env
+GEMINI_API_KEY
+AIzaSyC9d-8SPEV1cupSiqS4wXR705MXo45ZJGs
 
-Firebase Functions Python desteği sınırlı olduğundan, backend için **Google Cloud Run** kullanmanızı öneririz:
+ALLOWED_ORIGINS
+https://pentagent-b9007.web.app
 
-#### Option A: Cloud Run (Önerilen)
+QDRANT_HOST
+https://meryemarpaci-pentagent-qdrant.hf.space
 
-```bash
-# Google Cloud SDK kurulu olmalı
-gcloud init
+QDRANT_PORT
+443
 
-# Proje seç
-gcloud config set project YOUR_PROJECT_ID
-
-# Docker image oluştur
-gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/pentagent-backend
-
-# Cloud Run'a deploy et
-gcloud run deploy pentagent-backend \
-  --image gcr.io/YOUR_PROJECT_ID/pentagent-backend \
-  --platform managed \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --set-env-vars GEMINI_API_KEY=your_key_here
+HUGGINGFACE_TOKEN
+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
 ```
 
-#### Option B: Firebase Functions
+### 2.4. Health Check Path
 
-```bash
-cd functions
-firebase deploy --only functions
+```
+/health
 ```
 
-### 2. Frontend (Firebase Hosting)
+### 2.5. Deploy
+
+**"Deploy web service"** tıkla → 5-10 dakika bekle
+
+**Backend URL:** `https://pentagent-backend-xxxx.onrender.com`
+
+---
+
+## ✅ ADIM 3: Frontend (Firebase Hosting)
+
+### 3.1. Backend URL'ini Ayarla
 
 ```bash
-# Frontend'i build et
-cd pentagent-frontend
-npm install
+cd C:\Users\Meryem\Desktop\PENTTT\pentagentMr\Pentagent\pentagent-frontend
+
+# Backend URL'ini gir (Render'dan al)
+echo VITE_API_URL=https://pentagent-backend-xxxx.onrender.com > .env.production
+```
+
+### 3.2. Build ve Deploy
+
+```bash
 npm run build
 
-# Firebase'e deploy et
 cd ..
 firebase deploy --only hosting
 ```
 
-### 3. Full Deployment (Tek komut)
+**Frontend URL:** `https://pentagent-b9007.web.app`
 
+---
+
+## 🧪 Test
+
+### 1. Qdrant Test
 ```bash
-./deploy.sh
+curl -H "Authorization: Bearer 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" \
+  https://meryemarpaci-pentagent-qdrant.hf.space/health
 ```
 
-## 🔐 Environment Variables Ayarlama
-
-### Cloud Run için:
+### 2. Backend Test
 ```bash
-gcloud run services update pentagent-backend \
-  --set-env-vars GEMINI_API_KEY=your_gemini_api_key_here
+curl https://pentagent-backend-xxxx.onrender.com/health
 ```
 
-### Firebase Functions için:
-```bash
-firebase functions:config:set \
-  gemini.api_key="your_gemini_api_key_here"
+**Beklenen:**
+```json
+{
+  "status": "healthy",
+  "rag_available": true,
+  "rag_cves": 95237
+}
 ```
 
-## 🌐 Domain Ayarlama
-
-1. Firebase Console → Hosting → Custom Domain
-2. Domain'inizi ekleyin
-3. DNS kayıtlarını güncelleyin
-
-## 📊 Monitoring
-
+### 3. RAG Test
 ```bash
-# Logs görüntüle (Cloud Run)
-gcloud run services logs read pentagent-backend --limit=100
-
-# Firebase logs
-firebase functions:log
+curl -X POST "https://pentagent-backend-xxxx.onrender.com/api/rag/search" \
+  -H "Content-Type: application/json" \
+  -d "{\"query\":\"SQL injection\",\"limit\":3}"
 ```
 
-## 🔄 Güncelleme
+### 4. Frontend Test
+1. `https://pentagent-b9007.web.app` aç
+2. Pentest taraması yap
+3. `/rag-search` → CVE ara
+4. ContextPanel → CVE Suggestions kontrol et
 
-```bash
-# Backend güncelle
-gcloud run deploy pentagent-backend --image gcr.io/YOUR_PROJECT_ID/pentagent-backend
+---
 
-# Frontend güncelle
-cd pentagent-frontend && npm run build && cd .. && firebase deploy --only hosting
-```
+## 📁 Proje Dosyaları
 
-## ⚠️ Önemli Notlar
+### Tutulması Gerekenler
+- ✅ `README.md` - Ana readme
+- ✅ `RAG_INTEGRATION_README.md` - RAG kullanım rehberi
+- ✅ `HUGGINGFACE_QDRANT_DEPLOYMENT.md` - Qdrant deployment
+- ✅ `PRIVATE_SPACE_SOLUTION.md` - Private Space çözümü
+- ✅ `LICENSE` - Lisans
+- ✅ `requirements.txt` - Python dependencies
+- ✅ `web_api.py` - Backend API
+- ✅ `services/` - Servisler (RAG dahil)
+- ✅ `agent_core/` - AI agent mantığı
+- ✅ `tools/` - Security tools
+- ✅ `pentagent-frontend/` - React frontend
+- ✅ `Rag-Pent/Qdrant/` - RAG search modülleri
 
-1. **API Keys:** Tüm API key'leri environment variables'a taşıyın
-2. **CORS:** Backend'te CORS ayarlarını production domain'e göre güncelleyin
-3. **Security:** Firebase Security Rules oluşturun
-4. **Rate Limiting:** Cloud Run'da rate limiting ekleyin
-5. **WebSocket:** Cloud Run WebSocket'leri destekler, Firebase Functions desteklemez
+### Silinen Gereksizler
+- ❌ Eski deployment dosyaları (10+ MD)
+- ❌ Deploy script'leri (bat/sh)
+- ❌ Docker compose dosyaları
+- ❌ Fly.io dosyaları
 
-## 🐛 Troubleshooting
+---
 
-### Backend başlamıyor:
-```bash
-# Logs kontrol et
-gcloud run services logs read pentagent-backend --limit=50
+## 💰 Maliyet
 
-# Environment variables kontrol et
-gcloud run services describe pentagent-backend
-```
+| Servis | Maliyet |
+|--------|---------|
+| HuggingFace Space | $0 |
+| Render.com | $0 |
+| Firebase Hosting | $0 |
+| **TOPLAM** | **$0** |
 
-### Frontend bağlanamıyor:
-- `pentagent-frontend/src/services/pentagentAPI.js` dosyasında backend URL'i güncelle
-- CORS ayarlarını kontrol et
+---
 
-### WebSocket bağlantısı yok:
-- Cloud Run kullanın (Firebase Functions WebSocket desteklemez)
-- WSS (secure WebSocket) kullanın
+## 🚦 Deployment Durumu
 
-## 📞 Destek
+- ✅ **Qdrant:** Running
+- 🔄 **Backend:** Deploy edilecek
+- 🔄 **Frontend:** Deploy edilecek
 
-Sorun yaşarsanız GitHub issues açın veya dokümantasyona bakın.
+**Sonraki adım:** Render.com'da backend'i deploy et! 🚀
 
