@@ -86,7 +86,15 @@ class RAGService:
             
             # Environment variables'dan config oluştur
             qdrant_host = os.getenv('QDRANT_HOST', 'localhost')
-            qdrant_port = int(os.getenv('QDRANT_PORT', '6333'))
+            
+            # Port: HuggingFace Space için gereksiz, ignore et
+            qdrant_port_str = os.getenv('QDRANT_PORT', '6333')
+            if '.hf.space' in qdrant_host:
+                qdrant_port = 443  # HuggingFace Space için HTTPS default port
+                logger.info("🌐 HuggingFace Space detected - using default HTTPS port (443)")
+            else:
+                qdrant_port = int(qdrant_port_str)
+            
             qdrant_api_key = os.getenv('QDRANT_API_KEY')
             hf_token = os.getenv('HUGGINGFACE_TOKEN')
             use_hf_api = os.getenv('USE_HF_INFERENCE_API', 'false').lower() == 'true'
