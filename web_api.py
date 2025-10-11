@@ -495,7 +495,7 @@ async def test_qdrant_connection():
             "error": str(e)
         })
     
-    # Test 3: QdrantClient initialization
+    # Test 3: QdrantClient initialization (default settings)
     try:
         client = QdrantClient(
             url=qdrant_url,
@@ -504,10 +504,9 @@ async def test_qdrant_connection():
             https=False
         )
         
-        # Test get_collections
         collections = client.get_collections()
         results["tests"].append({
-            "test": "QdrantClient initialization",
+            "test": "QdrantClient (default)",
             "success": True,
             "collections_found": len(collections.collections),
             "collection_names": [c.name for c in collections.collections]
@@ -515,10 +514,45 @@ async def test_qdrant_connection():
     except Exception as e:
         import traceback
         results["tests"].append({
-            "test": "QdrantClient initialization",
+            "test": "QdrantClient (default)",
             "success": False,
             "error": str(e),
-            "traceback": traceback.format_exc()
+            "traceback": traceback.format_exc()[:500]
+        })
+    
+    # Test 4: QdrantClient with optimized settings
+    try:
+        import httpx
+        
+        # Custom httpx client with longer timeout
+        http_client = httpx.Client(
+            timeout=httpx.Timeout(60.0, connect=60.0, read=60.0),
+            limits=httpx.Limits(max_connections=10, max_keepalive_connections=5)
+        )
+        
+        client = QdrantClient(
+            url=qdrant_url,
+            timeout=60,
+            prefer_grpc=False,
+            https=False,
+            # Use custom http client
+            http_client=http_client
+        )
+        
+        collections = client.get_collections()
+        results["tests"].append({
+            "test": "QdrantClient (optimized)",
+            "success": True,
+            "collections_found": len(collections.collections),
+            "collection_names": [c.name for c in collections.collections]
+        })
+    except Exception as e:
+        import traceback
+        results["tests"].append({
+            "test": "QdrantClient (optimized)",
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()[:500]
         })
     
     return results
