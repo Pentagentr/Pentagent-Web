@@ -14,6 +14,7 @@ import requests
 
 from qdrant_client import QdrantClient, models
 from qdrant_client.http.exceptions import UnexpectedResponse
+import httpx
 
 try:
     from FlagEmbedding import BGEM3FlagModel
@@ -117,50 +118,52 @@ class CVESearchEngine:
                             full_url = f"{self.config.qdrant_host}:{self.config.qdrant_port}"
                 else:
                     # HuggingFace Space - port ekleme, direkt URL kullan
-                    logger.info("HuggingFace Space detected - using direct URL (no port)")
+                    logger.info("HuggingFace Space detected - using httpx for fast connection")
                 
                 logger.info(f"Full Qdrant URL: {full_url}")
+                self._base_url = full_url
                 
-                # HuggingFace Private Space için token
-                if self.config.huggingface_token:
-                    logger.info("HuggingFace token ile bağlanılıyor (Private Space)")
-                    self._client = QdrantClient(
-                        url=full_url,
-                        api_key=self.config.huggingface_token,
-                        timeout=self.config.timeout,
-                        prefer_grpc=False,  # HTTP kullan
-                        https=False  # URL'de zaten https var
-                    )
-                # API key varsa
-                elif self.config.qdrant_api_key:
-                    self._client = QdrantClient(
-                        url=full_url,
-                        api_key=self.config.qdrant_api_key,
-                        timeout=self.config.timeout,
-                        prefer_grpc=False
-                    )
-                else:
-                    # Public cloud Qdrant
-                    self._client = QdrantClient(
-                        url=full_url,
-                        timeout=self.config.timeout,
-                        prefer_grpc=False,  # HTTP kullan
-                        https=False  # URL'de zaten https var
-                    )
+                # Cloud için httpx kullan (QdrantClient çok yavaş)
+                logger.info("Using httpx for Qdrant API calls (faster than QdrantClient)")
+                self._use_httpx = True
+                self._httpx_client = httpx.Client(
+                    timeout=httpx.Timeout(30.0, connect=10.0),
+                    follow_redirects=True
+                )
+                
+                # Collection kontrolü (httpx ile)
+                logger.info("Checking collections via httpx...")
+                collections_response = self._httpx_client.get(f"{full_url}/collections")
+                collections_response.raise_for_status()
+                collections_data = collections_response.json()
+                
+                collection_names = [c['name'] for c in collections_data['result']['collections']]
+                logger.info(f"Found collections: {collection_names}")
+                
+                if self.config.collection_name not in collection_names:
+                    raise ValueError(f"Collection '{self.config.collection_name}' bulunamadı!")
+                
+                # QdrantClient'ı None yap, httpx kullanacağız
+                self._client = None
+                
             else:
-                # Local deployment (host:port format)
+                # Local deployment (host:port format) - QdrantClient kullan
                 logger.info(f"Local Qdrant bağlantısı: {self.config.qdrant_host}:{self.config.qdrant_port}")
+                self._use_httpx = False
+                self._httpx_client = None
+                self._base_url = f"http://{self.config.qdrant_host}:{self.config.qdrant_port}"
+                
                 self._client = QdrantClient(
                     host=self.config.qdrant_host,
                     port=self.config.qdrant_port,
                     timeout=self.config.timeout
                 )
-            
-            # Collection kontrolü
-            collections = self._client.get_collections().collections
-            collection_exists = any(c.name == self.config.collection_name for c in collections)
-            if not collection_exists:
-                raise ValueError(f"Collection '{self.config.collection_name}' bulunamadı!")
+                
+                # Collection kontrolü
+                collections = self._client.get_collections().collections
+                collection_exists = any(c.name == self.config.collection_name for c in collections)
+                if not collection_exists:
+                    raise ValueError(f"Collection '{self.config.collection_name}' bulunamadı!")
             
             logger.info(f"Collection '{self.config.collection_name}' bulundu")
             
@@ -349,14 +352,30 @@ class CVESearchEngine:
     def _search_dense(self, dense_vector: List[float], limit: int) -> List[Dict]:
         """Dense (semantik) arama yapar"""
         try:
-            results = self._client.query_points(
-                collection_name=self.config.collection_name,
-                query=dense_vector,
-                using="text-dense",
-                limit=limit,
-                with_payload=True
-            )
-            return [{"id": r.id, "score": r.score, "payload": r.payload} for r in results.points]
+            if self._use_httpx:
+                # httpx ile REST API çağrısı
+                url = f"{self._base_url}/collections/{self.config.collection_name}/points/query"
+                payload = {
+                    "query": dense_vector,
+                    "using": "text-dense",
+                    "limit": limit,
+                    "with_payload": True
+                }
+                response = self._httpx_client.post(url, json=payload)
+                response.raise_for_status()
+                data = response.json()
+                return [{"id": p["id"], "score": p["score"], "payload": p.get("payload", {})} 
+                        for p in data["result"]["points"]]
+            else:
+                # QdrantClient ile
+                results = self._client.query_points(
+                    collection_name=self.config.collection_name,
+                    query=dense_vector,
+                    using="text-dense",
+                    limit=limit,
+                    with_payload=True
+                )
+                return [{"id": r.id, "score": r.score, "payload": r.payload} for r in results.points]
         except Exception as e:
             logger.error(f"Dense search hatası: {e}")
             return []
@@ -364,14 +383,33 @@ class CVESearchEngine:
     def _search_sparse(self, sparse_vector: models.SparseVector, limit: int) -> List[Dict]:
         """Sparse (keyword) arama yapar"""
         try:
-            results = self._client.query_points(
-                collection_name=self.config.collection_name,
-                query=sparse_vector,
-                using="text-sparse",
-                limit=limit,
-                with_payload=True
-            )
-            return [{"id": r.id, "score": r.score, "payload": r.payload} for r in results.points]
+            if self._use_httpx:
+                # httpx ile REST API çağrısı
+                url = f"{self._base_url}/collections/{self.config.collection_name}/points/query"
+                payload = {
+                    "query": {
+                        "indices": sparse_vector.indices,
+                        "values": sparse_vector.values
+                    },
+                    "using": "text-sparse",
+                    "limit": limit,
+                    "with_payload": True
+                }
+                response = self._httpx_client.post(url, json=payload)
+                response.raise_for_status()
+                data = response.json()
+                return [{"id": p["id"], "score": p["score"], "payload": p.get("payload", {})} 
+                        for p in data["result"]["points"]]
+            else:
+                # QdrantClient ile
+                results = self._client.query_points(
+                    collection_name=self.config.collection_name,
+                    query=sparse_vector,
+                    using="text-sparse",
+                    limit=limit,
+                    with_payload=True
+                )
+                return [{"id": r.id, "score": r.score, "payload": r.payload} for r in results.points]
         except Exception as e:
             logger.error(f"Sparse search hatası: {e}")
             return []
@@ -540,18 +578,39 @@ class CVESearchEngine:
             # CVE ID'den UUID oluştur
             point_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, cve_id))
             
-            results = self._client.retrieve(
-                collection_name=self.config.collection_name,
-                ids=[point_uuid],
-                with_payload=True,
-                with_vectors=False
-            )
+            if self._use_httpx:
+                # httpx ile REST API çağrısı
+                url = f"{self._base_url}/collections/{self.config.collection_name}/points"
+                payload_data = {
+                    "ids": [point_uuid],
+                    "with_payload": True,
+                    "with_vector": False
+                }
+                response = self._httpx_client.post(url, json=payload_data)
+                response.raise_for_status()
+                data = response.json()
+                
+                if not data["result"]:
+                    logger.warning(f"CVE bulunamadı: {cve_id}")
+                    return None
+                
+                point = data["result"][0]
+                payload = point["payload"]
+            else:
+                # QdrantClient ile
+                results = self._client.retrieve(
+                    collection_name=self.config.collection_name,
+                    ids=[point_uuid],
+                    with_payload=True,
+                    with_vectors=False
+                )
+                
+                if not results:
+                    logger.warning(f"CVE bulunamadı: {cve_id}")
+                    return None
+                
+                payload = results[0].payload
             
-            if not results:
-                logger.warning(f"CVE bulunamadı: {cve_id}")
-                return None
-            
-            payload = results[0].payload
             metadata = payload.get("metadata", {})
             
             return SearchResult(
