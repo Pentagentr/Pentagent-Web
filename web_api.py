@@ -440,6 +440,59 @@ async def get_rag_stats():
         logger.error(f"Stats hatası: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/debug/test-qdrant")
+async def test_qdrant_connection():
+    """Debug: Render'dan HuggingFace Space'e bağlantı testi"""
+    import httpx
+    import os
+    
+    qdrant_url = os.getenv('QDRANT_HOST', 'localhost')
+    results = {
+        "qdrant_host_env": qdrant_url,
+        "tests": []
+    }
+    
+    # Test 1: Root endpoint
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(qdrant_url)
+            results["tests"].append({
+                "test": "Root endpoint",
+                "url": qdrant_url,
+                "status": response.status_code,
+                "success": True,
+                "response": response.json() if response.status_code == 200 else None
+            })
+    except Exception as e:
+        results["tests"].append({
+            "test": "Root endpoint",
+            "url": qdrant_url,
+            "success": False,
+            "error": str(e)
+        })
+    
+    # Test 2: Collections endpoint
+    try:
+        collections_url = f"{qdrant_url}/collections"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(collections_url)
+            results["tests"].append({
+                "test": "Collections endpoint",
+                "url": collections_url,
+                "status": response.status_code,
+                "success": True,
+                "response": response.json() if response.status_code == 200 else None
+            })
+    except Exception as e:
+        results["tests"].append({
+            "test": "Collections endpoint",
+            "url": collections_url,
+            "success": False,
+            "error": str(e)
+        })
+    
+    return results
+
 if __name__ == "__main__":
     uvicorn.run(
         "web_api:app",
