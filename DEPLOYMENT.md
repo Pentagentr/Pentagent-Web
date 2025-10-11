@@ -1,185 +1,244 @@
-# 🚀 Pentagent Deployment Rehberi
+# 🚀 Pentagent Deployment Guide
 
-## 📊 Deployment Mimarisi
+## 📊 System Architecture
 
 ```
+┌─────────────────────────────────────────────────┐
+│           PENTAGENT ARCHITECTURE                │
+└─────────────────────────────────────────────────┘
+
 Frontend (Firebase Hosting)
-    ↓ HTTPS
-Backend (Render.com)
-    ↓ HTTPS + WebSocket
-Qdrant (HuggingFace Space - Private)
-    └─ 95,237 CVE Vektörleri
+    ↓ HTTPS / WebSocket
+Backend API (Render.com)
+    ↓ REST API
+RAG Vector Database (HuggingFace Space)
+    └─ Qdrant (95K+ CVE vectors)
 ```
 
 ---
 
-## ✅ ADIM 1: Qdrant (HuggingFace Space)
+## 🎯 Deployment Stack
 
-**Durum:** ✅ Tamamlandı
-- **URL:** `https://meryemarpaci-pentagent-qdrant.hf.space`
-- **Status:** Running
-- **Vektörler:** 95,237 CVE
+| Component | Platform | Type | Cost |
+|-----------|----------|------|------|
+| **Frontend** | Firebase Hosting | Static SPA | Free |
+| **Backend** | Render.com | Python/FastAPI | Free |
+| **Vector DB** | HuggingFace Space | Docker/Qdrant | Free |
 
 ---
 
-## ✅ ADIM 2: Backend (Render.com)
+## 🚀 Deployment Steps
 
-### 2.1. Render.com'da Web Service Oluştur
+### 1. Vector Database (Qdrant on HuggingFace)
 
-1. **https://render.com** → GitHub ile giriş yap
-2. **Dashboard → "New +" → "Web Service"**
-3. **Repo seç:** `Pentagent-Web`
+**Setup:**
+1. Create HuggingFace account
+2. Create new Space (Docker SDK)
+3. Upload Qdrant Docker image with pre-loaded vectors
+4. Set Space visibility (public/private)
+5. Get Space URL and access token (if private)
 
-### 2.2. Ayarlar
+**Configuration:**
+- Port: 7860 (HuggingFace default)
+- Storage: Persistent volume
+- Vectors: 95K+ CVE embeddings (BGE-M3)
 
-```
-Name: pentagent-backend
+---
+
+### 2. Backend API (Render.com)
+
+**Setup:**
+1. Connect GitHub repository
+2. Create new Web Service
+3. Configure build settings
+
+**Build Configuration:**
+```yaml
 Language: Python 3
-Branch: main
-
-Build Command:
-pip install -r requirements.txt
-
-Start Command:
-uvicorn web_api:app --host 0.0.0.0 --port $PORT
-
+Build Command: pip install -r requirements.txt
+Start Command: uvicorn web_api:app --host 0.0.0.0 --port $PORT
 Instance Type: Free
 ```
 
-### 2.3. Environment Variables
-
+**Environment Variables Required:**
 ```env
-GEMINI_API_KEY
-AIzaSyC9d-8SPEV1cupSiqS4wXR705MXo45ZJGs
-
-ALLOWED_ORIGINS
-https://pentagent-b9007.web.app
-
-QDRANT_HOST
-https://meryemarpaci-pentagent-qdrant.hf.space
-
-QDRANT_PORT
-443
-
-HUGGINGFACE_TOKEN
-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
+GEMINI_API_KEY=<your_gemini_api_key>
+ALLOWED_ORIGINS=<your_frontend_url>
+QDRANT_HOST=<your_huggingface_space_url>
+QDRANT_PORT=443
+HUGGINGFACE_TOKEN=<your_hf_token>  # If Space is private
 ```
 
-### 2.4. Health Check Path
-
-```
-/health
-```
-
-### 2.5. Deploy
-
-**"Deploy web service"** tıkla → 5-10 dakika bekle
-
-**Backend URL:** `https://pentagent-backend-xxxx.onrender.com`
+**Health Check:**
+- Path: `/health`
+- Expected Response: 
+  ```json
+  {
+    "status": "healthy",
+    "rag_available": true,
+    "rag_cves": 95237
+  }
+  ```
 
 ---
 
-## ✅ ADIM 3: Frontend (Firebase Hosting)
+### 3. Frontend (Firebase Hosting)
 
-### 3.1. Backend URL'ini Ayarla
+**Setup:**
+1. Build production bundle with backend URL
+2. Deploy to Firebase Hosting
 
+**Build Commands:**
 ```bash
-cd C:\Users\Meryem\Desktop\PENTTT\pentagentMr\Pentagent\pentagent-frontend
+cd pentagent-frontend
 
-# Backend URL'ini gir (Render'dan al)
-echo VITE_API_URL=https://pentagent-backend-xxxx.onrender.com > .env.production
-```
+# Set backend URL
+echo VITE_API_URL=<your_backend_url> > .env.production
 
-### 3.2. Build ve Deploy
-
-```bash
+# Build
 npm run build
 
-cd ..
+# Deploy
 firebase deploy --only hosting
 ```
 
-**Frontend URL:** `https://pentagent-b9007.web.app`
+---
+
+## 🔌 API Endpoints
+
+### Core Endpoints
+- `GET /health` - System health check
+- `POST /api/scan` - Start security scan
+- `WebSocket /ws` - Real-time scan updates
+
+### RAG Endpoints
+- `POST /api/rag/search` - Search CVE database
+- `GET /api/rag/cve/{id}` - Get CVE details
+- `POST /api/rag/analyze-scan` - Analyze scan results for CVEs
+- `GET /api/rag/stats` - RAG system statistics
 
 ---
 
-## 🧪 Test
+## 🔒 Security Considerations
 
-### 1. Qdrant Test
+### Environment Variables
+- Store all secrets in platform environment variables
+- Never commit API keys or tokens to repository
+- Use `.env.production` for frontend (gitignored)
+
+### CORS Configuration
+- Backend validates allowed origins
+- Frontend URL must be whitelisted
+- WebSocket connections authenticated
+
+### Vector Database Access
+- Private HuggingFace Space requires authentication token
+- Token passed via HTTP headers
+- Read-only access recommended for backend
+
+---
+
+## 🧪 Testing
+
+### 1. Backend Health
 ```bash
-curl -H "Authorization: Bearer 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" \
-  https://meryemarpaci-pentagent-qdrant.hf.space/health
+curl https://<backend-url>/health
 ```
 
-### 2. Backend Test
+### 2. RAG System
 ```bash
-curl https://pentagent-backend-xxxx.onrender.com/health
-```
-
-**Beklenen:**
-```json
-{
-  "status": "healthy",
-  "rag_available": true,
-  "rag_cves": 95237
-}
-```
-
-### 3. RAG Test
-```bash
-curl -X POST "https://pentagent-backend-xxxx.onrender.com/api/rag/search" \
+curl -X POST "https://<backend-url>/api/rag/search" \
   -H "Content-Type: application/json" \
-  -d "{\"query\":\"SQL injection\",\"limit\":3}"
+  -d '{"query":"SQL injection","limit":5}'
 ```
 
-### 4. Frontend Test
-1. `https://pentagent-b9007.web.app` aç
-2. Pentest taraması yap
-3. `/rag-search` → CVE ara
-4. ContextPanel → CVE Suggestions kontrol et
+### 3. Frontend
+- Navigate to deployed URL
+- Test pentest functionality
+- Test CVE search page (`/rag-search`)
+- Verify ContextPanel CVE suggestions
 
 ---
 
-## 📁 Proje Dosyaları
+## 📈 Performance & Limits
 
-### Tutulması Gerekenler
-- ✅ `README.md` - Ana readme
-- ✅ `RAG_INTEGRATION_README.md` - RAG kullanım rehberi
-- ✅ `HUGGINGFACE_QDRANT_DEPLOYMENT.md` - Qdrant deployment
-- ✅ `PRIVATE_SPACE_SOLUTION.md` - Private Space çözümü
-- ✅ `LICENSE` - Lisans
-- ✅ `requirements.txt` - Python dependencies
-- ✅ `web_api.py` - Backend API
-- ✅ `services/` - Servisler (RAG dahil)
-- ✅ `agent_core/` - AI agent mantığı
-- ✅ `tools/` - Security tools
-- ✅ `pentagent-frontend/` - React frontend
-- ✅ `Rag-Pent/Qdrant/` - RAG search modülleri
+### Free Tier Limitations
 
-### Silinen Gereksizler
-- ❌ Eski deployment dosyaları (10+ MD)
-- ❌ Deploy script'leri (bat/sh)
-- ❌ Docker compose dosyaları
-- ❌ Fly.io dosyaları
+**Render.com:**
+- 750 hours/month
+- 512MB RAM
+- Spins down after 15min inactivity
+- Cold start: 30-60 seconds
+
+**HuggingFace Space:**
+- CPU-basic (free tier)
+- Persistent storage included
+- Always-on (no sleep)
+
+**Firebase Hosting:**
+- 10GB storage
+- 360MB/day transfer
+- CDN included
 
 ---
 
-## 💰 Maliyet
+## 🛠️ Maintenance
 
-| Servis | Maliyet |
-|--------|---------|
-| HuggingFace Space | $0 |
-| Render.com | $0 |
-| Firebase Hosting | $0 |
-| **TOPLAM** | **$0** |
+### Update Deployment
+
+**Backend:**
+- Push to GitHub → Auto-deploy on Render
+- Monitor logs in Render Dashboard
+
+**Frontend:**
+- Build and deploy: `firebase deploy --only hosting`
+
+**Vector Database:**
+- Update via HuggingFace Space interface
+- Re-upload Docker image if needed
+
+### Monitoring
+- **Backend:** Render Dashboard → Logs
+- **Frontend:** Firebase Console → Hosting
+- **Qdrant:** HuggingFace Space → Logs
 
 ---
 
-## 🚦 Deployment Durumu
+## 📚 Documentation
 
-- ✅ **Qdrant:** Running
-- 🔄 **Backend:** Deploy edilecek
-- 🔄 **Frontend:** Deploy edilecek
+- `README.md` - Main project documentation
+- `RAG_INTEGRATION_README.md` - RAG system usage
+- `HUGGINGFACE_QDRANT_DEPLOYMENT.md` - Qdrant deployment details
+- `PRIVATE_SPACE_SOLUTION.md` - Private Space authentication
 
-**Sonraki adım:** Render.com'da backend'i deploy et! 🚀
+---
 
+## 🆘 Troubleshooting
+
+### Backend Build Fails
+- Check `requirements.txt` dependencies
+- Verify Python version compatibility
+- Review build logs in Render
+
+### RAG Not Available
+- Verify HuggingFace Space is running
+- Check authentication token
+- Confirm Qdrant collection exists
+
+### Frontend Can't Connect
+- Verify backend URL in `.env.production`
+- Check CORS settings (ALLOWED_ORIGINS)
+- Inspect browser console for errors
+
+---
+
+## 📞 Support
+
+For issues and questions:
+- Check logs in respective platforms
+- Review API documentation
+- Verify environment variables
+
+---
+
+**License:** Apache 2.0 - Open Source & Licensable
