@@ -28,6 +28,7 @@ const ChatInterface = () => {
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
   const [currentScan, setCurrentScan] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [scanResults, setScanResults] = useState(null);
   
   const apiRef = useRef(new PentagentAPI());
 
@@ -99,6 +100,12 @@ const ChatInterface = () => {
         });
         setIsTyping(false);
         setCurrentScan(null);
+        
+        // Scan sonuçlarını kaydet (CVE analizi için)
+        if (data.result) {
+          console.log('Scan sonuçları alındı:', data.result);
+          setScanResults(data.result);
+        }
         break;
         
       case 'scan_started':
@@ -388,6 +395,7 @@ const ChatInterface = () => {
         isOpen={contextOpen}
         conversationId={activeConversation}
         onToggle={() => setContextOpen(!contextOpen)}
+        scanResults={scanResults}
       />
     </div>
   );
