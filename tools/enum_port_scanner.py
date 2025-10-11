@@ -320,7 +320,25 @@ class PortScannerModule(MCPTool):
                                                  başarısız ise (None, error_message).
         """
         if not self._is_nmap_installed():
-            return None, "Nmap sistemde kurulu değil. Lütfen nmap'i kurun."
+            # Nmap yoksa: En yaygın portlarda hızlı TCP connect fallback taraması (saf Python)
+            try:
+                import socket
+                self._add_reasoning(reasoning_log, "fallback_scan", "Nmap bulunamadı. Python tabanlı hızlı port taraması başlatılıyor (top common ports).")
+                parsed_targets = self._parse_target_input(target)
+                host = parsed_targets.split()[0] if parsed_targets else target
+                common_ports = [80, 443, 22, 21, 25, 110, 143, 587, 993, 995, 8080, 8443, 3306, 5432, 6379, 27017, 3389, 5900, 445, 139]
+                open_tcp = {}
+                for p in common_ports:
+                    try:
+                        with socket.create_connection((host, p), timeout=1.0):
+                            open_tcp[p] = {"state": "open", "name": "unknown", "product": "", "version": "", "cpe": ""}
+                    except Exception:
+                        # closed/filtered - ignore
+                        continue
+                scan_data = {"scan": {host: {"tcp": open_tcp}}}
+                return scan_data, None
+            except Exception as e:
+                return None, f"Nmap yok ve fallback tarama başarısız: {str(e)}"
 
         # Target'ı parse et - virgülle ayrılmış IP'leri düzelt
         parsed_targets = self._parse_target_input(target)

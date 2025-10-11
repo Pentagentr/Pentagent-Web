@@ -91,7 +91,7 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="w-80 bg-obsidian-900 border-l border-obsidian-700 flex flex-col">
+    <div className="w-full bg-obsidian-900 border-l border-obsidian-700 flex flex-col">
       {/* Header */}
       <div className="p-4 border-b border-obsidian-700 flex items-center justify-between">
         <h3 className="font-semibold text-text-primary">Scan Context</h3>
@@ -125,7 +125,7 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
         
         {activeTab === 'cve' && (
           <>
@@ -163,45 +163,51 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
                     Yenile
                   </Button>
                 </div>
-                {cveResults.map((cve, index) => (
-                  <Card key={cve.cve_id} variant="default" className="p-3 hover:border-platinum-500/50 transition-all">
-                    <div className="space-y-2">
+                {cveResults.map((cve) => (
+                  <Card key={cve.cve_id} variant="default" className="p-5 hover:border-platinum-500/50 transition-all">
+                    <div className="space-y-3">
                       {/* CVE Header */}
                       <div className="flex items-start justify-between">
                         <div>
-                          <h5 className="text-sm font-semibold text-text-primary">{cve.cve_id}</h5>
-                          <div className="flex items-center gap-2 mt-1">
+                          <h5 className="text-base font-semibold text-text-primary">{cve.cve_id}</h5>
+                          <div className="flex items-center gap-3 mt-2 text-sm">
                             {cve.severity && (
                               <span className={`w-2 h-2 rounded-full ${getSeverityColor(cve.severity)}`} />
                             )}
-                            <span className="text-xs text-text-tertiary">{cve.severity || 'N/A'}</span>
+                            <span className="text-text-tertiary">{cve.severity || 'N/A'}</span>
                             {cve.base_score && (
-                              <span className="text-xs text-text-tertiary">
-                                • CVSS: {cve.base_score}
-                              </span>
+                              <span className="text-text-tertiary">CVSS: {cve.base_score}</span>
+                            )}
+                            {cve.attack_vector && (
+                              <span className="text-text-tertiary">Vector: {cve.attack_vector}</span>
+                            )}
+                            {cve.published_date && (
+                              <span className="text-text-tertiary">Published: {cve.published_date}</span>
                             )}
                           </div>
                         </div>
-                        <div className="text-xs text-platinum-400 font-medium">
+                        <div className="text-sm text-platinum-400 font-medium">
                           {(cve.score * 100).toFixed(0)}%
                         </div>
                       </div>
 
                       {/* Description */}
-                      <p className="text-xs text-text-secondary leading-relaxed line-clamp-3">
+                      <p className="text-sm text-text-secondary leading-relaxed">
                         {cve.description}
                       </p>
 
                       {/* Link */}
-                      <a
-                        href={`https://nvd.nist.gov/vuln/detail/${cve.cve_id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-xs text-platinum-400 hover:text-platinum-300 transition-colors"
-                      >
-                        <ExternalLink className="w-3 h-3" />
-                        <span>NVD'de Aç</span>
-                      </a>
+                      <div className="flex items-center justify-between pt-2">
+                        <a
+                          href={`https://nvd.nist.gov/vuln/detail/${cve.cve_id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-sm text-platinum-400 hover:text-platinum-300 transition-colors"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          <span>NVD'de Aç</span>
+                        </a>
+                      </div>
                     </div>
                   </Card>
                 ))}

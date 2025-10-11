@@ -13,13 +13,11 @@ import {
   WifiOff
 } from 'lucide-react';
 import Button from '../../common/Button';
-import ConversationSidebar from '../ConversationSidebar';
 import ChatArea from '../ChatArea';
 import ContextPanel from '../ContextPanel';
 import PentagentAPI from '../../../services/pentagentAPI';
 
 const ChatInterface = () => {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [contextOpen, setContextOpen] = useState(true);
   const [message, setMessage] = useState('');
   const [conversations, setConversations] = useState([]);
@@ -162,6 +160,25 @@ const ChatInterface = () => {
     };
   }, []); // Boş dependency array - sadece mount/unmount'ta çalışsın
 
+  const parseUserIntent = (text) => {
+    const lower = text.toLowerCase().trim();
+    // Extract a likely target (URL/domain/ip - first token containing dot or starting with http)
+    const tokens = lower.split(/\s+/);
+    let targetToken = tokens.find(t => t.startsWith('http://') || t.startsWith('https://') || t.includes('.')) || lower;
+    // Clean target from trailing words
+    targetToken = targetToken.replace(/,$/, '');
+    // Task inference
+    let task = 'Genel güvenlik testi yap';
+    if (lower.includes('port') || lower.includes('açık port') || lower.includes('portları tara') || lower.includes('port taraması')) {
+      task = 'Açık portları tara';
+    } else if (lower.includes('sql')) {
+      task = 'SQL injection testi yap';
+    } else if (lower.includes('xss')) {
+      task = 'XSS testi yap';
+    }
+    return { target: targetToken, task };
+  };
+
   const handleSendMessage = (e) => {
     e.preventDefault();
     
@@ -184,14 +201,15 @@ const ChatInterface = () => {
     setIsTyping(true);
     
     // Gerçek güvenlik testi başlat
+    const { target, task } = parseUserIntent(message);
     if (connectionStatus === 'connected') {
       console.log('WebSocket ile scan başlatılıyor...');
       // WebSocket ile gönder
-      apiRef.current.startScan(message, 'Kapsamlı güvenlik testi yap');
+      apiRef.current.startScan(target, task);
     } else {
       console.log('REST API ile scan başlatılıyor...');
       // REST API fallback
-      apiRef.current.startScanREST(message, 'Kapsamlı güvenlik testi yap')
+      apiRef.current.startScanREST(target, task)
         .then(result => {
           console.log('REST API scan started:', result);
           addMessage({
@@ -240,19 +258,26 @@ const ChatInterface = () => {
     }
   ];
 
+  // CVE sonuçları oluştuğunda sağ paneli otomatik aç
+  useEffect(() => {
+    if (scanResults) {
+      setContextOpen(true);
+    }
+  }, [scanResults]);
+
+  const isExpanded = Boolean(scanResults);
+
   return (
     <div className="h-full bg-obsidian-950 flex overflow-hidden pt-0">
-      {/* Conversation Sidebar */}
-      <ConversationSidebar 
-        isOpen={sidebarOpen}
-        conversations={conversations}
-        activeConversation={activeConversation}
-        onSelectConversation={setActiveConversation}
-        onToggle={() => setSidebarOpen(!sidebarOpen)}
-      />
-
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col min-w-0 max-w-full overflow-hidden">
+      <div className={
+        `${contextOpen
+          ? (isExpanded
+              ? 'w-full md:w-1/2'
+              : 'flex-1')
+          : 'w-full'} ` +
+        'flex flex-col min-w-0 max-w-full overflow-hidden transition-all duration-300 ease-out'
+      }>
         {/* Status Bar - Sabit, navbar'ın hemen altında */}
         <div className="w-full h-12 bg-obsidian-900 border-b border-obsidian-700 flex items-center justify-between px-6 flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -375,13 +400,22 @@ const ChatInterface = () => {
         </div>
       </div>
 
-      {/* Context Panel */}
-      <ContextPanel 
-        isOpen={contextOpen}
-        conversationId={activeConversation}
-        onToggle={() => setContextOpen(!contextOpen)}
-        scanResults={scanResults}
-      />
+      {/* Context Panel Wrapper */}
+      {contextOpen && (
+        <div
+          className={
+            `${isExpanded ? 'hidden md:flex md:w-1/2' : 'hidden md:flex md:w-[20rem]'} ` +
+            'h-full border-l border-obsidian-800 transition-all duration-300 ease-out'
+          }
+        >
+          <ContextPanel
+            isOpen={contextOpen}
+            conversationId={activeConversation}
+            onToggle={() => setContextOpen(!contextOpen)}
+            scanResults={scanResults}
+          />
+        </div>
+      )}
     </div>
   );
 };
