@@ -108,28 +108,40 @@ class CVESearchEngine:
                 # Cloud deployment (HuggingFace Space veya diğer)
                 logger.info(f"Cloud Qdrant bağlantısı (URL-based): {self.config.qdrant_host}")
                 
+                # Port'u URL'e ekle (HuggingFace Space için)
+                full_url = self.config.qdrant_host
+                if self.config.qdrant_port and self.config.qdrant_port != 443:
+                    # Port'u URL'e ekle (sadece 443 değilse)
+                    if ':' not in full_url.split('/')[-1]:  # URL'de port yoksa
+                        full_url = f"{self.config.qdrant_host}:{self.config.qdrant_port}"
+                
+                logger.info(f"Full Qdrant URL: {full_url}")
+                
                 # HuggingFace Private Space için token
                 if self.config.huggingface_token:
                     logger.info("HuggingFace token ile bağlanılıyor (Private Space)")
-                    # HuggingFace Space için api_key parametresini token olarak kullan
                     self._client = QdrantClient(
-                        url=self.config.qdrant_host,
+                        url=full_url,
                         api_key=self.config.huggingface_token,
                         timeout=self.config.timeout,
-                        prefer_grpc=False  # HTTP kullan
+                        prefer_grpc=False,  # HTTP kullan
+                        https=False  # URL'de zaten https var
                     )
                 # API key varsa
                 elif self.config.qdrant_api_key:
                     self._client = QdrantClient(
-                        url=self.config.qdrant_host,
+                        url=full_url,
                         api_key=self.config.qdrant_api_key,
-                        timeout=self.config.timeout
+                        timeout=self.config.timeout,
+                        prefer_grpc=False
                     )
                 else:
                     # Public cloud Qdrant
                     self._client = QdrantClient(
-                        url=self.config.qdrant_host,
-                        timeout=self.config.timeout
+                        url=full_url,
+                        timeout=self.config.timeout,
+                        prefer_grpc=False,  # HTTP kullan
+                        https=False  # URL'de zaten https var
                     )
             else:
                 # Local deployment (host:port format)
