@@ -445,19 +445,23 @@ async def test_qdrant_connection():
     """Debug: Render'dan HuggingFace Space'e bağlantı testi"""
     import httpx
     import os
+    from qdrant_client import QdrantClient
     
     qdrant_url = os.getenv('QDRANT_HOST', 'localhost')
+    hf_token = os.getenv('HUGGINGFACE_TOKEN')
+    
     results = {
         "qdrant_host_env": qdrant_url,
+        "hf_token_set": hf_token is not None,
         "tests": []
     }
     
-    # Test 1: Root endpoint
+    # Test 1: Root endpoint (httpx)
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(qdrant_url)
             results["tests"].append({
-                "test": "Root endpoint",
+                "test": "Root endpoint (httpx)",
                 "url": qdrant_url,
                 "status": response.status_code,
                 "success": True,
@@ -465,19 +469,19 @@ async def test_qdrant_connection():
             })
     except Exception as e:
         results["tests"].append({
-            "test": "Root endpoint",
+            "test": "Root endpoint (httpx)",
             "url": qdrant_url,
             "success": False,
             "error": str(e)
         })
     
-    # Test 2: Collections endpoint
+    # Test 2: Collections endpoint (httpx)
     try:
         collections_url = f"{qdrant_url}/collections"
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(collections_url)
             results["tests"].append({
-                "test": "Collections endpoint",
+                "test": "Collections endpoint (httpx)",
                 "url": collections_url,
                 "status": response.status_code,
                 "success": True,
@@ -485,10 +489,36 @@ async def test_qdrant_connection():
             })
     except Exception as e:
         results["tests"].append({
-            "test": "Collections endpoint",
+            "test": "Collections endpoint (httpx)",
             "url": collections_url,
             "success": False,
             "error": str(e)
+        })
+    
+    # Test 3: QdrantClient initialization
+    try:
+        client = QdrantClient(
+            url=qdrant_url,
+            timeout=10,
+            prefer_grpc=False,
+            https=False
+        )
+        
+        # Test get_collections
+        collections = client.get_collections()
+        results["tests"].append({
+            "test": "QdrantClient initialization",
+            "success": True,
+            "collections_found": len(collections.collections),
+            "collection_names": [c.name for c in collections.collections]
+        })
+    except Exception as e:
+        import traceback
+        results["tests"].append({
+            "test": "QdrantClient initialization",
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
         })
     
     return results
