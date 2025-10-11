@@ -1,221 +1,360 @@
-# 🛡️ Pentagent - AI-Powered Autonomous Penetration Testing Framework
+# 🛡️ Pentagent - AI-Powered Security Testing Platform
 
-Pentagent, yapay zeka destekli otonom penetrasyon testi gerçekleştiren gelişmiş bir güvenlik testi çerçevesidir. OWASP Top 10 zafiyetlerini tespit eder, teknoloji stack'lerini analiz eder ve kapsamlı güvenlik raporları oluşturur.
+> Autonomous penetration testing platform powered by advanced AI and RAG-enhanced vulnerability intelligence.
 
-## ✨ Özellikler
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
+[![React](https://img.shields.io/badge/react-18+-61dafb.svg)](https://reactjs.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688.svg)](https://fastapi.tiangolo.com/)
 
--  **AI-Powered**: Yapay zeka destekli otonom karar verme
--  **Comprehensive Scanning**: OWASP Top 10 zafiyet taraması
-<<<<<<< HEAD
--  **25+ Security Tools**: Kapsamlı güvenlik araçları koleksiyonu
-=======
--  **28+ Security Tools**: Kapsamlı güvenlik araçları koleksiyonu
->>>>>>> 01c0227 (Add RAG integration and HuggingFace Space support)
--  **Real-time Analysis**: Gerçek zamanlı analiz ve raporlama
--  **Web Interface**: Modern React.js web arayüzü
--  **RAG Integration**: Retrieval Augmented Generation desteği
--  **Dynamic Recommendations**: Dinamik öneri sistemi
--  **403 Bypass**: Cloudflare ve bot korumasını aşma
--  **Multi-layer Reconnaissance**: Pasif ve aktif keşif teknikleri
--  **Cloud Security**: AWS, Azure, Google Cloud güvenlik testleri
--  **API Security**: REST/GraphQL API güvenlik analizi
--  **Responsive Design**: Mobil uyumlu modern arayüz
--  **WebSocket Support**: Gerçek zamanlı iletişim
--  **Live AI Thinking**: Canlı AI düşünce süreçleri
--  **Agentic Workflow**: Tam otonom penetrasyon testi
+---
 
-## 🚀 Hızlı Başlangıç
+## 🎯 Overview
 
-### Gereksinimler
+**Pentagent** is an autonomous security testing platform that combines:
+- 🤖 **AI-Driven Testing** - Powered by Google Gemini for intelligent decision-making
+- 🔍 **RAG-Enhanced Intelligence** - 95K+ CVE database with semantic search
+- 🎨 **Modern Interface** - Real-time scanning with WebSocket updates
+- 🛠️ **30+ Security Tools** - Automated vulnerability detection and verification
 
-- Python 3.8+
-- Node.js 16+ (Frontend için)
-- Chrome/Chromium (Selenium için)
+---
 
-### Kurulum
+## ✨ Key Features
 
-1. **Repository'yi klonlayın:**
+### 🤖 Autonomous AI Agent
+- Dynamic orchestration with self-improving workflows
+- Context-aware tool selection
+- Real-time reasoning and decision-making
+- Adaptive testing strategies
+
+### 🔍 RAG CVE Intelligence
+- **95,000+ CVE vectors** from NVD database
+- **Hybrid search** (Dense 70% + Sparse 30%)
+- **Semantic similarity** matching with BGE-M3 embeddings
+- **Real-time suggestions** based on scan results
+
+### 🛠️ Security Tools (30+)
+
+**Enumeration:**
+- Port Scanner (Nmap integration)
+- Subdomain Bruteforcer
+- Directory Bruteforce
+- Web Crawler
+- Technology Detector
+- Firewall Detector
+
+**Vulnerability Scanning:**
+- SQL Injection Tester
+- XSS Detector
+- LFI/RFI Scanner
+- IDOR Tester
+- JWT Vulnerability Tester
+- Dependency Scanner
+- HTTP Header Analyzer
+
+**Infrastructure:**
+- Cloud S3 Bucket Scanner
+- Exposed Admin Panel Finder
+- API Endpoint Discovery
+
+**Reconnaissance:**
+- WHOIS Lookup
+- DNS Analyzer
+- Email Security Audit
+- Historical Data Analyzer
+- Origin IP Finder
+- Passive Subdomain Finder
+
+### 🎨 Modern UI/UX
+- Real-time scan progress with WebSocket
+- Interactive chat interface
+- Context panel with live updates
+- CVE suggestion sidebar
+- Dedicated RAG search page
+- Responsive design with dark theme
+
+---
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────┐
+│            SYSTEM ARCHITECTURE              │
+└─────────────────────────────────────────────┘
+
+React Frontend (Firebase Hosting)
+    ↓ HTTPS / WebSocket
+FastAPI Backend (Render.com)
+    ├─ AI Orchestrator (Google Gemini)
+    ├─ Security Tools (30+ modules)
+    └─ RAG Service
+        ↓ REST API
+Qdrant Vector DB (HuggingFace Space)
+    └─ 95K+ CVE Embeddings (BGE-M3)
+```
+
+---
+
+## 🚀 Quick Start
+
+### Local Development
+
+**Prerequisites:**
+- Python 3.11+
+- Node.js 18+
+- Docker (for Qdrant)
+
+**1. Clone Repository**
 ```bash
 git clone https://github.com/Pentagentr/Pentagent-Web.git
 cd Pentagent-Web
 ```
 
-2. **Backend bağımlılıklarını yükleyin:**
+**2. Start Qdrant (Optional - for RAG features)**
 ```bash
-pip install -r requirements.txt
+cd Rag-Pent
+docker-compose up -d
+cd ..
 ```
 
-3. **Frontend bağımlılıklarını yükleyin:**
+**3. Backend Setup**
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Set API key
+export GEMINI_API_KEY="your_gemini_api_key"
+
+# Start backend
+python web_api.py
+```
+
+**4. Frontend Setup**
 ```bash
 cd pentagent-frontend
 npm install
-```
-
-### Kullanım
-
-#### 🚀 Hızlı Başlatma (Önerilen)
-
-**Linux/Mac:**
-```bash
-chmod +x quick_start.sh
-./quick_start.sh
-```
-
-**Windows:**
-```cmd
-quick_start.bat
-```
-
-#### 🔧 Manuel Başlatma
-
-**1. Web Interface (Önerilen)**
-```bash
-# Terminal 1: Backend
-python web_api.py
-
-# Terminal 2: Frontend
-cd pentagent-frontend
 npm run dev
 ```
 
-**2. Debug Testi**
-```bash
-python debug_pentagent.py
-```
-
-**3. Autonomous Chat Testi**
-```bash
-python autonomous_chat.py
-```
-
-**4. CLI Mode**
-```bash
-python pentagent_cli.py --target example.com
-```
-
-#### 🌐 Erişim
-- **Frontend**: http://localhost:5173
-- **Backend API**: http://localhost:8000
-- **Health Check**: http://localhost:8000/health
-
-## 🛠️ Araçlar (25+ Security Tools)
-
-### 🔍 Discovery & Enumeration
-- `enum_tech_detector` - Teknoloji stack analizi (WordPress, Drupal, Node.js, etc.)
-- `enum_port_scanner` - Port taraması ve servis keşfi
-- `enum_web_crawler` - Web crawling ve endpoint keşfi
-- `enum_directory_bruteforce` - Dizin ve dosya keşfi
-- `enum_subdomain_bruteforcer` - Subdomain brute force saldırısı
-- `enum_firewall_detector` - Firewall ve güvenlik duvarı tespiti
-
-### 🛡️ Vulnerability Assessment
-- `verify_sqli` - SQL Injection testi ve exploit
-- `verify_xss` - Cross-Site Scripting (XSS) testi
-- `verify_lfi` - Local File Inclusion (LFI) testi
-- `vuln_http_header_analyzer` - HTTP header güvenlik analizi
-- `vuln_idor_tester` - IDOR (Insecure Direct Object Reference) testi
-- `vul_depency_scanner` - Dependency ve bağımlılık zafiyet taraması
-
-### 🔎 Reconnaissance & Intelligence
-- `recon_passive_subfinder_tool` - Pasif subdomain keşfi
-- `recon_whois_tool` - WHOIS bilgi analizi
-- `recon_dns_analyzer` - DNS kayıt analizi ve keşfi
-- `recon_origin_ip_finder` - Origin IP keşfi ve CDN bypass
-- `recon_api_endpoint_finder` - API endpoint keşfi
-- `rec_intel_code_scanner` - Kaynak kod analizi
-- `rec_intel_historical_analyzer` - Tarihsel veri analizi
-- `rec_audit_email_security` - Email güvenlik denetimi
-
-### 🌐 API Security Testing
-- `api_finder_active` - Aktif API keşfi
-- `api_vuln_idor_scanner` - API IDOR zafiyet taraması
-- `api_vuln_jwt_tester` - JWT token güvenlik testi
-
-### ☁️ Cloud & Infrastructure Security
-- `cloud_s3_bucket_scanner` - AWS S3 bucket güvenlik taraması
-- `infra_exposed_panels_finder` - Açık admin panelleri keşfi
-
-## 🏗️ Mimari
-
-```
-pentagent/
-├── 🧠 agent_core/           # AI beyin merkezi
-│   ├── dynamic_orchestrator.py  # Ana karar verme sistemi
-│   ├── planner.py               # Stratejik planlama
-│   ├── executor.py              # Tool yürütme
-│   ├── analyzer.py              # Sonuç analizi
-│   └── state.py                 # Hafıza yönetimi
-├── 🛠️ tools/                # 28+ güvenlik aracı
-├── 🌐 pentagent-frontend/   # React.js web arayüzü
-├── 📊 reports/              # Güvenlik raporları
-└── 🔧 mcp_server/           # Tool koordinasyonu
-```
-
-## 📊 Raporlama
-
-Pentagent, aşağıdaki formatlarda raporlar oluşturur:
-
-- **JSON**: Yapılandırılmış veri
-- **PDF**: Detaylı güvenlik raporu
-- **HTML**: Web tabanlı rapor
-- **CSV**: Veri analizi için
-
-## 🤝 Katkıda Bulunma
-
-1. Fork yapın
-2. Feature branch oluşturun (`git checkout -b feature/amazing-feature`)
-3. Commit yapın (`git commit -m 'Add amazing feature'`)
-4. Push yapın (`git push origin feature/amazing-feature`)
-5. Pull Request oluşturun
-
-## 🔧 Sorun Giderme
-
-### Bağlantı Sorunları
-
-**WebSocket Bağlantı Hatası:**
-```bash
-# Bağlantı testi yapın
-python test_connection.py
-
-# Port kontrolü
-netstat -an | grep 8000
-```
-
-**Frontend Bağlantı Sorunu:**
-```bash
-# Frontend yeniden başlatın
-cd pentagent-frontend
-npm run dev
-```
-
-**Backend Başlatma Hatası:**
-```bash
-# Dependencies kontrolü
-pip install -r requirements.txt
-
-# Port kontrolü
-lsof -i :8000
-```
-
-## 📄 Lisans
-
-Bu proje MIT lisansı altında lisanslanmıştır. Detaylar için [LICENSE](LICENSE) dosyasına bakın.
-
-## 📊 Proje İstatistikleri
-
-### 🛠️ Geliştirilen Araçlar
-- ✅ **25+ Security Tools** - Kapsamlı güvenlik araçları koleksiyonu
-- ✅ **6 Kategori** - Discovery, Vulnerability, Reconnaissance, API, Cloud, Infrastructure
-- ✅ **AI-Powered** - Yapay zeka destekli otonom karar verme
-- ✅ **Real-time** - Gerçek zamanlı analiz ve raporlama
-
-### 🛡️ Güvenlik Yetenekleri
-- ✅ **OWASP Top 10** - Tüm kritik zafiyetler
-- ✅ **403 Bypass** - Cloudflare ve bot korumasını aşma
-- ✅ **Multi-layer Recon** - Pasif ve aktif keşif teknikleri
-- ✅ **API Security** - REST/GraphQL API güvenlik analizi
-- ✅ **Cloud Security** - AWS, Azure, Google Cloud testleri
+**5. Access Application**
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
 
 ---
 
-**⚠️ Uyarı**: Bu araç sadece eğitim ve yetkili güvenlik testleri için tasarlanmıştır. Kötü niyetli kullanım yasaktır.
+## 🌐 Production Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for complete deployment guide.
+
+**Stack:**
+- **Frontend:** Firebase Hosting (Free)
+- **Backend:** Render.com (Free)
+- **Vector DB:** HuggingFace Space (Free)
+
+**Total Cost:** $0 with free tiers
+
+---
+
+## 📖 Usage
+
+### 1. Autonomous Pentest
+
+1. Open the chat interface
+2. Enter target URL
+3. AI agent automatically:
+   - Plans testing strategy
+   - Executes security tools
+   - Analyzes results
+   - Generates comprehensive report
+
+### 2. CVE Search
+
+Navigate to `/rag-search` page:
+- Search 95K+ CVE database
+- Filter by severity (CRITICAL, HIGH, MEDIUM, LOW)
+- View related vulnerabilities
+- Access NVD references
+
+### 3. Scan Analysis
+
+After pentest completion:
+- View results in real-time
+- Check CVE Suggestions tab
+- Get relevant CVE recommendations
+- Export detailed reports
+
+---
+
+## 🔧 Technology Stack
+
+### Backend
+- **Framework:** FastAPI (async Python)
+- **AI:** Google Gemini API
+- **Vector Store:** Qdrant
+- **Embeddings:** BGE-M3 (BAAI)
+- **WebSocket:** Native FastAPI support
+
+### Frontend
+- **Framework:** React 18
+- **Build Tool:** Vite
+- **Styling:** TailwindCSS
+- **Routing:** React Router
+- **State:** React Hooks
+
+### Infrastructure
+- **Hosting:** Firebase Hosting + Render.com
+- **Vector DB:** HuggingFace Spaces (Docker)
+- **CI/CD:** GitHub integration
+
+---
+
+## 📊 RAG System
+
+### CVE Database
+- **Total CVEs:** 95,237 (NVD 2022-2024)
+- **Embedding Model:** BGE-M3 (1024 dimensions)
+- **Search Type:** Hybrid (Dense + Sparse)
+- **Response Time:** <300ms average
+
+### Search Capabilities
+- Semantic similarity matching
+- Keyword-based search
+- Severity filtering
+- CVSS score integration
+- Attack vector classification
+
+**Learn more:** [RAG_INTEGRATION_README.md](RAG_INTEGRATION_README.md)
+
+---
+
+## 🔒 Security & Compliance
+
+### Best Practices
+- All API keys stored as environment variables
+- CORS protection with whitelist
+- WebSocket authentication
+- Private vector database option
+- Input validation and sanitization
+
+### Responsible Use
+⚠️ **Important:** This tool is for authorized security testing only.
+- Always obtain proper authorization
+- Follow responsible disclosure practices
+- Comply with local laws and regulations
+- Use in controlled environments
+
+---
+
+## 📁 Project Structure
+
+```
+Pentagent/
+├── agent_core/              # AI orchestration logic
+│   ├── dynamic_orchestrator.py
+│   ├── planner.py
+│   ├── analyzer.py
+│   └── executor.py
+├── tools/                   # Security testing modules (30+)
+├── services/               
+│   └── rag_service.py      # RAG integration
+├── Rag-Pent/               # Vector database system
+│   └── Qdrant/             # Search engine
+├── pentagent-frontend/     # React application
+│   ├── src/
+│   │   ├── pages/          # ChatPage, RagSearch
+│   │   ├── components/     # Reusable UI components
+│   │   └── services/       # API integration
+├── web_api.py              # FastAPI backend
+├── config.py               # Configuration
+└── requirements.txt        # Python dependencies
+```
+
+---
+
+## 🚀 Features Roadmap
+
+### Current Features ✅
+- [x] Autonomous AI-driven pentesting
+- [x] 30+ integrated security tools
+- [x] Real-time WebSocket updates
+- [x] RAG-enhanced CVE search
+- [x] Interactive chat interface
+- [x] Context-aware scanning
+
+### Planned Features 🔮
+- [ ] Multi-target scanning
+- [ ] Custom tool integration
+- [ ] Advanced reporting (PDF/CSV export)
+- [ ] Scan history and bookmarks
+- [ ] Team collaboration features
+- [ ] API rate limiting
+- [ ] Enhanced caching
+
+---
+
+## 📚 Documentation
+
+- [DEPLOYMENT.md](DEPLOYMENT.md) - Deployment guide
+- [RAG_INTEGRATION_README.md](RAG_INTEGRATION_README.md) - RAG system details
+- [LICENSE](LICENSE) - Apache 2.0 License
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! This is an open-source project.
+
+**How to contribute:**
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
+
+---
+
+## 📝 License
+
+This project is licensed under the **Apache License 2.0** - see the [LICENSE](LICENSE) file for details.
+
+**Key points:**
+- ✅ Commercial use allowed
+- ✅ Modification allowed
+- ✅ Distribution allowed
+- ✅ Patent use allowed
+- ⚠️ Liability and warranty disclaimers apply
+
+---
+
+## 🙏 Acknowledgments
+
+- **Google Gemini** - AI orchestration
+- **Qdrant** - Vector database
+- **BAAI BGE-M3** - Embedding model
+- **NVD/MITRE** - CVE data
+- **FastAPI** - Backend framework
+- **React** - Frontend framework
+
+---
+
+## 📞 Contact & Support
+
+- **GitHub:** [@Pentagentr](https://github.com/Pentagentr)
+- **Repository:** [Pentagent-Web](https://github.com/Pentagentr/Pentagent-Web)
+- **Issues:** [GitHub Issues](https://github.com/Pentagentr/Pentagent-Web/issues)
+
+---
+
+## ⚠️ Disclaimer
+
+This tool is designed for **authorized security testing only**. Users are responsible for:
+- Obtaining proper authorization before testing
+- Complying with applicable laws and regulations
+- Using the tool ethically and responsibly
+
+The developers assume no liability for misuse.
+
+---
+
+**Built with ❤️ for the security community**
