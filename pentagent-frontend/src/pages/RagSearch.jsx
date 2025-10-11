@@ -3,7 +3,7 @@
  * CVE veritabanında direkt arama yapılabilir
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, AlertCircle, Shield, Calendar, ExternalLink } from 'lucide-react';
 import Button from '../components/common/Button/Button';
 import Card from '../components/common/Card/Card';
@@ -19,7 +19,7 @@ const RagSearch = () => {
   const [stats, setStats] = useState(null);
 
   // Sayfa yüklendiğinde stats al
-  useState(() => {
+  useEffect(() => {
     fetchStats();
   }, []);
 
