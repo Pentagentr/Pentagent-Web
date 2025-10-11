@@ -895,11 +895,26 @@ Sen siber güvenlik uzmanısın. Son tool'un çıktısını analiz edip sonraki 
             
             await self.status_callback(f"🧠 Sonraki adım kararı: {decision.get('reasoning', '')}", "ai_reasoning")
             
+            # En az adım zorlaması: AI 'stop' dese bile minimum adım tamamlanana kadar devam et
+            try:
+                if decision.get("action") == "stop" and current_step < self.min_steps:
+                    fallback = self._get_fallback_first_tool(self.current_target)
+                    fallback["action"] = "continue"
+                    await self.status_callback(
+                        f"⚠️ Min {self.min_steps} adım şartı: 'stop' yerine devam ediliyor ({fallback.get('tool')})",
+                        "warning"
+                    )
+                    return fallback
+            except Exception:
+                pass
+            
             return decision
             
         except Exception as e:
             logger.error(f"Next tool decision failed: {e}")
-            return {"action": "stop", "reasoning": "AI karar verme hatası - test tamamlandı"}
+            fallback = self._get_fallback_first_tool(self.current_target)
+            fallback["action"] = "continue"
+            return fallback
 
     async def _ai_handle_failed_tool(self, failed_tool: str, error_result: Dict[str, Any], current_step: int) -> Dict[str, Any]:
         """Başarısız tool için karar ver - OPTİMİZE"""
@@ -934,11 +949,26 @@ JSON{{
             
             await self.status_callback(f"🧠 Hata yönetimi kararı: {decision.get('reasoning', '')}", "ai_reasoning")
             
+            # En az adım zorlaması
+            try:
+                if decision.get("action") == "stop" and current_step < self.min_steps:
+                    fallback = self._get_fallback_first_tool(self.current_target)
+                    fallback["action"] = "continue"
+                    await self.status_callback(
+                        f"⚠️ Min {self.min_steps} adım şartı: 'stop' yerine devam ediliyor ({fallback.get('tool')})",
+                        "warning"
+                    )
+                    return fallback
+            except Exception:
+                pass
+            
             return decision
             
         except Exception as e:
             logger.error(f"Failed tool handling failed: {e}")
-            return {"action": "stop", "reasoning": "Hata yönetimi hatası - test tamamlandı"}
+            fallback = self._get_fallback_first_tool(self.current_target)
+            fallback["action"] = "continue"
+            return fallback
 
     async def _analyze_final_results(self) -> Dict[str, Any]:
         """Final sonuçları analiz et"""

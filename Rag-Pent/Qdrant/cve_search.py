@@ -306,10 +306,6 @@ class CVESearchEngine:
         logger.info(f"Arama başlatıldı: '{query}' (limit={limit})")
         
         try:
-            # Model yoksa text-based search (production)
-            if self._model is None:
-                return self._text_based_search(query, limit)
-            
             # Ağırlıkları ayarla
             d_weight = dense_weight if dense_weight is not None else self.config.default_dense_weight
             s_weight = sparse_weight if sparse_weight is not None else self.config.default_sparse_weight
@@ -432,44 +428,73 @@ class CVESearchEngine:
             # Query kelimelerini küçült
             query_terms = query.lower().split()
             
-            # Scroll ile tüm CVE'leri al (payload filtresi ile)
+            # Scroll ile CVE'leri al (payload filtresi ile)
             results = []
-            scroll_result = self._client.scroll(
-                collection_name=self.config.collection_name,
-                limit=1000,  # İlk 1000 CVE
-                with_payload=True,
-                with_vectors=False
-            )
+            points = []
             
-            # Text matching skoru hesapla
-            for point in scroll_result[0]:
-                payload = point.payload
-                metadata = payload.get("metadata", {})
-                content = payload.get("content", "").lower()
-                cve_id = payload.get("cve_id", "").lower()
-                
-                # Query terimlerinin kaçı içerikte var?
-                match_count = sum(1 for term in query_terms if term in content or term in cve_id)
-                score = match_count / len(query_terms) if query_terms else 0
-                
-                if score > 0:
-                    result = SearchResult(
-                        cve_id=payload.get("cve_id", str(point.id)),
-                        score=score,
-                        dense_score=0.0,
-                        sparse_score=score,
-                        severity=metadata.get("severity"),
-                        base_score=metadata.get("base_score"),
-                        attack_vector=metadata.get("attack_vector"),
-                        description=payload.get("content", "")[:500],
-                        published_date=metadata.get("published_date"),
-                        metadata=metadata
-                    )
-                    results.append(result)
+            if getattr(self, "_use_httpx", False):
+                # Qdrant REST scroll
+                url = f"{self._base_url}/collections/{self.config.collection_name}/points/scroll"
+                payload = {
+                    "with_payload": True,
+                    "with_vectors": False,
+                    "limit": 1000
+                }
+                response = self._httpx_client.post(url, json=payload)
+                response.raise_for_status()
+                data = response.json()
+                points = data.get("result", {}).get("points", [])
+                # Adapt to payload format below
+                for p in points:
+                    payload = p.get("payload", {})
+                    metadata = payload.get("metadata", {})
+                    content = (payload.get("content", "") or "").lower()
+                    cve_id = (payload.get("cve_id", "") or "").lower()
+                    match_count = sum(1 for term in query_terms if term in content or term in cve_id)
+                    score = match_count / len(query_terms) if query_terms else 0
+                    if score > 0:
+                        results.append(SearchResult(
+                            cve_id=payload.get("cve_id", str(p.get("id", ""))),
+                            score=score,
+                            dense_score=0.0,
+                            sparse_score=score,
+                            severity=metadata.get("severity"),
+                            base_score=metadata.get("base_score"),
+                            attack_vector=metadata.get("attack_vector"),
+                            description=payload.get("content", "")[:500],
+                            published_date=metadata.get("published_date"),
+                            metadata=metadata
+                        ))
+            else:
+                # Qdrant client scroll
+                scroll_result = self._client.scroll(
+                    collection_name=self.config.collection_name,
+                    limit=1000,
+                    with_payload=True,
+                    with_vectors=False
+                )
+                for point in scroll_result[0]:
+                    payload = point.payload
+                    metadata = payload.get("metadata", {})
+                    content = payload.get("content", "").lower()
+                    cve_id = payload.get("cve_id", "").lower()
+                    match_count = sum(1 for term in query_terms if term in content or term in cve_id)
+                    score = match_count / len(query_terms) if query_terms else 0
+                    if score > 0:
+                        results.append(SearchResult(
+                            cve_id=payload.get("cve_id", str(point.id)),
+                            score=score,
+                            dense_score=0.0,
+                            sparse_score=score,
+                            severity=metadata.get("severity"),
+                            base_score=metadata.get("base_score"),
+                            attack_vector=metadata.get("attack_vector"),
+                            description=payload.get("content", "")[:500],
+                            published_date=metadata.get("published_date"),
+                            metadata=metadata
+                        ))
             
-            # Skora göre sırala
             results.sort(key=lambda x: x.score, reverse=True)
-            
             logger.info(f"Text-based search tamamlandı: {len(results[:limit])} sonuç")
             return results[:limit]
             
