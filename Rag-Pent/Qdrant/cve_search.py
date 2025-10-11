@@ -558,13 +558,15 @@ class CVESearchEngine:
     def health_check(self) -> bool:
         """
         Sistem sağlık kontrolü yapar.
+        Qdrant'a bağlanıp collection'ı kontrol eder.
         
         Returns:
             True: Sistem sağlıklı, False: Sorun var
         """
         try:
-            # Qdrant bağlantısını kontrol et
-            self._client.get_collections()
+            # Qdrant bağlantısını test et (collections endpoint kullan - her zaman var)
+            collections_response = self._client.get_collections()
+            logger.info(f"Qdrant bağlantısı OK - {len(collections_response.collections)} collection bulundu")
             
             # Collection'ı kontrol et
             info = self._client.get_collection(self.config.collection_name)
@@ -573,6 +575,9 @@ class CVESearchEngine:
             
         except Exception as e:
             logger.error(f"Health check FAILED: {e}")
+            logger.error(f"Qdrant Host: {self.config.qdrant_host}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return False
     
     def get_stats(self) -> Dict[str, Any]:
