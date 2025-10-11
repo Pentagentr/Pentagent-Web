@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { Search, AlertCircle, Shield, Calendar, ExternalLink } from 'lucide-react';
+import AppNavbar from '../components/layout/AppNavbar';
 import Button from '../components/common/Button/Button';
 import Card from '../components/common/Card/Card';
 import Input from '../components/common/Input/Input';
@@ -74,8 +75,11 @@ const RagSearch = () => {
   };
 
   return (
-    <div className="min-h-screen bg-obsidian-950 p-6">
-      <div className="max-w-5xl mx-auto">
+    <div className="min-h-screen bg-obsidian-950">
+      {/* Navbar */}
+      <AppNavbar />
+      
+      <div className="max-w-5xl mx-auto p-6 pt-20">
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
