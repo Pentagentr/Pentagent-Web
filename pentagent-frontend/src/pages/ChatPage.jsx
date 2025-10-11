@@ -4,12 +4,12 @@ import ChatInterface from '../components/chat/ChatInterface';
 
 const ChatPage = () => {
   return (
-    <div className="h-screen bg-obsidian-950 flex flex-col">
-      {/* Navbar */}
+    <div className="h-screen bg-obsidian-950 flex flex-col overflow-hidden">
+      {/* Navbar - Sabit */}
       <AppNavbar />
       
-      {/* Chat Interface */}
-      <div className="flex-1 pt-14">
+      {/* Chat Interface - Kalan alan */}
+      <div className="flex-1 overflow-hidden">
         <ChatInterface />
       </div>
     </div>
