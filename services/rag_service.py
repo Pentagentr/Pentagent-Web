@@ -117,8 +117,10 @@ class RAGService:
                         import time
                         time.sleep(2)
                     else:
-                        logger.error("❌ Tüm denemeler başarısız - RAG servisi devre dışı")
-                        raise
+                        logger.warning("❌ Tüm denemeler başarısız - RAG servisi devre dışı bırakıldı")
+                        self._engine = None
+                        self._available = False
+                        return  # Exception raise etme, devam et
             
             # Health check
             if self._engine.health_check():
