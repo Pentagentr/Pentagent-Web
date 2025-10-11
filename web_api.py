@@ -106,13 +106,16 @@ async def startup_event():
         logger.info("✅ Pentagent API başarıyla başlatıldı!")
         logger.info("💡 Her scan için yeni orchestrator instance oluşturulacak (modüler)")
         
-        # RAG servisini başlat
-        rag_service = get_rag_service()
-        if rag_service.is_available():
-            stats = rag_service.get_stats()
-            logger.info(f"✅ RAG servisi hazır: {stats.get('total_cves', 0)} CVE yüklü")
-        else:
-            logger.warning("⚠️ RAG servisi kullanılamıyor (Qdrant çalışmıyor olabilir)")
+        # RAG servisini başlat (lazy loading - ilk kullanımda yüklenecek)
+        try:
+            logger.info("RAG servisi lazy loading modunda - ilk kullanımda yüklenecek")
+            # Startup'ta yükleme - optional
+            # rag_service = get_rag_service()
+            # if rag_service.is_available():
+            #     stats = rag_service.get_stats()
+            #     logger.info(f"✅ RAG servisi hazır: {stats.get('total_cves', 0)} CVE yüklü")
+        except Exception as e:
+            logger.warning(f"⚠️ RAG servisi startup'ta yüklenemedi: {e}")
         
     except Exception as e:
         logger.error(f"❌ Pentagent API başlatma hatası: {e}")
