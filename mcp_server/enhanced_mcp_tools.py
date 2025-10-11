@@ -120,6 +120,7 @@ class PentagentMCPServer:
             self._register_tool("verify_xss", self._create_xss_verifier_tool())
             self._register_tool("verify_sqli", self._create_sqli_verifier_tool())
             self._register_tool("verify_lfi", self._create_lfi_verifier_tool())
+            self._register_tool("verify_xss_http", self._create_verify_xss_http_tool())
             
             # Cloud Security Tools
             self._register_tool("cloud_s3_bucket_scanner", self._create_s3_scanner_tool())
@@ -339,6 +340,15 @@ class PentagentMCPServer:
             return LfiVerifier()
         except ImportError as e:
             logger.error(f"LfiVerifier import edilemedi: {e}")
+            return None
+
+    def _create_verify_xss_http_tool(self):
+        """VerifyXSSHTTP instance'ı oluştur"""
+        try:
+            from tools.verify_xss_http import VerifyXSSHTTP
+            return VerifyXSSHTTP()
+        except ImportError as e:
+            logger.error(f"VerifyXSSHTTP import edilemedi: {e}")
             return None
     
     def _create_s3_scanner_tool(self):

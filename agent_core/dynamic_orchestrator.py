@@ -859,7 +859,7 @@ Sen siber güvenlik uzmanısın. Son tool'un çıktısını analiz edip sonraki 
 3. Eğer {current_step} >= {self.min_steps} ve yeterli bilgi varsa → "stop"
 4. Eğer {current_step} >= {suggested_max} → mutlaka "stop"
 5. Eğer tool boş sonuç döndüyse: 1 alternatif dene veya yeterli bilgi varsa "stop"
-6. 'technology_research' gibi SİSTEMDE OLMAYAN tool isimlerini ASLA seçme.
+6. SİSTEMDE OLMAYAN tool isimlerini ASLA seçme.
 
 ⚡ GÖREV KARMAŞIKLIĞI KURALLARI:
 - 📊 Basit/Hızlı görev: 3 tool yeterli → erken "stop"
