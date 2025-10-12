@@ -153,19 +153,27 @@ Bu test suite'i RAG sisteminin **5 farklı kategoride** performansını ölçer:
 
 ## 🚀 **NASIL ÇALIŞTIRILIR**
 
-### **Adım 1: Environment Variables**
-```bash
-# Qdrant Cloud
-export QDRANT_HOST="https://your-qdrant-cloud-url"
-export QDRANT_API_KEY="your-api-key"
-
-# HuggingFace
-export HUGGINGFACE_TOKEN="your-hf-token"
+### **Adım 1: Otomatik Test (Önerilen)**
+```powershell
+# Windows PowerShell
+cd rag_test
+./run_test.ps1
 ```
 
-### **Adım 2: Test Çalıştır**
 ```bash
+# Linux/Mac
 cd rag_test
+./run_test.sh
+```
+
+### **Adım 2: Manuel Test (Environment variables ile)**
+```bash
+# Qdrant HuggingFace Space
+export QDRANT_HOST="https://pentagent-rag-qdrant.hf.space"
+export QDRANT_API_KEY="your-api-key"
+export HUGGINGFACE_TOKEN="your-hf-token"
+
+# Test çalıştır
 python test_rag_comprehensive.py
 ```
 

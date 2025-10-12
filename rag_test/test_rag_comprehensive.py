@@ -969,8 +969,8 @@ async def run_comprehensive_test():
     # Initialize RAG - Render'dakiyle aynı config
     print("[*] Initializing RAG Search Engine...")
     
-    # Environment variables'dan al (Render'da kullanılan)
-    qdrant_host = os.getenv('QDRANT_HOST', 'https://ca7c82ea-1098-402b-a2d8-6c8ecf74b93d.europe-west3-0.gcp.cloud.qdrant.io')
+    # Environment variables'dan al (HuggingFace Space - Render'da kullanılan)
+    qdrant_host = os.getenv('QDRANT_HOST', 'https://pentagent-rag-qdrant.hf.space')
     qdrant_api_key = os.getenv('QDRANT_API_KEY', 'iM-z0e_4bNbfO0M-9Xl5DM5LwL80q0OTv2UX5S7Q18XyvAVJQVQNEg')
     hf_token = os.getenv('HUGGINGFACE_TOKEN', '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')
     
