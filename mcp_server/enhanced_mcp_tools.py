@@ -636,7 +636,22 @@ class EnhancedPentestMCPServerV3:
             "timestamp": datetime.now().isoformat()
         }
 
+# ==================== NEW TOOL REGISTRY INTEGRATION ====================
+from mcp_server.tool_registry import get_tool_registry
+
 # Create server instances
+try:
+    # Yeni tool registry sistemi
+    from mcp_server.tool_registry import ToolRegistry
+    _tool_registry = ToolRegistry()
+    logger.info("✅ Tool Registry başarıyla yüklendi")
+    REGISTRY_AVAILABLE = True
+except Exception as e:
+    logger.error(f"❌ Tool Registry yüklenemedi: {e}")
+    _tool_registry = None
+    REGISTRY_AVAILABLE = False
+
+# Legacy server instance (backwards compatibility)
 pentagent_mcp_server = PentagentMCPServer()
 enhanced_mcp_server = PentagentMCPServer()
 
@@ -646,19 +661,35 @@ def get_pentagent_mcp_server():
     return pentagent_mcp_server
 
 def get_enhanced_mcp_server():
-    """Get the enhanced MCP server instance"""
+    """Get the enhanced MCP server instance (uses tool registry if available)"""
+    if REGISTRY_AVAILABLE:
+        return _tool_registry
     return enhanced_mcp_server
+
+def get_tool_registry_instance():
+    """Get the tool registry instance"""
+    if REGISTRY_AVAILABLE:
+        return _tool_registry
+    return None
 
 def get_tool_list():
     """Get categorized tool list"""
+    if REGISTRY_AVAILABLE:
+        return _tool_registry.get_tool_list_for_planner()
     return enhanced_mcp_server.get_tool_list()
 
 def get_tool_info(tool_name: str):
     """Get detailed tool information"""
+    if REGISTRY_AVAILABLE:
+        return _tool_registry.tool_metadata.get(tool_name, {
+            "error": f"Tool {tool_name} not found"
+        })
     return enhanced_mcp_server.get_tool_info(tool_name)
 
 async def execute_tool(tool_name: str, params: Dict[str, Any]):
-    """Execute a tool"""
+    """Execute a tool (uses tool registry if available)"""
+    if REGISTRY_AVAILABLE:
+        return await _tool_registry.execute_tool(tool_name, params)
     return await enhanced_mcp_server.execute_tool(tool_name, params)
 
 # Main execution function
