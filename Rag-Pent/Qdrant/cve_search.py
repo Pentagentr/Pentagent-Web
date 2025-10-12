@@ -175,7 +175,17 @@ class CVESearchEngine:
                 logger.info("HuggingFace Inference API kullanılacak (BGE-M3)")
                 self._model = None  # API kullanacağız
                 self._hf_token = self.config.huggingface_token
-                self._hf_api_url = "https://api-inference.huggingface.co/models/BAAI/bge-m3"
+                
+                # Custom HF Space endpoint (varsa) veya public API
+                custom_endpoint = os.getenv("HF_CUSTOM_ENDPOINT")
+                if custom_endpoint:
+                    self._hf_api_url = custom_endpoint
+                    self._use_custom_endpoint = True
+                    logger.info(f"✅ Custom HF Space endpoint kullanılacak: {custom_endpoint}")
+                else:
+                    self._hf_api_url = "https://api-inference.huggingface.co/models/BAAI/bge-m3"
+                    self._use_custom_endpoint = False
+                    logger.info("Public HF Inference API kullanılacak (sparse approximation)")
             elif HAS_LOCAL_MODEL:
                 logger.info(f"Local BGE-M3 modeli yükleniyor: {self.config.model_name}")
                 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -243,6 +253,7 @@ class CVESearchEngine:
     def _encode_with_hf_api(self, query: str) -> Tuple[List[float], models.SparseVector]:
         """
         HuggingFace Inference API ile query'yi vektörleştirir.
+        Custom endpoint (native sparse) veya public API (approximation) kullanır.
         
         Args:
             query: Arama sorgusu
@@ -251,6 +262,11 @@ class CVESearchEngine:
             (dense_vector, sparse_vector) tuple
         """
         try:
+            # Custom endpoint kullanıyorsa (Native sparse support)
+            if getattr(self, '_use_custom_endpoint', False):
+                return self._encode_with_custom_endpoint(query)
+            
+            # Public HF API (sadece dense, sparse approximation)
             headers = {}
             if self._hf_token:
                 headers["Authorization"] = f"Bearer {self._hf_token}"
@@ -280,11 +296,63 @@ class CVESearchEngine:
                 values=sparse_values
             )
             
-            logger.info("HuggingFace Inference API ile encoding tamamlandı")
+            logger.info("HuggingFace public API ile encoding tamamlandı (sparse approximation)")
             return dense_vec, sparse_vec
             
         except Exception as e:
             logger.error(f"HuggingFace API encoding hatası: {e}")
+            raise
+    
+    def _encode_with_custom_endpoint(self, query: str) -> Tuple[List[float], models.SparseVector]:
+        """
+        Custom HF Space endpoint ile query'yi vektörleştirir.
+        ✅ NATIVE SPARSE SUPPORT (BGE-M3 lexical_weights)
+        
+        Args:
+            query: Arama sorgusu
+            
+        Returns:
+            (dense_vector, sparse_vector) tuple
+        """
+        try:
+            # Custom endpoint request
+            response = requests.post(
+                self._hf_api_url,
+                json={
+                    "inputs": query,
+                    "return_dense": True,
+                    "return_sparse": True,
+                    "return_colbert_vecs": False
+                },
+                timeout=30
+            )
+            
+            if response.status_code != 200:
+                raise Exception(f"Custom endpoint error: {response.status_code} - {response.text}")
+            
+            data = response.json()
+            
+            # Dense vector
+            dense_vec = data.get("dense_vecs")
+            if not dense_vec:
+                raise Exception("Dense vector not found in response")
+            
+            # ✅ NATIVE sparse vector (BGE-M3 lexical_weights)
+            lexical_weights = data.get("lexical_weights")
+            if not lexical_weights:
+                raise Exception("Lexical weights not found in response")
+            
+            # Convert to SparseVector
+            sparse_vec = models.SparseVector(
+                indices=[int(k) for k in lexical_weights.keys()],
+                values=list(lexical_weights.values())
+            )
+            
+            logger.info(f"✅ Custom endpoint encoding tamamlandı (NATIVE sparse: {len(sparse_vec.indices)} tokens)")
+            return dense_vec, sparse_vec
+            
+        except Exception as e:
+            logger.error(f"Custom endpoint encoding hatası: {e}")
             raise
     
     def _analyze_query_intelligence(self, query: str) -> dict:
