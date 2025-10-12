@@ -315,13 +315,13 @@ class CVESearchEngine:
             hybrid_results = [r for r in hybrid_results if r.cve_id != cve_id_result.cve_id]
             return [cve_id_result] + hybrid_results[:limit-1]
         
-        # 2. Version Detection - Sürüm numarası varsa weight'leri ayarla
+        # 2. Version Detection - Sürüm numarası varsa sparse'a hafif bonus
         has_version = self._detect_version_in_query(query)
         if has_version:
-            logger.info("📌 Sürüm numarası tespit edildi, sparse weight artırıldı (exact matching)")
-            # Sürüm varsa sparse'ı artır (exact matching için)
-            dense_weight = 0.5
-            sparse_weight = 0.5
+            logger.info("📌 Sürüm numarası tespit edildi, sparse'a hafif bonus veriliyor (semantic hala öncelikli)")
+            # Sürüm varsa sparse'a sadece hafif bonus ver, semantic hala ağırlıklı kalsın
+            dense_weight = 0.65 if dense_weight is None else dense_weight
+            sparse_weight = 0.35 if sparse_weight is None else sparse_weight
         
         # 3. Hybrid Search
         return self._hybrid_search_internal(query, limit, dense_weight, sparse_weight, min_score)
@@ -609,7 +609,7 @@ class CVESearchEngine:
             else:
                 combined[point_id]["sparse_score"] = result["score"]
         
-        # Hybrid skor hesapla ve SearchResult objelerine çevir
+        # Hybrid skor hesapla ve SearchResult objelerine çevir - TÜM METADATA İLE
         results = []
         for point_id, data in combined.items():
             payload = data["payload"]
@@ -617,6 +617,29 @@ class CVESearchEngine:
             
             # Hybrid skor
             hybrid_score = (dense_weight * data["dense_score"]) + (sparse_weight * data["sparse_score"])
+            
+            # TÜM METADATA EXTRACT ET - HER ŞEY GELMELİ
+            full_metadata = {
+                "severity": metadata.get("severity"),
+                "base_score": metadata.get("base_score"),
+                "attack_vector": metadata.get("attack_vector"),
+                "published_date": metadata.get("published_date"),
+                "modified_date": metadata.get("modified_date"),
+                "references": metadata.get("references", []),
+                "cwe_id": metadata.get("cwe_id"),
+                "vendor": metadata.get("vendor"),
+                "product": metadata.get("product"),
+                "cvss_vector": metadata.get("cvss_vector"),
+                "cvss_vector_string": metadata.get("cvss_vector_string"),
+                "exploitability_score": metadata.get("exploitability_score"),
+                "impact_score": metadata.get("impact_score"),
+                "confidentiality_impact": metadata.get("confidentiality_impact"),
+                "integrity_impact": metadata.get("integrity_impact"),
+                "availability_impact": metadata.get("availability_impact"),
+                "access_complexity": metadata.get("access_complexity"),
+                "authentication": metadata.get("authentication"),
+                "affected_versions": metadata.get("affected_versions", []),
+            }
             
             result = SearchResult(
                 cve_id=payload.get("cve_id", str(point_id)),
@@ -626,14 +649,15 @@ class CVESearchEngine:
                 severity=metadata.get("severity"),
                 base_score=metadata.get("base_score"),
                 attack_vector=metadata.get("attack_vector"),
-                description=payload.get("content", "")[:500],  # İlk 500 karakter
+                description=payload.get("content", ""),  # TAM AÇIKLAMA - KISALTMA YOK
                 published_date=metadata.get("published_date"),
-                metadata=metadata
+                metadata=full_metadata  # TÜM METADATA
             )
             results.append(result)
         
-        # Skora göre sırala
+        # Skora göre sırala (en yüksek önce)
         results.sort(key=lambda x: x.score, reverse=True)
+        logger.info(f"🔗 {len(results)} sonuç birleştirildi ve sıralandı")
         return results
     
     def search_by_severity(
@@ -714,6 +738,29 @@ class CVESearchEngine:
             
             metadata = payload.get("metadata", {})
             
+            # TÜM METADATA EXTRACT ET - REFERANSLAR, SKORLAR, HER ŞEY
+            full_metadata = {
+                "severity": metadata.get("severity"),
+                "base_score": metadata.get("base_score"),
+                "attack_vector": metadata.get("attack_vector"),
+                "published_date": metadata.get("published_date"),
+                "modified_date": metadata.get("modified_date"),
+                "references": metadata.get("references", []),
+                "cwe_id": metadata.get("cwe_id"),
+                "vendor": metadata.get("vendor"),
+                "product": metadata.get("product"),
+                "cvss_vector": metadata.get("cvss_vector"),
+                "cvss_vector_string": metadata.get("cvss_vector_string"),
+                "exploitability_score": metadata.get("exploitability_score"),
+                "impact_score": metadata.get("impact_score"),
+                "confidentiality_impact": metadata.get("confidentiality_impact"),
+                "integrity_impact": metadata.get("integrity_impact"),
+                "availability_impact": metadata.get("availability_impact"),
+                "access_complexity": metadata.get("access_complexity"),
+                "authentication": metadata.get("authentication"),
+                "affected_versions": metadata.get("affected_versions", []),
+            }
+            
             return SearchResult(
                 cve_id=payload.get("cve_id", cve_id),
                 score=1.0,  # Direct fetch, skor yok
@@ -722,9 +769,9 @@ class CVESearchEngine:
                 severity=metadata.get("severity"),
                 base_score=metadata.get("base_score"),
                 attack_vector=metadata.get("attack_vector"),
-                description=payload.get("content", ""),
+                description=payload.get("content", ""),  # TAM AÇIKLAMA
                 published_date=metadata.get("published_date"),
-                metadata=metadata
+                metadata=full_metadata  # TÜM METADATA
             )
             
         except Exception as e:

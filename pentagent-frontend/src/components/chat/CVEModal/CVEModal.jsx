@@ -22,17 +22,27 @@ const CVEModal = ({ cve, onClose }) => {
     return colors[severity] || 'text-text-tertiary bg-obsidian-850 border-obsidian-700';
   };
 
-  // Parse CVE data
+  // Parse CVE data - TÜM ALANLAR
   const cveId = typeof cve === 'string' ? cve : cve.cve_id || cve.id;
   const description = cve.description || cve.summary || 'No description available';
   const severity = cve.severity || 'UNKNOWN';
-  const score = cve.score || cve.cvss_score || 'N/A';
-  const references = cve.references || cve.refs || [];
-  const publishedDate = cve.published || cve.published_date || null;
-  const modifiedDate = cve.modified || cve.modified_date || null;
-  const cweId = cve.cwe_id || cve.cwe || null;
-  const vendor = cve.vendor || null;
-  const product = cve.product || null;
+  const baseScore = cve.base_score || cve.cvss_score || null;
+  const matchScore = cve.score || null; // Arama match skoru
+  const references = cve.references || cve.refs || cve.metadata?.references || [];
+  const publishedDate = cve.published || cve.published_date || cve.metadata?.published_date || null;
+  const modifiedDate = cve.modified || cve.modified_date || cve.metadata?.modified_date || null;
+  const cweId = cve.cwe_id || cve.cwe || cve.metadata?.cwe_id || null;
+  const vendor = cve.vendor || cve.metadata?.vendor || null;
+  const product = cve.product || cve.metadata?.product || null;
+  const cvssVector = cve.cvss_vector || cve.metadata?.cvss_vector || null;
+  const exploitabilityScore = cve.exploitability_score || cve.metadata?.exploitability_score || null;
+  const impactScore = cve.impact_score || cve.metadata?.impact_score || null;
+  const attackVector = cve.attack_vector || cve.metadata?.attack_vector || null;
+  const accessComplexity = cve.access_complexity || cve.metadata?.access_complexity || null;
+  const authentication = cve.authentication || cve.metadata?.authentication || null;
+  const confidentialityImpact = cve.confidentiality_impact || cve.metadata?.confidentiality_impact || null;
+  const integrityImpact = cve.integrity_impact || cve.metadata?.integrity_impact || null;
+  const availabilityImpact = cve.availability_impact || cve.metadata?.availability_impact || null;
 
   return (
     <div 
@@ -56,16 +66,23 @@ const CVEModal = ({ cve, onClose }) => {
                 <h2 className="text-lg font-bold text-platinum">{cveId}</h2>
               </div>
               
-              {/* Severity & Score */}
-              <div className="flex items-center gap-2">
+              {/* Severity & Scores */}
+              <div className="flex items-center gap-2 flex-wrap">
                 <div className={`px-2.5 py-1 rounded text-xs font-medium border ${getSeverityColor(severity)}`}>
                   {severity}
                 </div>
-                {score && score !== 'N/A' && (
+                {baseScore && (
                   <div className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-500/10 border border-purple-500/20 rounded">
                     <AlertCircle size={12} className="text-purple-400" />
                     <span className="text-xs text-purple-400 font-medium">
-                      CVSS: {score}
+                      CVSS: {baseScore}
+                    </span>
+                  </div>
+                )}
+                {matchScore && (
+                  <div className="px-2.5 py-1 bg-obsidian-850 border border-purple-500/20 rounded">
+                    <span className="text-xs text-purple-300 font-medium">
+                      Match: {(matchScore * 100).toFixed(0)}%
                     </span>
                   </div>
                 )}
@@ -96,6 +113,72 @@ const CVEModal = ({ cve, onClose }) => {
               </p>
             </div>
           </section>
+
+          {/* CVSS Details */}
+          {(exploitabilityScore || impactScore || attackVector || accessComplexity || authentication) && (
+            <section>
+              <div className="flex items-center gap-2 mb-3">
+                <AlertCircle size={14} className="text-purple-400" />
+                <h3 className="text-sm font-semibold text-platinum">CVSS Metrics</h3>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {attackVector && (
+                  <div className="bg-obsidian-950/50 border border-purple-500/10 rounded-lg p-3">
+                    <span className="text-[10px] text-text-tertiary uppercase tracking-wide block mb-1">Attack Vector</span>
+                    <p className="text-xs text-platinum font-medium">{attackVector}</p>
+                  </div>
+                )}
+                {accessComplexity && (
+                  <div className="bg-obsidian-950/50 border border-purple-500/10 rounded-lg p-3">
+                    <span className="text-[10px] text-text-tertiary uppercase tracking-wide block mb-1">Complexity</span>
+                    <p className="text-xs text-platinum font-medium">{accessComplexity}</p>
+                  </div>
+                )}
+                {authentication && (
+                  <div className="bg-obsidian-950/50 border border-purple-500/10 rounded-lg p-3">
+                    <span className="text-[10px] text-text-tertiary uppercase tracking-wide block mb-1">Auth Required</span>
+                    <p className="text-xs text-platinum font-medium">{authentication}</p>
+                  </div>
+                )}
+                {exploitabilityScore && (
+                  <div className="bg-obsidian-950/50 border border-purple-500/10 rounded-lg p-3">
+                    <span className="text-[10px] text-text-tertiary uppercase tracking-wide block mb-1">Exploitability</span>
+                    <p className="text-xs text-purple-400 font-medium">{exploitabilityScore.toFixed(1)}</p>
+                  </div>
+                )}
+                {impactScore && (
+                  <div className="bg-obsidian-950/50 border border-purple-500/10 rounded-lg p-3">
+                    <span className="text-[10px] text-text-tertiary uppercase tracking-wide block mb-1">Impact Score</span>
+                    <p className="text-xs text-rose-400 font-medium">{impactScore.toFixed(1)}</p>
+                  </div>
+                )}
+                {confidentialityImpact && (
+                  <div className="bg-obsidian-950/50 border border-purple-500/10 rounded-lg p-3">
+                    <span className="text-[10px] text-text-tertiary uppercase tracking-wide block mb-1">Confidentiality</span>
+                    <p className="text-xs text-platinum font-medium">{confidentialityImpact}</p>
+                  </div>
+                )}
+                {integrityImpact && (
+                  <div className="bg-obsidian-950/50 border border-purple-500/10 rounded-lg p-3">
+                    <span className="text-[10px] text-text-tertiary uppercase tracking-wide block mb-1">Integrity</span>
+                    <p className="text-xs text-platinum font-medium">{integrityImpact}</p>
+                  </div>
+                )}
+                {availabilityImpact && (
+                  <div className="bg-obsidian-950/50 border border-purple-500/10 rounded-lg p-3">
+                    <span className="text-[10px] text-text-tertiary uppercase tracking-wide block mb-1">Availability</span>
+                    <p className="text-xs text-platinum font-medium">{availabilityImpact}</p>
+                  </div>
+                )}
+              </div>
+              {cvssVector && (
+                <div className="mt-3 bg-obsidian-950/50 border border-purple-500/10 rounded-lg p-3">
+                  <span className="text-[10px] text-text-tertiary uppercase tracking-wide block mb-1">CVSS Vector</span>
+                  <code className="text-[10px] text-purple-300 font-mono">{cvssVector}</code>
+                </div>
+              )}
+            </section>
+          )}
 
           {/* Metadata */}
           {(publishedDate || modifiedDate || cweId || vendor || product) && (
