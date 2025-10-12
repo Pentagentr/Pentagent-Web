@@ -286,27 +286,95 @@ class CVESearchEngine:
         min_score: float = 0.0
     ) -> List[SearchResult]:
         """
-        Hybrid search (dense + sparse) yapar.
-        Model yoksa text-based scroll search kullanır.
+        Profesyonel hybrid search (dense + sparse) + CVE ID detection + version matching.
         
         Args:
             query: Arama sorgusu
             limit: Maksimum sonuç sayısı
-            dense_weight: Dense vektör ağırlığı (None ise config'den alınır)
-            sparse_weight: Sparse vektör ağırlığı (None ise config'den alınır)
+            dense_weight: Dense vektör ağırlığı (None ise config'den alınır - default: 0.7)
+            sparse_weight: Sparse vektör ağırlığı (None ise config'den alınır - default: 0.3)
             min_score: Minimum skor eşiği
             
         Returns:
-            SearchResult listesi
+            SearchResult listesi (score'a göre sıralı)
         """
         if not query or not query.strip():
             logger.warning("Boş query alındı")
             return []
         
-        logger.info(f"Arama başlatıldı: '{query}' (limit={limit})")
+        query = query.strip()
+        logger.info(f"🔍 Profesyonel arama başlatıldı: '{query}' (limit={limit})")
+        
+        # 1. CVE ID Detection - Direkt CVE kodu varsa önce onu getir
+        cve_id_result = self._detect_and_fetch_cve_id(query)
+        if cve_id_result:
+            logger.info(f"✅ CVE ID tespit edildi, direkt getiriliyor: {cve_id_result.cve_id}")
+            # CVE ID bulunduysa onu en üste koy, sonra hybrid search yap
+            hybrid_results = self._hybrid_search_internal(query, limit - 1, dense_weight, sparse_weight, min_score)
+            # Duplicate kontrolü yap
+            hybrid_results = [r for r in hybrid_results if r.cve_id != cve_id_result.cve_id]
+            return [cve_id_result] + hybrid_results[:limit-1]
+        
+        # 2. Version Detection - Sürüm numarası varsa weight'leri ayarla
+        has_version = self._detect_version_in_query(query)
+        if has_version:
+            logger.info("📌 Sürüm numarası tespit edildi, sparse weight artırıldı (exact matching)")
+            # Sürüm varsa sparse'ı artır (exact matching için)
+            dense_weight = 0.5
+            sparse_weight = 0.5
+        
+        # 3. Hybrid Search
+        return self._hybrid_search_internal(query, limit, dense_weight, sparse_weight, min_score)
+    
+    def _detect_and_fetch_cve_id(self, query: str) -> Optional[SearchResult]:
+        """
+        Query'de CVE ID var mı kontrol eder ve varsa direkt getirir.
+        CVE format: CVE-YYYY-NNNNN (ör: CVE-2024-12345)
+        """
+        import re
+        # CVE pattern: CVE-YYYY-1234 veya CVE-YYYY-12345678
+        cve_pattern = r'CVE-\d{4}-\d{4,}'
+        match = re.search(cve_pattern, query, re.IGNORECASE)
+        
+        if match:
+            cve_id = match.group(0).upper()
+            logger.info(f"🎯 CVE ID tespit edildi: {cve_id}")
+            return self.get_cve_by_id(cve_id)
+        return None
+    
+    def _detect_version_in_query(self, query: str) -> bool:
+        """
+        Query'de sürüm numarası var mı kontrol eder.
+        Format: 1.2.3, v1.2, 2.4.49, vb.
+        """
+        import re
+        # Version patterns
+        version_patterns = [
+            r'\d+\.\d+\.\d+',  # 1.2.3
+            r'\d+\.\d+',       # 1.2
+            r'v\d+\.\d+',      # v1.2
+            r'version\s+\d+',  # version 2
+        ]
+        
+        for pattern in version_patterns:
+            if re.search(pattern, query, re.IGNORECASE):
+                logger.info(f"📌 Sürüm pattern tespit edildi: {pattern}")
+                return True
+        return False
+    
+    def _hybrid_search_internal(
+        self,
+        query: str,
+        limit: int,
+        dense_weight: Optional[float],
+        sparse_weight: Optional[float],
+        min_score: float
+    ) -> List[SearchResult]:
+        """Internal hybrid search implementation"""
+        logger.info(f"🔬 Hybrid search yapılıyor: '{query}'")
         
         try:
-            # Ağırlıkları ayarla
+            # Ağırlıkları ayarla ve optimize et
             d_weight = dense_weight if dense_weight is not None else self.config.default_dense_weight
             s_weight = sparse_weight if sparse_weight is not None else self.config.default_sparse_weight
             
@@ -315,16 +383,23 @@ class CVESearchEngine:
             d_weight = d_weight / total_weight
             s_weight = s_weight / total_weight
             
+            logger.info(f"⚖️ Ağırlıklar: Dense={d_weight:.2f}, Sparse={s_weight:.2f}")
+            
             # Query'yi vektörlere çevir
             dense_vec, sparse_vec = self._encode_query(query)
             
-            # Dense arama
-            dense_results = self._search_dense(dense_vec, limit * 2)
+            # Dense arama (semantik) - daha fazla sonuç al sonra birleştir
+            logger.info(f"🧠 Semantic search yapılıyor...")
+            dense_results = self._search_dense(dense_vec, limit * 3)
+            logger.info(f"  → {len(dense_results)} semantic sonuç bulundu")
             
-            # Sparse arama
-            sparse_results = self._search_sparse(sparse_vec, limit * 2)
+            # Sparse arama (keyword) - daha fazla sonuç al
+            logger.info(f"🔤 Keyword search yapılıyor...")
+            sparse_results = self._search_sparse(sparse_vec, limit * 3)
+            logger.info(f"  → {len(sparse_results)} keyword sonuç bulundu")
             
-            # Sonuçları birleştir
+            # Sonuçları profesyonelce birleştir
+            logger.info(f"🔗 Sonuçlar birleştiriliyor...")
             combined_results = self._combine_results(
                 dense_results, sparse_results, d_weight, s_weight
             )
@@ -332,17 +407,18 @@ class CVESearchEngine:
             # Minimum skor filtresi uygula
             if min_score > 0:
                 combined_results = [r for r in combined_results if r.score >= min_score]
+                logger.info(f"  → {len(combined_results)} sonuç min_score filtresini geçti (threshold={min_score})")
             
-            # Limit uygula
-            final_results = combined_results[:limit]
+            # Limit uygula ve sırala (en yüksek skor önce)
+            final_results = sorted(combined_results, key=lambda x: x.score, reverse=True)[:limit]
             
-            logger.info(f"Arama tamamlandı: {len(final_results)} sonuç bulundu")
+            logger.info(f"✅ Profesyonel arama tamamlandı: {len(final_results)} sonuç (avg score: {sum(r.score for r in final_results)/len(final_results) if final_results else 0:.3f})")
             return final_results
             
         except Exception as e:
-            logger.error(f"Arama hatası: {e}")
+            logger.error(f"❌ Arama hatası: {e}")
             # Fallback: text-based search
-            logger.info("Fallback: text-based search kullanılıyor")
+            logger.info("⚠️ Fallback: text-based search kullanılıyor")
             return self._text_based_search(query, limit)
     
     def _search_dense(self, dense_vector: List[float], limit: int) -> List[Dict]:

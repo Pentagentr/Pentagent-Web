@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class CVEResult:
-    """CVE arama sonucu"""
+    """CVE arama sonucu - Tüm detaylar"""
     cve_id: str
     score: float
     severity: Optional[str]
@@ -38,9 +38,17 @@ class CVEResult:
     attack_vector: Optional[str]
     description: str
     published_date: Optional[str]
+    modified_date: Optional[str] = None
+    references: Optional[List] = None
+    cwe_id: Optional[str] = None
+    vendor: Optional[str] = None
+    product: Optional[str] = None
+    cvss_vector: Optional[str] = None
+    exploitability_score: Optional[float] = None
+    impact_score: Optional[float] = None
     
     def to_dict(self) -> Dict[str, Any]:
-        """Dict formatına dönüştür"""
+        """Dict formatına dönüştür - Tüm detaylar"""
         return {
             "cve_id": self.cve_id,
             "score": self.score,
@@ -48,7 +56,15 @@ class CVEResult:
             "base_score": self.base_score,
             "attack_vector": self.attack_vector,
             "description": self.description,
-            "published_date": self.published_date
+            "published_date": self.published_date,
+            "modified_date": self.modified_date,
+            "references": self.references or [],
+            "cwe_id": self.cwe_id,
+            "vendor": self.vendor,
+            "product": self.product,
+            "cvss_vector": self.cvss_vector,
+            "exploitability_score": self.exploitability_score,
+            "impact_score": self.impact_score
         }
 
 
@@ -204,9 +220,11 @@ class RAGService:
             else:
                 results = self._engine.search(query, limit=limit)
             
-            # SearchResult'ları CVEResult'a dönüştür
+            # SearchResult'ları CVEResult'a dönüştür - TÜM DETAYLARLA
             cve_results = []
             for r in results:
+                # Metadata'dan tüm bilgileri çıkar
+                metadata = r.metadata or {}
                 cve_results.append(CVEResult(
                     cve_id=r.cve_id,
                     score=r.score,
@@ -214,10 +232,18 @@ class RAGService:
                     base_score=r.base_score,
                     attack_vector=r.attack_vector,
                     description=r.description,
-                    published_date=r.published_date
+                    published_date=r.published_date,
+                    modified_date=metadata.get('modified_date'),
+                    references=metadata.get('references', []),
+                    cwe_id=metadata.get('cwe_id'),
+                    vendor=metadata.get('vendor'),
+                    product=metadata.get('product'),
+                    cvss_vector=metadata.get('cvss_vector'),
+                    exploitability_score=metadata.get('exploitability_score'),
+                    impact_score=metadata.get('impact_score')
                 ))
             
-            logger.info(f"✅ {len(cve_results)} CVE bulundu")
+            logger.info(f"✅ {len(cve_results)} CVE bulundu (tüm detaylarla)")
             return cve_results
             
         except Exception as e:
@@ -245,6 +271,7 @@ class RAGService:
         try:
             result = self._engine.get_cve_by_id(cve_id)
             if result:
+                metadata = result.metadata or {}
                 return CVEResult(
                     cve_id=result.cve_id,
                     score=result.score,
@@ -252,7 +279,15 @@ class RAGService:
                     base_score=result.base_score,
                     attack_vector=result.attack_vector,
                     description=result.description,
-                    published_date=result.published_date
+                    published_date=result.published_date,
+                    modified_date=metadata.get('modified_date'),
+                    references=metadata.get('references', []),
+                    cwe_id=metadata.get('cwe_id'),
+                    vendor=metadata.get('vendor'),
+                    product=metadata.get('product'),
+                    cvss_vector=metadata.get('cvss_vector'),
+                    exploitability_score=metadata.get('exploitability_score'),
+                    impact_score=metadata.get('impact_score')
                 )
             return None
             
