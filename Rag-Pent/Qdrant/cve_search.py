@@ -6,6 +6,7 @@ HuggingFace Inference API ile embedding oluşturma desteği.
 """
 
 import logging
+import re
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 import uuid
