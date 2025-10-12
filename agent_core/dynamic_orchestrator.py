@@ -359,38 +359,63 @@ Lütfen geçerli bir hedef belirtin."""
 
     async def run_autonomous_pentest_streaming(self, target: str, user_task: str, status_callback):
         """Streaming düşünce ile dinamik otonom pentest"""
-        # ==================== TARGET VALIDATION ====================
-        from agent_core.target_validator import validate_target, has_target_in_query
+        # ==================== AI-POWERED TARGET VALIDATION ====================
+        from agent_core.target_validator import (
+            validate_target, 
+            smart_target_extraction,
+            extract_target_from_query
+        )
         
-        # 1. Target var mı ve geçerli mi kontrol et
+        # 1. Target var mı kontrol et
         if not target or target.strip() == "":
-            # Target boş - user_task'te target var mı bak
-            if user_task and has_target_in_query(user_task):
-                from agent_core.target_validator import extract_target_from_query
-                extracted_target = extract_target_from_query(user_task)
+            # Target boş - user_task'ten çıkarmayı dene
+            if user_task and user_task.strip():
+                await status_callback("🧠 Hedef analiz ediliyor...", "ai_thinking")
+                
+                # 🤖 SMART EXTRACTION: Regex + AI
+                extracted_target, method = await smart_target_extraction(user_task, self.model)
+                
                 if extracted_target:
                     target = extracted_target
-                    await status_callback(f"✅ Hedef tespit edildi: {target}", "info")
+                    if method == "ai":
+                        await status_callback(f"🤖 AI ile hedef tespit edildi: {target}", "info")
+                    else:
+                        await status_callback(f"✅ Hedef tespit edildi: {target}", "info")
                 else:
-                    # Target çıkarılamadı
-                    await status_callback("❌ Hedef belirtilmedi", "error")
+                    # Hiçbir yöntem target bulamadı
+                    await status_callback("❌ Tarama hedefi belirtilmedi", "error")
                     await self._send_no_target_response(user_task, status_callback)
                     return None
             else:
-                # Ne target ne de user_task'te hedef var
+                # Query de boş
                 await status_callback("❌ Tarama hedefi belirtilmedi", "error")
-                await self._send_no_target_response(user_task, status_callback)
+                await self._send_no_target_response("", status_callback)
                 return None
-        
-        # 2. Target'ı validate et
-        is_valid, normalized_target, error_msg = validate_target(target)
-        if not is_valid:
-            await status_callback(f"❌ Geçersiz hedef: {error_msg}", "error")
-            await self._send_invalid_target_response(target, error_msg, status_callback)
-            return None
-        
-        # 3. Normalize edilmiş target'ı kullan
-        target = normalized_target
+        else:
+            # Target direkt verilmiş - validate et
+            is_valid, normalized_target, error_msg = validate_target(target)
+            if not is_valid:
+                # Geçersiz - AI ile düzeltmeyi dene
+                await status_callback(f"⚠️ Target geçersiz, AI ile düzeltme deneniyor...", "ai_thinking")
+                
+                # AI'a sor
+                ai_target = None
+                if hasattr(self, 'model') and self.model:
+                    from agent_core.target_validator import ai_extract_target
+                    # User_task ile birleştir
+                    combined_query = f"{target} {user_task}" if user_task else target
+                    ai_target = await ai_extract_target(combined_query, self.model)
+                
+                if ai_target:
+                    target = ai_target
+                    await status_callback(f"🤖 AI ile düzeltildi: {target}", "info")
+                else:
+                    await status_callback(f"❌ Geçersiz hedef: {error_msg}", "error")
+                    await self._send_invalid_target_response(target, error_msg, status_callback)
+                    return None
+            else:
+                # Valid - normalize edilmiş halini kullan
+                target = normalized_target
         
         # Dinamik state'i başlat
         self.current_target = target
