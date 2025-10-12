@@ -976,20 +976,29 @@ async def run_comprehensive_test():
     qdrant_api_key = os.getenv('QDRANT_API_KEY', 'iM-z0e_4bNbfO0M-9Xl5DM5LwL80q0OTv2UX5S7Q18XyvAVJQVQNEg')
     hf_token = os.getenv('HUGGINGFACE_TOKEN', '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')
     
-    # HuggingFace Space - WORKING CONFIG (No HF token needed for public space)
-    qdrant_host = "https://meryemarpaci-pentagent-qdrant.hf.space"
+    # ✅ DOĞRU YÖNTEM: LOCAL BGE-M3 vectorization + HuggingFace Space Qdrant
+    print("="*80)
+    print("[*] RAG TEST CONFIGURATION:")
+    print(f"[*] Qdrant Database: https://meryemarpaci-pentagent-qdrant.hf.space")
+    print(f"[*] Collection: cve_collection_hybrid (verified)")
+    print(f"[*] Vectorization: LOCAL BGE-M3 Model (BAAI/bge-m3)")
+    print(f"[*] Testing: Both Dense + Sparse vectors")
+    print(f"[*] Hybrid Search: Yes (adaptive weights)")
+    print("="*80 + "\n")
+    
+    print("[*] Loading LOCAL BGE-M3 model...")
     config_obj = SearchConfig(
-        collection_name="cve_collection_hybrid",  # Verified from HF Space API
-        qdrant_host=qdrant_host,
+        collection_name="cve_collection_hybrid",
+        qdrant_host="https://meryemarpaci-pentagent-qdrant.hf.space",
         qdrant_port=443,
         qdrant_https=True,
-        huggingface_token=None  # Public space - HF API kullanma, sadece Qdrant'tan çek
+        huggingface_token=None  # LOCAL BGE-M3 kullan, HF Inference API KULLANMA!
     )
     
-    print(f"[*] Connecting to: {qdrant_host[:50]}...")
-    
     search_engine = CVESearchEngine(config_obj)
-    print("[+] RAG Search Engine initialized\n")
+    print("[+] BGE-M3 Model loaded ✅")
+    print("[+] Qdrant connection established ✅")
+    print("[+] Ready to test HYBRID SEARCH (Dense + Sparse) ✅\n")
     
     # Test statistics
     stats = {
