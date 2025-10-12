@@ -976,14 +976,14 @@ async def run_comprehensive_test():
     qdrant_api_key = os.getenv('QDRANT_API_KEY', 'iM-z0e_4bNbfO0M-9Xl5DM5LwL80q0OTv2UX5S7Q18XyvAVJQVQNEg')
     hf_token = os.getenv('HUGGINGFACE_TOKEN', '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')
     
-    # HuggingFace Space - WORKING CONFIG
+    # HuggingFace Space - WORKING CONFIG (No HF token needed for public space)
     qdrant_host = "https://meryemarpaci-pentagent-qdrant.hf.space"
     config_obj = SearchConfig(
         collection_name="cve_collection_hybrid",  # Verified from HF Space API
         qdrant_host=qdrant_host,
         qdrant_port=443,
         qdrant_https=True,
-        huggingface_token=hf_token
+        huggingface_token=None  # Public space - HF API kullanma, sadece Qdrant'tan çek
     )
     
     print(f"[*] Connecting to: {qdrant_host[:50]}...")

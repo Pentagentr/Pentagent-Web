@@ -224,8 +224,17 @@ class CVESearchEngine:
                 
                 return dense_vec.tolist(), sparse_vec
             
-            # Hiçbiri yoksa hata
-            raise ValueError("Neither HF API nor local model available")
+            # Hiçbiri yoksa - FALLBACK: Query'yi text olarak kullan (embedding olmadan)
+            logger.warning("⚠️ NE HF API NE LOCAL MODEL - Text-based fallback")
+            # Basit text-based sparse vector oluştur
+            words = query.lower().split()
+            sparse_vec = models.SparseVector(
+                indices=list(range(len(words))),
+                values=[1.0] * len(words)
+            )
+            # Dense için dummy vector (sıfırlarla doldur)
+            dense_vec = [0.0] * 1024  # BGE-M3 dimension
+            return dense_vec, sparse_vec
             
         except Exception as e:
             logger.error(f"Query encoding hatası: {e}")
