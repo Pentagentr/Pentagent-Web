@@ -722,38 +722,70 @@ class CVESearchEngine:
         dense_weight: float,
         sparse_weight: float
     ) -> List[SearchResult]:
-        """Dense ve sparse sonuçları birleştirir"""
+        """
+        IMPROVED: Dense ve sparse sonuçları RRF (Reciprocal Rank Fusion) ile birleştirir
+        Daha dengeli ve profesyonel birleştirme algoritması
+        """
+        # RRF konstant (standard değer)
+        k = 60
         combined = {}
         
-        # Dense sonuçları ekle
-        for result in dense_results:
+        # Dense sonuçları ekle (rank-based RRF)
+        for rank, result in enumerate(dense_results, start=1):
             point_id = result["id"]
+            rrf_score = 1.0 / (k + rank)  # RRF formülü
             combined[point_id] = {
                 "payload": result["payload"],
                 "dense_score": result["score"],
-                "sparse_score": 0.0
+                "sparse_score": 0.0,
+                "dense_rank": rank,
+                "sparse_rank": None,
+                "rrf_dense": rrf_score * dense_weight,
+                "rrf_sparse": 0.0
             }
         
-        # Sparse sonuçları ekle
-        for result in sparse_results:
+        # Sparse sonuçları ekle (rank-based RRF)
+        for rank, result in enumerate(sparse_results, start=1):
             point_id = result["id"]
+            rrf_score = 1.0 / (k + rank)
             if point_id not in combined:
                 combined[point_id] = {
                     "payload": result["payload"],
                     "dense_score": 0.0,
-                    "sparse_score": result["score"]
+                    "sparse_score": result["score"],
+                    "dense_rank": None,
+                    "sparse_rank": rank,
+                    "rrf_dense": 0.0,
+                    "rrf_sparse": rrf_score * sparse_weight
                 }
             else:
                 combined[point_id]["sparse_score"] = result["score"]
+                combined[point_id]["sparse_rank"] = rank
+                combined[point_id]["rrf_sparse"] = rrf_score * sparse_weight
         
-        # Hybrid skor hesapla ve SearchResult objelerine çevir - TÜM METADATA İLE
+        # Hybrid skor hesapla (RRF + bonuslar)
         results = []
         for point_id, data in combined.items():
             payload = data["payload"]
             metadata = payload.get("metadata", {})
             
-            # Hybrid skor
-            hybrid_score = (dense_weight * data["dense_score"]) + (sparse_weight * data["sparse_score"])
+            # RRF skorları topla
+            rrf_score = data["rrf_dense"] + data["rrf_sparse"]
+            
+            # Bonus 1: Her iki listede de varsa boost ver (+8% bonus)
+            if data["dense_rank"] and data["sparse_rank"]:
+                rrf_score *= 1.08
+                
+            # Bonus 2: Her iki skor da yüksekse ekstra boost (+12% bonus)
+            if data["dense_score"] > 0.65 and data["sparse_score"] > 0.65:
+                rrf_score *= 1.12
+                
+            # Bonus 3: Top-5'te her ikisinde de varsa ekstra (+5% bonus)
+            if data["dense_rank"] and data["dense_rank"] <= 5 and data["sparse_rank"] and data["sparse_rank"] <= 5:
+                rrf_score *= 1.05
+            
+            # Final hybrid skor (RRF-based)
+            hybrid_score = rrf_score
             
             # TÜM METADATA EXTRACT ET - HER ŞEY GELMELİ
             full_metadata = {
