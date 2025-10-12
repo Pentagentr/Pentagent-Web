@@ -79,13 +79,6 @@ const CVEModal = ({ cve, onClose }) => {
                     </span>
                   </div>
                 )}
-                {matchScore && (
-                  <div className="px-2.5 py-1 bg-obsidian-850 border border-purple-500/20 rounded">
-                    <span className="text-xs text-purple-300 font-medium">
-                      Match: {(matchScore * 100).toFixed(0)}%
-                    </span>
-                  </div>
-                )}
               </div>
             </div>
 

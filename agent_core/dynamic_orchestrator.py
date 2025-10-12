@@ -56,6 +56,39 @@ class DynamicAgentOrchestrator:
         """Varsayılan durum geri çağrısı"""
         print(f"[{message_type.upper()}] {message}")
     
+    async def _send_no_target_response(self, user_query: str, status_callback):
+        """Hedef belirtilmediğinde kısa ve profesyonel yanıt"""
+        # Kısa bir yanıt oluştur (token tasarrufu)
+        response = """Merhaba! Ben Pentagent AI, siber güvenlik uzmanı asistanınızım. 🛡️
+
+Sizin için kapsamlı güvenlik taraması yapabilirim, ancak bir hedef belirtmeniz gerekiyor.
+
+📋 Örnek kullanım:
+• "example.com için zafiyet taraması yap"
+• "https://mysite.com üzerinde SQL injection testi yap"
+• "192.168.1.1 IP adresini tara"
+
+Hangi hedefi taramak istersiniz?"""
+        
+        await status_callback(response, "ai_response")
+        return None
+    
+    async def _send_invalid_target_response(self, target: str, error: str, status_callback):
+        """Geçersiz hedef için kısa yanıt"""
+        response = f"""Belirttiğiniz hedef geçerli görünmüyor: "{target}"
+
+❌ Hata: {error}
+
+✅ Geçerli format örnekleri:
+• Domain: example.com
+• URL: https://example.com
+• IP: 192.168.1.1
+
+Lütfen geçerli bir hedef belirtin."""
+        
+        await status_callback(response, "ai_response")
+        return None
+    
     def _complete_tool_params(self, tool_name: str, params: dict, status_callback=None) -> dict:
         """Tool için eksik parametreleri akıllıca tamamla"""
         completed_params = params.copy()
@@ -326,6 +359,39 @@ class DynamicAgentOrchestrator:
 
     async def run_autonomous_pentest_streaming(self, target: str, user_task: str, status_callback):
         """Streaming düşünce ile dinamik otonom pentest"""
+        # ==================== TARGET VALIDATION ====================
+        from agent_core.target_validator import validate_target, has_target_in_query
+        
+        # 1. Target var mı ve geçerli mi kontrol et
+        if not target or target.strip() == "":
+            # Target boş - user_task'te target var mı bak
+            if user_task and has_target_in_query(user_task):
+                from agent_core.target_validator import extract_target_from_query
+                extracted_target = extract_target_from_query(user_task)
+                if extracted_target:
+                    target = extracted_target
+                    await status_callback(f"✅ Hedef tespit edildi: {target}", "info")
+                else:
+                    # Target çıkarılamadı
+                    await status_callback("❌ Hedef belirtilmedi", "error")
+                    await self._send_no_target_response(user_task, status_callback)
+                    return None
+            else:
+                # Ne target ne de user_task'te hedef var
+                await status_callback("❌ Tarama hedefi belirtilmedi", "error")
+                await self._send_no_target_response(user_task, status_callback)
+                return None
+        
+        # 2. Target'ı validate et
+        is_valid, normalized_target, error_msg = validate_target(target)
+        if not is_valid:
+            await status_callback(f"❌ Geçersiz hedef: {error_msg}", "error")
+            await self._send_invalid_target_response(target, error_msg, status_callback)
+            return None
+        
+        # 3. Normalize edilmiş target'ı kullan
+        target = normalized_target
+        
         # Dinamik state'i başlat
         self.current_target = target
         self.user_task = user_task
