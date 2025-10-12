@@ -106,14 +106,14 @@ const ChatArea = ({ conversationId, isTyping, messages = [], currentScan }) => {
             case 'ai_thinking':
               return (
                 <div key={message.id} className="flex items-start gap-3 animate-fadeIn">
-                  <div className="w-8 h-8 bg-gradient-to-br from-platinum-500 to-platinum-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Brain className="w-4 h-4 text-obsidian-950 animate-pulse" />
+                  <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Brain className="w-4 h-4 text-white animate-pulse" />
                   </div>
                   <div className="flex-1">
-                    <div className="bg-obsidian-850 border border-platinum-500/30 rounded-lg p-3">
+                    <div className="bg-obsidian-850 border border-purple-500/30 rounded-lg p-3">
                       <div className="flex items-center gap-2 mb-1">
-                        <div className="w-1.5 h-1.5 bg-platinum-500 rounded-full animate-pulse" />
-                        <span className="text-xs text-platinum-400 font-medium">AI Düşünüyor</span>
+                        <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-pulse" />
+                        <span className="text-xs text-purple-400 font-medium">AI Düşünüyor</span>
                         <span className="text-xs text-text-tertiary">{message.timestamp}</span>
                       </div>
                       <p className="text-text-primary text-xs">{message.content}</p>
@@ -125,14 +125,14 @@ const ChatArea = ({ conversationId, isTyping, messages = [], currentScan }) => {
             case 'ai_reasoning':
               return (
                 <div key={message.id} className="flex items-start gap-3 animate-fadeIn">
-                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Brain className="w-4 h-4 text-white" />
                   </div>
                   <div className="flex-1">
-                    <div className="bg-obsidian-850 border border-blue-500/30 rounded-lg p-3">
+                    <div className="bg-obsidian-850 border border-purple-500/30 rounded-lg p-3">
                       <div className="flex items-center gap-2 mb-1">
-                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
-                        <span className="text-xs text-blue-400 font-medium">
+                        <div className="w-1.5 h-1.5 bg-purple-400 rounded-full" />
+                        <span className="text-xs text-purple-400 font-medium">
                           {message.content.includes('AI Analizi:') ? '📊 Tool Sonuçları' : 'AI Analizi'}
                         </span>
                         <span className="text-xs text-text-tertiary">{message.timestamp}</span>

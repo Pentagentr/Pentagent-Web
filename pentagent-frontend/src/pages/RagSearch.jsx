@@ -95,13 +95,13 @@ const RagSearch = () => {
             {/* Stats */}
             {stats?.available && (
               <div className="flex items-center gap-3 text-xs">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-obsidian-900 border border-obsidian-700 rounded-lg">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  <span className="text-text-secondary">Live</span>
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500/10 border border-green-500/20 rounded-lg">
+                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                  <span className="text-green-400">Live</span>
                 </div>
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-obsidian-900 border border-obsidian-700 rounded-lg">
-                  <Shield className="w-3.5 h-3.5 text-platinum-500" />
-                  <span className="text-text-secondary">{stats.total_cves?.toLocaleString()} CVE</span>
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                  <Shield className="w-3.5 h-3.5 text-purple-400" />
+                  <span className="text-purple-300">{stats.total_cves?.toLocaleString()} CVE</span>
                 </div>
               </div>
             )}
@@ -118,7 +118,7 @@ const RagSearch = () => {
                   placeholder="Search vulnerabilities... (e.g., SQL injection, Apache Log4j)"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-obsidian-850 border border-obsidian-700 focus:border-platinum-500 rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none transition-colors text-sm"
+                  className="w-full px-4 py-2.5 bg-obsidian-850 border border-obsidian-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none transition-all duration-300 text-sm"
                   disabled={loading}
                 />
               </div>
@@ -126,7 +126,7 @@ const RagSearch = () => {
               <select
                 value={severity}
                 onChange={(e) => setSeverity(e.target.value)}
-                className="px-4 py-2.5 bg-obsidian-850 border border-obsidian-700 focus:border-platinum-500 rounded-lg text-text-secondary focus:outline-none transition-colors text-sm"
+                className="px-4 py-2.5 bg-obsidian-850 border border-obsidian-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 rounded-lg text-text-secondary focus:outline-none transition-all duration-300 text-sm"
                 disabled={loading}
               >
                 <option value="">All Severity</option>
@@ -139,7 +139,7 @@ const RagSearch = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="flex items-center gap-2 px-6 py-2.5 bg-platinum-500 hover:bg-platinum-600 disabled:bg-obsidian-700 disabled:text-text-tertiary text-obsidian-950 font-medium rounded-lg transition-colors text-sm"
+                className="flex items-center gap-2 px-6 py-2.5 bg-purple-500 hover:bg-purple-600 disabled:bg-obsidian-700 disabled:text-text-tertiary text-white font-medium rounded-lg transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/20 text-sm"
               >
                 <Search className="w-4 h-4" />
                 {loading ? 'Searching...' : 'Search'}

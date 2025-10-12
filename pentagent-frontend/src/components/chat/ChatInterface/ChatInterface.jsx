@@ -281,7 +281,7 @@ const ChatInterface = () => {
         {/* Status Bar - Sabit, navbar'ın hemen altında */}
         <div className="w-full h-12 bg-obsidian-900 border-b border-obsidian-700 flex items-center justify-between px-6 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <Brain className="w-5 h-5 text-platinum-500" />
+            <Brain className="w-5 h-5 text-purple-400" />
             <div>
               <h2 className="text-sm font-medium text-text-primary">AI Security Assistant</h2>
             </div>
@@ -292,13 +292,13 @@ const ChatInterface = () => {
             <div className="flex items-center gap-2">
               {connectionStatus === 'connected' ? (
                 <>
-                  <Wifi className="w-4 h-4 text-green-500" />
-                  <span className="text-sm text-green-500">Connected</span>
+                  <Wifi className="w-4 h-4 text-green-400" />
+                  <span className="text-sm text-green-400">Connected</span>
                 </>
               ) : connectionStatus === 'connecting' ? (
                 <>
                   <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm text-yellow-500">Connecting</span>
+                  <span className="text-sm text-yellow-400">Connecting</span>
                 </>
               ) : (
                 <>
@@ -337,9 +337,9 @@ const ChatInterface = () => {
                   <button
                     key={index}
                     onClick={() => setMessage(prompt.text)}
-                    className="flex items-center gap-2 px-3 py-2 bg-obsidian-850 hover:bg-obsidian-800 border border-obsidian-700 hover:border-platinum-500/30 rounded-lg text-sm text-text-secondary hover:text-text-primary transition-all group"
+                    className="flex items-center gap-2 px-3 py-2 bg-obsidian-850 hover:bg-purple-500/10 border border-obsidian-700 hover:border-purple-500/30 rounded-lg text-sm text-text-secondary hover:text-purple-300 transition-all duration-300 group"
                   >
-                    <Icon className="w-4 h-4 group-hover:text-platinum-500" />
+                    <Icon className="w-4 h-4 group-hover:text-purple-400" />
                     <span className="truncate max-w-48">{prompt.text}</span>
                   </button>
                 );
@@ -355,7 +355,7 @@ const ChatInterface = () => {
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Describe what you want to test..."
                 rows={1}
-                className="w-full min-h-[44px] max-h-32 px-4 py-3 pr-24 bg-obsidian-850 border border-obsidian-700 rounded-xl text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-platinum-500 focus:ring-2 focus:ring-platinum-500/10 resize-none transition-all"
+                className="w-full min-h-[44px] max-h-32 px-4 py-3 pr-24 bg-obsidian-850 border border-obsidian-700 rounded-xl text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 resize-none transition-all duration-300"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();

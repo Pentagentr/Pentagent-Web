@@ -80,3 +80,4 @@ class VerifyXSSHTTP(MCPTool):
 verify_xss_http = VerifyXSSHTTP()
 
 
+

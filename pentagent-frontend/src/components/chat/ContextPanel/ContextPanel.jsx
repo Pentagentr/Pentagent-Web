@@ -93,31 +93,31 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
   return (
     <div className="w-full bg-obsidian-900 border-l border-obsidian-700 flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-obsidian-700 flex items-center justify-between">
-        <h3 className="font-semibold text-text-primary">Scan Context</h3>
+      <div className="p-4 border-b border-purple-500/10 flex items-center justify-between bg-obsidian-900/50">
+        <h3 className="text-sm font-semibold text-platinum">Scan Context</h3>
         <button
           onClick={onToggle}
-          className="p-2 text-text-tertiary hover:text-text-secondary hover:bg-obsidian-850 rounded-lg transition-all"
+          className="p-1.5 text-text-tertiary hover:text-purple-400 hover:bg-purple-500/10 rounded-lg transition-all duration-300"
         >
           <X className="w-4 h-4" />
         </button>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-obsidian-700">
+      <div className="flex border-b border-purple-500/10">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           return (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-all ${
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-medium transition-all duration-300 ${
                 activeTab === tab.id
-                  ? 'text-platinum-500 border-b-2 border-platinum-500 bg-platinum-500/5'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-obsidian-850'
+                  ? 'text-purple-400 border-b-2 border-purple-500 bg-purple-500/5'
+                  : 'text-text-secondary hover:text-purple-300 hover:bg-purple-500/5'
               }`}
             >
-              <Icon className="w-4 h-4" />
+              <Icon className="w-3.5 h-3.5" />
               <span>{tab.label}</span>
             </button>
           );
@@ -125,116 +125,111 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin scrollbar-thumb-purple-500/20 scrollbar-track-transparent">
         
         {activeTab === 'cve' && (
           <>
             {/* CVE Suggestions */}
             {cveLoading ? (
               <div className="flex flex-col items-center justify-center py-12 space-y-3">
-                <Loader2 className="w-8 h-8 text-platinum-500 animate-spin" />
-                <p className="text-sm text-text-tertiary">CVE analizi yapılıyor...</p>
+                <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+                <p className="text-xs text-text-tertiary">CVE analizi yapılıyor...</p>
               </div>
             ) : cveError ? (
-              <Card variant="default" className="p-4 text-center">
-                <AlertTriangle className="w-8 h-8 text-warning mx-auto mb-2" />
-                <p className="text-sm text-text-tertiary">{cveError}</p>
-                <Button 
-                  variant="secondary" 
-                  size="sm" 
-                  className="mt-3"
+              <div className="bg-obsidian-900/50 border border-purple-500/20 rounded-lg p-4 text-center">
+                <AlertTriangle className="w-6 h-6 text-warning mx-auto mb-2" />
+                <p className="text-xs text-text-tertiary">{cveError}</p>
+                <button
                   onClick={fetchCVESuggestions}
+                  className="mt-3 px-3 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-lg text-xs font-medium text-purple-400 transition-all duration-300"
                 >
                   Tekrar Dene
-                </Button>
-              </Card>
+                </button>
+              </div>
             ) : cveResults.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-sm font-medium text-text-primary">
+                  <h4 className="text-xs font-medium text-platinum">
                     İlgili CVE'ler ({cveResults.length})
                   </h4>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
+                  <button
                     onClick={fetchCVESuggestions}
-                    className="text-xs"
+                    className="px-2 py-1 text-[10px] text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 rounded transition-all"
                   >
                     Yenile
-                  </Button>
+                  </button>
                 </div>
                 {cveResults.map((cve) => (
-                  <Card key={cve.cve_id} variant="default" className="p-5 hover:border-platinum-500/50 transition-all">
-                    <div className="space-y-3">
+                  <div key={cve.cve_id} className="bg-obsidian-900/50 border border-purple-500/20 hover:border-purple-500/40 rounded-lg p-3 transition-all duration-300">
+                    <div className="space-y-2">
                       {/* CVE Header */}
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h5 className="text-base font-semibold text-text-primary">{cve.cve_id}</h5>
-                          <div className="flex items-center gap-3 mt-2 text-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <Shield size={12} className="text-purple-400" />
+                            <h5 className="text-xs font-semibold text-platinum">{cve.cve_id}</h5>
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap text-[10px]">
                             {cve.severity && (
-                              <span className={`w-2 h-2 rounded-full ${getSeverityColor(cve.severity)}`} />
+                              <div className="flex items-center gap-1">
+                                <span className={`w-1.5 h-1.5 rounded-full ${getSeverityColor(cve.severity)}`} />
+                                <span className="text-text-tertiary">{cve.severity}</span>
+                              </div>
                             )}
-                            <span className="text-text-tertiary">{cve.severity || 'N/A'}</span>
                             {cve.base_score && (
-                              <span className="text-text-tertiary">CVSS: {cve.base_score}</span>
-                            )}
-                            {cve.attack_vector && (
-                              <span className="text-text-tertiary">Vector: {cve.attack_vector}</span>
-                            )}
-                            {cve.published_date && (
-                              <span className="text-text-tertiary">Published: {cve.published_date}</span>
+                              <span className="text-purple-400">CVSS: {cve.base_score}</span>
                             )}
                           </div>
                         </div>
-                        <div className="text-sm text-platinum-400 font-medium">
+                        <div className="text-xs text-purple-400 font-medium">
                           {(cve.score * 100).toFixed(0)}%
                         </div>
                       </div>
 
                       {/* Description */}
-                      <p className="text-sm text-text-secondary leading-relaxed">
+                      <p className="text-xs text-text-secondary leading-relaxed line-clamp-3">
                         {cve.description}
                       </p>
 
                       {/* Link */}
-                      <div className="flex items-center justify-between pt-2">
+                      <div className="pt-2 border-t border-purple-500/10">
                         <a
                           href={`https://nvd.nist.gov/vuln/detail/${cve.cve_id}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center gap-2 text-sm text-platinum-400 hover:text-platinum-300 transition-colors"
+                          className="flex items-center gap-1.5 text-[10px] text-purple-400 hover:text-purple-300 transition-colors"
                         >
-                          <ExternalLink className="w-4 h-4" />
-                          <span>NVD'de Aç</span>
+                          <ExternalLink className="w-3 h-3" />
+                          <span>View on NVD</span>
                         </a>
                       </div>
                     </div>
-                  </Card>
+                  </div>
                 ))}
               </div>
             ) : (
-              <Card variant="default" className="p-6 text-center">
-                <Database className="w-10 h-10 text-text-tertiary mx-auto mb-3" />
-                <p className="text-sm text-text-tertiary mb-2">CVE önerisi yok</p>
-                <p className="text-xs text-text-tertiary">
+              <div className="bg-obsidian-900/50 border border-purple-500/20 rounded-lg p-6 text-center">
+                <Database className="w-8 h-8 text-purple-400/50 mx-auto mb-3" />
+                <p className="text-xs text-text-tertiary mb-1">CVE önerisi yok</p>
+                <p className="text-[10px] text-text-tertiary">
                   Tarama tamamlandığında ilgili CVE'ler burada görünecek
                 </p>
-              </Card>
+              </div>
             )}
           </>
         )}
       </div>
 
       {/* Actions */}
-      <div className="p-4 border-t border-obsidian-700 space-y-3">
-        <Button variant="primary" className="w-full">
-          <Download className="w-4 h-4 mr-2" />
+      <div className="p-3 border-t border-purple-500/10 space-y-2 bg-obsidian-900/50">
+        <button className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-lg text-xs font-medium text-purple-400 transition-all duration-300">
+          <Download className="w-3.5 h-3.5" />
           Generate Report
-        </Button>
-        <Button variant="secondary" className="w-full">
-          <Share2 className="w-4 h-4 mr-2" />
+        </button>
+        <button className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-obsidian-850 hover:bg-obsidian-800 border border-purple-500/20 rounded-lg text-xs font-medium text-text-secondary hover:text-purple-400 transition-all duration-300">
+          <Share2 className="w-3.5 h-3.5" />
           Export Results
-        </Button>
+        </button>
       </div>
     </div>
   );

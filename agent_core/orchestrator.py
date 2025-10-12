@@ -161,10 +161,10 @@ class AgentOrchestrator:
             remaining_steps = [s for s in state.plan if s['status'] == 'pending']
             
             # Adaptasyon koşulları:
-            # - Hala bekleyen adımlar varsa
-            # - Veya Analyzer yeni bir aksiyon öneriyorsa
-            # - Veya birkaç adım tamamlandıysa (periyodik güncelleme)
-            should_adapt = (remaining_steps and (next_action_suggestion or step_count % 3 == 0))
+            # - SADECE Analyzer yeni bir aksiyon öneriyorsa
+            # - Veya plan tamamen bittiyse ama henüz yeterli bilgi toplanmadıysa
+            # ÇOK SIK ADAPTASYON YAPMAYI ENGELLEMEK için step_count % kontrolünü kaldırdık
+            should_adapt = (remaining_steps and next_action_suggestion is not None)
             
             if should_adapt:
                    await self.status_callback("🔄 STRATEJİK PLAN ADAPTASYONU BAŞLIYOR...", "ai_thinking")
@@ -200,15 +200,19 @@ class AgentOrchestrator:
                     
                     # Mevcut bekleyen adımlarla karşılaştır
                     # Tamamen yeni adımlar ekle, tekrar etmeyenleri
+                    # GÜÇLENDIRILMIŞ DUPLICATE KONTROLÜ: Sadece tool adına bak, aynı tool tekrar çağrılmasın
                     unique_new_steps = []
                     for new_step in new_steps:
                         is_duplicate = any(
-                            existing['tool'] == new_step['tool'] and 
-                            existing['params'] == new_step['params'] 
+                            existing['tool'] == new_step['tool']  # Sadece tool adı kontrolü
                             for existing in state.plan
                         )
                         if not is_duplicate:
                             unique_new_steps.append(new_step)
+                        else:
+                            # Debug için log
+                            if self.status_callback:
+                                await self.status_callback(f"⏭️ {new_step['tool']} zaten çalıştırıldı, atlanıyor", "info")
                     
                     if unique_new_steps:
                         state.plan = completed_steps_in_plan + unique_new_steps

@@ -48,7 +48,7 @@ class DynamicAgentOrchestrator:
         self.discovered_information = {}
         self.max_steps = 10  # Maksimum limit
         self.min_steps = 3   # Minimum gereksinim
-        self.suggested_steps = 5  # Varsayılan hedef
+        self.suggested_steps = 3  # Varsayılan hedef - minimum ile aynı (gereksiz tool çağrılarını engelle)
         
         logger.info("🤖 Dynamic Agent Orchestrator initialized")
     

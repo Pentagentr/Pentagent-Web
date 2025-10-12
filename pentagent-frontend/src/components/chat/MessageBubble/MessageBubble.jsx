@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Copy, Check, ThumbsUp, ThumbsDown, RotateCcw, User, Brain } from 'lucide-react';
+import CVECard from '../CVECard';
 
 const MessageBubble = ({ 
   type, 
@@ -7,6 +8,7 @@ const MessageBubble = ({
   timestamp, 
   avatar, 
   thinking = false,
+  cves = null,
   onCopy,
   onRegenerate,
   onFeedback 
@@ -77,6 +79,16 @@ const MessageBubble = ({
               {content}
             </p>
           </div>
+
+          {/* CVE Results */}
+          {cves && cves.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-obsidian-700 space-y-2">
+              <p className="text-xs text-text-tertiary mb-2">Found {cves.length} CVE{cves.length > 1 ? 's' : ''}:</p>
+              {cves.map((cve, index) => (
+                <CVECard key={index} cve={cve} />
+              ))}
+            </div>
+          )}
 
           {/* Thinking Indicator */}
           {thinking && (

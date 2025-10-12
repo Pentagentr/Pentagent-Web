@@ -1,0 +1,92 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Kullanıcı profilleri koleksiyonu
+    match /users/{userId} {
+      // Kullanıcı kendi profilini okuyabilir
+      allow read: if request.auth != null && request.auth.uid == userId;
+      
+      // Yeni kullanıcı profili oluşturma (signup sırasında)
+      allow create: if request.auth != null 
+                    && request.auth.uid == userId
+                    && request.resource.data.uid == userId
+                    && request.resource.data.email == request.auth.token.email;
+      
+      // Kullanıcı kendi profilini güncelleyebilir (lastLogin hariç kritik alanları koruyarak)
+      allow update: if request.auth != null 
+                    && request.auth.uid == userId
+                    && request.resource.data.uid == userId
+                    && request.resource.data.email == request.auth.token.email;
+      
+      // Silme işlemi yapılamaz
+      allow delete: if false;
+    }
+    
+    // Chat conversations - kullanıcı chat geçmişi
+    match /conversations/{conversationId} {
+      // Kullanıcı kendi konuşmalarını görebilir
+      allow read: if request.auth != null 
+                  && resource.data.userId == request.auth.uid;
+      
+      // Yeni konuşma oluşturma
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid;
+      
+      // Konuşma güncelleme (kendi konuşması ise)
+      allow update: if request.auth != null 
+                    && resource.data.userId == request.auth.uid;
+      
+      // Konuşma silme (kendi konuşması ise)
+      allow delete: if request.auth != null 
+                    && resource.data.userId == request.auth.uid;
+    }
+    
+    // Pentest scan sonuçları (gelecekte eklenebilir)
+    match /scans/{scanId} {
+      // Kullanıcı kendi scan'lerini görebilir
+      allow read: if request.auth != null 
+                  && resource.data.userId == request.auth.uid;
+      
+      // Yeni scan oluşturma
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid;
+      
+      // Scan güncelleme (kendi scan'i ise)
+      allow update: if request.auth != null 
+                    && resource.data.userId == request.auth.uid;
+      
+      // Scan silme (kendi scan'i ise)
+      allow delete: if request.auth != null 
+                    && resource.data.userId == request.auth.uid;
+    }
+    
+    // Raporlar koleksiyonu (gelecekte eklenebilir)
+    match /reports/{reportId} {
+      // Kullanıcı kendi raporlarını görebilir
+      allow read: if request.auth != null 
+                  && resource.data.userId == request.auth.uid;
+      
+      // Yeni rapor oluşturma
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid;
+      
+      // Rapor güncelleme ve silme
+      allow update, delete: if request.auth != null 
+                            && resource.data.userId == request.auth.uid;
+    }
+    
+    // Admin koleksiyonu - sadece admin erişebilir
+    match /admin/{document=**} {
+      allow read, write: if request.auth != null 
+                         && request.auth.token.admin == true;
+    }
+    
+    // Diğer tüm koleksiyonlar için varsayılan kural
+    // Güvenlik için varsayılan olarak erişim yok
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
