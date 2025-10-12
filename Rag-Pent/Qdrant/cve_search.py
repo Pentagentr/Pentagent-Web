@@ -277,6 +277,99 @@ class CVESearchEngine:
             logger.error(f"HuggingFace API encoding hatası: {e}")
             raise
     
+    def _analyze_query_intelligence(self, query: str) -> dict:
+        """
+        🧠 AKILLI QUERY ANALİZİ - En optimal RAG stratejisini belirler
+        
+        Returns:
+            {
+                'has_cve_id': bool,
+                'has_version': bool,
+                'is_semantic': bool,
+                'query_length': int,
+                'dense_weight': float,
+                'sparse_weight': float,
+                'strategy': str,
+                'reasoning': str
+            }
+        """
+        # Pattern tespitleri
+        has_cve_id = bool(re.search(r'CVE-\d{4}-\d{4,}', query, re.IGNORECASE))
+        has_version = bool(re.search(r'\b(\d+\.)+\d+\b|version\s*\d+|v\d+\.\d+', query, re.IGNORECASE))
+        
+        # Semantic indicators
+        words = query.split()
+        query_length = len(words)
+        
+        # Semantic kelimeler (soru, açıklama, bağlaç vs)
+        semantic_keywords = ['what', 'how', 'why', 'explain', 'describe', 'tell', 'about', 
+                           'vulnerability', 'exploit', 'attack', 'impact', 'risk', 'security',
+                           'nedir', 'nasıl', 'hakkında', 'anlat', 'açıkla']
+        has_semantic_keywords = any(kw in query.lower() for kw in semantic_keywords)
+        is_semantic = query_length >= 4 or has_semantic_keywords
+        
+        # 🎯 PROFESYONEL STRATEJI BELİRLEME
+        if has_cve_id and has_version:
+            # Senaryo: "CVE-2021-44228 Apache Log4j 2.14.1"
+            # Hem exact match hem semantic context gerekli
+            strategy = "balanced_hybrid"
+            dense_weight = 0.50  # Semantic context
+            sparse_weight = 0.50  # Exact matching (CVE ID + version)
+            reasoning = "CVE ID + Version tespit edildi → Balanced hybrid (exact + context)"
+            
+        elif has_cve_id:
+            # Senaryo: "CVE-2021-44228 nedir?"
+            # CVE exact match + anlamsal açıklama
+            strategy = "cve_semantic"
+            dense_weight = 0.50  # Semantic açıklama için
+            sparse_weight = 0.50  # CVE ID exact match
+            reasoning = "CVE ID tespit edildi → Balanced (ID exact + semantic explanation)"
+            
+        elif has_version and not is_semantic:
+            # Senaryo: "Apache 2.4.49"
+            # Version exact ama semantic de önemli
+            strategy = "version_aware"
+            dense_weight = 0.60  # Semantic anlama
+            sparse_weight = 0.40  # Version exact match
+            reasoning = "Sürüm tespit edildi → Semantic öncelikli (anlam + version)"
+            
+        elif is_semantic and not has_version:
+            # Senaryo: "SQL injection web application vulnerability"
+            # Pure anlamsal arama
+            strategy = "pure_semantic"
+            dense_weight = 0.80  # Semantic dominant
+            sparse_weight = 0.20  # Keyword minimal
+            reasoning = "Anlamsal sorgu tespit edildi → Pure semantic (meaning-focused)"
+            
+        elif has_version and is_semantic:
+            # Senaryo: "Apache 2.4.49 path traversal vulnerability"
+            # Hem version hem semantic
+            strategy = "semantic_version"
+            dense_weight = 0.60  # Semantic biraz öncelikli
+            sparse_weight = 0.40  # Version + keyword
+            reasoning = "Sürüm + anlamsal sorgu → Semantic öncelikli hybrid"
+            
+        else:
+            # Senaryo: Belirsiz/kısa query
+            strategy = "balanced_default"
+            dense_weight = 0.70  # Semantic default ağırlıklı
+            sparse_weight = 0.30  # Keyword yardımcı
+            reasoning = "Genel sorgu → Default balanced (semantic öncelikli)"
+        
+        logger.info(f"🧠 QUERY ANALİZİ: {strategy}")
+        logger.info(f"   └─ {reasoning}")
+        
+        return {
+            'has_cve_id': has_cve_id,
+            'has_version': has_version,
+            'is_semantic': is_semantic,
+            'query_length': query_length,
+            'dense_weight': dense_weight,
+            'sparse_weight': sparse_weight,
+            'strategy': strategy,
+            'reasoning': reasoning
+        }
+    
     def search(
         self,
         query: str,
@@ -286,45 +379,79 @@ class CVESearchEngine:
         min_score: float = 0.0
     ) -> List[SearchResult]:
         """
-        Profesyonel hybrid search (dense + sparse) + CVE ID detection + version matching.
+        🚀 PROFESYONEL ADAPTIVE RAG SEARCH SYSTEM
+        
+        Akıllı query analizi ile optimal search stratejisi otomatik belirlenir:
+        
+        Stratejiler:
+        ┌─────────────────────────────────────────────────────────────┐
+        │ Pure Semantic      │ 80% dense | 20% sparse                 │
+        │ CVE + Semantic     │ 50% dense | 50% sparse (exact+context) │
+        │ Version + Semantic │ 60% dense | 40% sparse (meaning+exact) │
+        │ CVE + Version      │ 50% dense | 50% sparse (balanced)      │
+        │ Balanced Default   │ 70% dense | 30% sparse                 │
+        └─────────────────────────────────────────────────────────────┘
         
         Args:
             query: Arama sorgusu
             limit: Maksimum sonuç sayısı
-            dense_weight: Dense vektör ağırlığı (None ise config'den alınır - default: 0.7)
-            sparse_weight: Sparse vektör ağırlığı (None ise config'den alınır - default: 0.3)
-            min_score: Minimum skor eşiği
+            dense_weight: Manuel dense ağırlığı (None = otomatik)
+            sparse_weight: Manuel sparse ağırlığı (None = otomatik)
+            min_score: Minimum skor threshold
             
         Returns:
-            SearchResult listesi (score'a göre sıralı)
+            SearchResult listesi (en alakalı önce, tam metadata ile)
         """
         if not query or not query.strip():
             logger.warning("Boş query alındı")
             return []
         
         query = query.strip()
-        logger.info(f"🔍 Profesyonel arama başlatıldı: '{query}' (limit={limit})")
+        logger.info(f"🔍 PROFESYONEL RAG SEARCH BAŞLATILDI")
+        logger.info(f"   Query: '{query}' | Limit: {limit}")
         
-        # 1. CVE ID Detection - Direkt CVE kodu varsa önce onu getir
-        cve_id_result = self._detect_and_fetch_cve_id(query)
-        if cve_id_result:
-            logger.info(f"✅ CVE ID tespit edildi, direkt getiriliyor: {cve_id_result.cve_id}")
-            # CVE ID bulunduysa onu en üste koy, sonra hybrid search yap
-            hybrid_results = self._hybrid_search_internal(query, limit - 1, dense_weight, sparse_weight, min_score)
-            # Duplicate kontrolü yap
-            hybrid_results = [r for r in hybrid_results if r.cve_id != cve_id_result.cve_id]
-            return [cve_id_result] + hybrid_results[:limit-1]
+        # 🧠 PHASE 1: AKILLI QUERY ANALİZİ
+        analysis = self._analyze_query_intelligence(query)
         
-        # 2. Version Detection - Sürüm numarası varsa sparse'a hafif bonus
-        has_version = self._detect_version_in_query(query)
-        if has_version:
-            logger.info("📌 Sürüm numarası tespit edildi, sparse'a hafif bonus veriliyor (semantic hala öncelikli)")
-            # Sürüm varsa sparse'a sadece hafif bonus ver, semantic hala ağırlıklı kalsın
-            dense_weight = 0.65 if dense_weight is None else dense_weight
-            sparse_weight = 0.35 if sparse_weight is None else sparse_weight
+        # Manuel weight yoksa analiz sonucunu kullan
+        if dense_weight is None:
+            dense_weight = analysis['dense_weight']
+        if sparse_weight is None:
+            sparse_weight = analysis['sparse_weight']
         
-        # 3. Hybrid Search
-        return self._hybrid_search_internal(query, limit, dense_weight, sparse_weight, min_score)
+        logger.info(f"⚖️  AĞIRLIKLAR: Dense {dense_weight:.0%} | Sparse {sparse_weight:.0%}")
+        
+        # 🎯 PHASE 2: CVE ID DIRECT FETCH (varsa)
+        if analysis['has_cve_id']:
+            cve_id_result = self._detect_and_fetch_cve_id(query)
+            if cve_id_result:
+                logger.info(f"✅ CVE direkt getirildi: {cve_id_result.cve_id}")
+                logger.info(f"🔄 Context search yapılıyor (hybrid)...")
+                
+                # Hybrid search ile ilgili CVE'leri de getir
+                hybrid_results = self._hybrid_search_internal(
+                    query, limit - 1, dense_weight, sparse_weight, min_score
+                )
+                # Duplicate temizle
+                hybrid_results = [r for r in hybrid_results if r.cve_id != cve_id_result.cve_id]
+                
+                final_results = [cve_id_result] + hybrid_results[:limit-1]
+                avg_score = sum(r.score for r in final_results) / len(final_results) if final_results else 0
+                logger.info(f"✅ SEARCH TAMAMLANDI: {len(final_results)} sonuç (avg: {avg_score:.3f})")
+                return final_results
+        
+        # 🔬 PHASE 3: HYBRID SEARCH (adaptive weights)
+        results = self._hybrid_search_internal(query, limit, dense_weight, sparse_weight, min_score)
+        
+        # 📊 PHASE 4: RESULT ANALYSIS & LOGGING
+        if results:
+            avg_score = sum(r.score for r in results) / len(results)
+            logger.info(f"✅ SEARCH TAMAMLANDI: {len(results)} sonuç (avg: {avg_score:.3f})")
+            logger.info(f"   Top score: {results[0].score:.3f} | Strategy: {analysis['strategy']}")
+        else:
+            logger.warning(f"⚠️  Sonuç bulunamadı (query: '{query}')")
+        
+        return results
     
     def _detect_and_fetch_cve_id(self, query: str) -> Optional[SearchResult]:
         """
