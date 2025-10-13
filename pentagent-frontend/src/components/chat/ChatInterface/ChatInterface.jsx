@@ -53,21 +53,24 @@ const ChatInterface = () => {
         break;
         
       case 'scan_status':
-        if (data.status_type === 'ai_thinking') {
+        // SADECE gerçek scan'lerde göster (ws_chat değil)
+        const isRealScan = data.scan_id && !data.scan_id.includes('ws_chat');
+        
+        if (data.status_type === 'ai_thinking' && isRealScan) {
           addMessage({
             type: 'ai_thinking',
             content: data.message,
             timestamp: data.timestamp,
             status: data.status_type
           });
-        } else if (data.status_type === 'ai_reasoning') {
+        } else if (data.status_type === 'ai_reasoning' && isRealScan) {
           addMessage({
             type: 'ai_reasoning',
             content: data.message,
             timestamp: data.timestamp,
             status: data.status_type
           });
-        } else if (data.status_type === 'tool_start') {
+        } else if (data.status_type === 'tool_start' && isRealScan) {
           addMessage({
             type: 'tool',
             toolName: data.message.replace('🔧 ', '').replace(' başlatılıyor...', ''),
@@ -76,7 +79,7 @@ const ChatInterface = () => {
             timestamp: data.timestamp,
             results: []
           });
-        } else if (data.status_type === 'tool_complete') {
+        } else if (data.status_type === 'tool_complete' && isRealScan) {
           // Son tool mesajını güncelle
           setMessages(prev => {
             const updated = [...prev];
@@ -90,7 +93,8 @@ const ChatInterface = () => {
             }
             return updated;
           });
-        } else {
+        } else if (isRealScan && data.status_type !== 'ai_response') {
+          // Diğer sistem mesajları (sadece gerçek scan'lerde)
           addMessage({
             type: 'system',
             content: data.message,
@@ -101,33 +105,39 @@ const ChatInterface = () => {
         break;
         
       case 'scan_completed':
-        addMessage({
-          type: 'ai',
-          content: `✅ Tarama tamamlandı! ${data.scan_id}`,
-          timestamp: data.timestamp
-        });
+        // SADECE gerçek scan'lerde göster (ws_chat değil)
+        if (data.scan_id && !data.scan_id.includes('ws_chat')) {
+          addMessage({
+            type: 'ai',
+            content: `✅ Tarama tamamlandı! ${data.scan_id}`,
+            timestamp: data.timestamp
+          });
+          
+          // Scan sonuçlarını kaydet (CVE analizi için)
+          if (data.result) {
+            console.log('Scan sonuçları alındı:', data.result);
+            setScanResults(data.result);
+          }
+        }
         setIsTyping(false);
         setCurrentScan(null);
-        
-        // Scan sonuçlarını kaydet (CVE analizi için)
-        if (data.result) {
-          console.log('Scan sonuçları alındı:', data.result);
-          setScanResults(data.result);
-        }
         break;
         
       case 'scan_started':
-        setCurrentScan({
-          id: data.scan_id,
-          target: data.target,
-          task: data.task,
-          status: 'running'
-        });
-        addMessage({
-          type: 'system',
-          content: `🚀 Tarama başlatıldı: ${data.target}`,
-          timestamp: data.timestamp
-        });
+        // SADECE gerçek scan'lerde göster (target varsa)
+        if (data.target && data.target.trim()) {
+          setCurrentScan({
+            id: data.scan_id,
+            target: data.target,
+            task: data.task,
+            status: 'running'
+          });
+          addMessage({
+            type: 'system',
+            content: `🚀 Tarama başlatıldı: ${data.target}`,
+            timestamp: data.timestamp
+          });
+        }
         break;
         
       case 'pong':
