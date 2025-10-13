@@ -781,11 +781,17 @@ JSON{{
         # Context bilgilerini hazırla
         target_type = self._classify_target(target)
         
+        # TÜM TOOL'LARI detaylı şekilde listele
+        tools_list = self._get_detailed_tools_info()
+        
         prompt = f"""
 Siber güvenlik uzmanı olarak {target} hedefi için ilk tool'u seç.
 
 🎯 HEDEF: {target} (Tip: {target_type})
 📋 KULLANICI GÖREVİ: {user_task or "Güvenlik testi"}
+
+📦 MEVCUT TÜM TOOL'LAR (29 adet):
+{tools_list}
 
 🧠 AKILLI BAŞLANGIÇ:
 - Kullanıcı "XSS testi" dedi mi? → enum_web_crawler (önce parametre bul) SONRA verify_xss
@@ -835,28 +841,46 @@ JSON{{
             return self._get_fallback_first_tool(target)
 
     def _get_detailed_tools_info(self) -> str:
-        """Detaylı tool bilgilerini al - GEREKLİ PARAMETRELER ile"""
+        """Detaylı tool bilgilerini al - TÜM 29 TOOL"""
         tools_info = {
-            # Reconnaissance Tools (target/url/domain parametresi)
-            "enum_port_scanner": "🔍 Port Scanner | Params: target, profile='quick' | Portları tarar",
-            "enum_tech_detector": "⚙️ Tech Detector | Params: target, scan_type='quick' | Web teknolojilerini tespit eder",
-            "enum_web_crawler": "🕷️ Web Crawler | Params: url, max_depth=3 | Sayfaları tarar, parametre bulur",
-            "enum_directory_bruteforce": "📁 Directory Brute | Params: url, wordlist='common' | Gizli dizinleri bulur",
-            "enum_subdomain_bruteforcer": "🎯 Subdomain Brute | Params: domain | Subdomain'leri bulur",
-            "recon_whois_lookup": "🌐 WHOIS | Params: domain | Domain bilgilerini alır",
-            "vuln_http_header_analyzer": "📋 Header Analyzer | Params: url | HTTP header'ları analiz eder",
+            # === RECONNAISSANCE TOOLS (9 tools) ===
+            "enum_port_scanner": "🔍 Port Scanner | Params: target, profile='quick'|'comprehensive' | Açık portları, servisleri, OS fingerprint tespit eder",
+            "enum_tech_detector": "⚙️ Tech Detector | Params: target, scan_type='quick' | Web teknolojileri, framework, CMS, server bilgisi tespit eder",
+            "enum_web_crawler": "🕷️ Web Crawler | Params: url, max_depth=3 | Sayfaları tarar, form parametreleri, endpoint'leri bulur - XSS/SQLi için ZORUNLU",
+            "enum_directory_bruteforce": "📁 Directory Brute | Params: url, wordlist='common' | Gizli dizinler, backup dosyaları, admin panelleri bulur",
+            "enum_subdomain_bruteforcer": "🎯 Subdomain Brute | Params: domain | Subdomain'leri bulur, saldırı yüzeyini genişletir",
+            "enum_firewall_detector": "🛡️ Firewall Detector | Params: target | WAF/Firewall varlığını tespit eder (Cloudflare, AWS WAF, etc.)",
+            "recon_whois_lookup": "🌐 WHOIS Lookup | Params: domain | Domain sahibi, registrar, DNS sunucuları, oluşturma tarihi",
+            "recon_origin_ip_finder": "🔎 Origin IP Finder | Params: domain | Cloudflare arkasındaki gerçek IP'yi bulur (SPF, MX, SSL)",
+            "recon_passive_subfinder": "🔍 Passive Subfinder | Params: domain | Pasif subdomain keşfi (DNS kayıtları, sertifikalar)",
             
-            # Vulnerability Tools (url + ek parametreler)
-            "verify_xss": "🎭 XSS Verifier | Params: url, parameter, method='GET' | ÖNEMLİ: parameter gerekli! (örn: 'search', 'q', 'input')",
-            "verify_sqli": "💉 SQLi Verifier | Params: url, parameter, method='GET' | ÖNEMLİ: parameter gerekli! (örn: 'id', 'user_id')",
-            "verify_lfi": "📄 LFI Verifier | Params: url, parameter, method='GET' | ÖNEMLİ: parameter gerekli! (örn: 'file', 'page')",
-            "vuln_idor_tester": "🔓 IDOR Tester | Params: url, endpoint, auth_token (opsiyonel) | IDOR testleri yapar",
+            # === VULNERABILITY TESTING TOOLS (7 tools) ===
+            "verify_xss": "🎭 XSS Verifier | Params: url, parameter, method='GET' | XSS zafiyeti testi - ÖNCE enum_web_crawler ile parametre bul!",
+            "verify_sqli": "💉 SQLi Verifier | Params: url, parameter, method='GET' | SQL injection testi - ÖNCE enum_web_crawler ile parametre bul!",
+            "verify_lfi": "📄 LFI Verifier | Params: url, parameter, method='GET' | Local File Inclusion testi - ÖNCE enum_web_crawler ile parametre bul!",
+            "verify_xss_http": "🌐 XSS HTTP | Params: url, parameter | HTTP-based XSS testi, gelişmiş payload'lar",
+            "vuln_idor_tester": "🔓 IDOR Tester | Params: url, endpoint, auth_token | Insecure Direct Object Reference testi",
+            "vuln_http_header_analyzer": "📋 Header Analyzer | Params: url | Güvenlik header'ları analiz eder (CSP, HSTS, X-Frame-Options)",
+            "vul_depency_scanner": "📦 Dependency Scanner | Params: target | Bağımlılık zafiyetleri, outdated kütüphaneler tespit eder",
             
-            # Infrastructure Tools
-            "infra_exposed_panels_finder": "🏗️ Infrastructure Panel Finder - Admin panel discovery, management interface detection, infrastructure exposure analysis.",
+            # === API SECURITY TOOLS (4 tools) ===
+            "api_finder_active": "🔌 API Finder | Params: target | Aktif API endpoint'lerini bulur, REST/GraphQL/SOAP",
+            "recon_api_endpoint_finder": "🎯 API Endpoint Finder | Params: url | API endpoint'lerini keşfeder, swagger/openapi bulur",
+            "api_vuln_idor_scanner": "🔐 API IDOR Scanner | Params: url, endpoint | API IDOR zafiyetlerini tarar",
+            "api_vuln_jwt_tester": "🔑 JWT Tester | Params: url, token | JWT token zafiyetleri (weak secret, algorithm confusion)",
             
-            # Cloud Security Tools
-            "cloud_s3_bucket_scanner": "☁️ S3 Bucket Scanner - AWS S3 bucket enumeration, permission analysis, data exposure detection, cloud misconfiguration testing."
+            # === INFRASTRUCTURE TOOLS (4 tools) ===
+            "infra_exposed_panels_finder": "🏗️ Exposed Panels | Params: target | Admin panel, phpMyAdmin, cPanel, Jenkins gibi yönetim panelleri bulur",
+            "service_fingerprinting": "🔬 Service Fingerprint | Params: target, port | Servis versiyonları, banner grabbing, detaylı fingerprint",
+            "rec_dns_analyzer": "🌐 DNS Analyzer | Params: domain | DNS kayıtları, zone transfer, DNSSEC, nameserver analizi",
+            "rec_audit_email_security": "📧 Email Security | Params: domain | SPF, DKIM, DMARC kayıtları, email güvenlik analizi",
+            
+            # === INTELLIGENCE TOOLS (3 tools) ===
+            "rec_intel_code_scanner": "💻 Code Scanner | Params: target | GitHub/GitLab'da kod sızıntıları, API key'ler, credential'lar bulur",
+            "rec_intel_historical_analyzer": "📜 Historical Analyzer | Params: domain | Wayback Machine, eski versiyonlar, tarihsel zafiyet analizi",
+            
+            # === CLOUD SECURITY TOOLS (2 tools) ===
+            "cloud_s3_bucket_scanner": "☁️ S3 Bucket Scanner | Params: domain | AWS S3 bucket'ları bulur, public erişim, veri sızıntısı tespit eder"
         }
         
         available_tools = []
@@ -967,6 +991,9 @@ JSON{{
             for i, rec in enumerate(tool_recommendations[:3], 1):  # İlk 3 öneri
                 recommendations_text += f"{i}. {rec.get('tool', 'unknown')}: {rec.get('reason', 'Öneri yok')}\n"
         
+        # TÜM TOOL'LARI listele
+        tools_list = self._get_detailed_tools_info()
+        
         # Kullanıcı görevine göre hedef step sayısı ayarla (class değişkenini güncelle)
         task_keywords = (self.user_task or "").lower()
         if any(word in task_keywords for word in ["hızlı", "quick", "basit", "simple"]):
@@ -996,6 +1023,9 @@ Sen siber güvenlik uzmanısın. Son tool'un çıktısını analiz edip sonraki 
 💡 MİNİMUM: {self.min_steps} tool (yeterli bilgi toplanmışsa erken durdurabilirsin)
 🚫 KULLANILMIŞ TOOL'LAR: {used_tools_str}
 
+📦 MEVCUT TÜM TOOL'LAR (29 adet):
+{tools_list}
+
 🧠 KARAR SÜRECİ:
 1. {last_tool} ne buldu? Yeterli bilgi toplandı mı?
 2. Kullanıcı isteği ({task_complexity}) için bu adım sayısı uygun mu?
@@ -1017,12 +1047,44 @@ Sen siber güvenlik uzmanısın. Son tool'un çıktısını analiz edip sonraki 
 - ✅ Hedef yanıt vermiyor veya bilgi toplanamıyor → "stop"
 - ❌ Gereksiz yere {suggested_max} tool'a kadar çalıştırma!
 
-🎯 TOOL ÇEŞİTLİLİĞİ ÖNERİLERİ:
-1. **Reconnaissance**: enum_tech_detector → enum_port_scanner → enum_web_crawler
-2. **Vulnerability Testing**: verify_sqli → verify_xss → verify_lfi
-3. **Infrastructure**: vuln_http_header_analyzer → enum_directory_bruteforce
-4. **Domain Intel**: recon_whois_lookup → enum_subdomain_bruteforcer
-5. **FARKLI kategorilerden tool seç** - aynı kategoriden 2'den fazla tool kullanma!
+🎯 SENARYO BAZLI TOOL SEÇİMİ:
+
+**Web Application Pentest:**
+1. enum_tech_detector (teknoloji keşfi)
+2. enum_web_crawler (parametre bulma)
+3. verify_sqli + verify_xss + verify_lfi (zafiyet testleri)
+4. vuln_http_header_analyzer (güvenlik header'ları)
+5. enum_directory_bruteforce (gizli dizinler)
+6. api_finder_active (API endpoint'leri)
+
+**Network Pentest:**
+1. enum_port_scanner (port tarama)
+2. service_fingerprinting (servis versiyonları)
+3. enum_firewall_detector (WAF tespiti)
+4. recon_origin_ip_finder (gerçek IP)
+
+**API Security Test:**
+1. api_finder_active (API keşfi)
+2. recon_api_endpoint_finder (endpoint'ler)
+3. api_vuln_jwt_tester (JWT zafiyetleri)
+4. api_vuln_idor_scanner (IDOR testleri)
+
+**Domain Intelligence:**
+1. recon_whois_lookup (domain bilgisi)
+2. enum_subdomain_bruteforcer (subdomain'ler)
+3. rec_dns_analyzer (DNS analizi)
+4. rec_audit_email_security (email güvenlik)
+5. rec_intel_code_scanner (kod sızıntıları)
+6. rec_intel_historical_analyzer (tarihsel analiz)
+
+**Cloud Security:**
+1. cloud_s3_bucket_scanner (S3 bucket'ları)
+2. infra_exposed_panels_finder (yönetim panelleri)
+
+**Comprehensive Pentest (Detaylı):**
+- Yukarıdaki TÜM kategorilerden tool'lar kullan
+- Her kategoriden en az 1-2 tool seç
+- Toplam 8-10 farklı tool kullan
 
 🎯 ÇIKTI FORMATI (SADECE JSON):
 {{
