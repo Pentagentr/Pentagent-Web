@@ -162,11 +162,20 @@ const ChatInterface = () => {
 
   const parseUserIntent = (text) => {
     const lower = text.toLowerCase().trim();
+    
     // Extract a likely target (URL/domain/ip - first token containing dot or starting with http)
     const tokens = lower.split(/\s+/);
-    let targetToken = tokens.find(t => t.startsWith('http://') || t.startsWith('https://') || t.includes('.')) || lower;
+    let targetToken = tokens.find(t => 
+      t.startsWith('http://') || 
+      t.startsWith('https://') || 
+      (t.includes('.') && /\.[a-z]{2,}/.test(t)) // domain pattern
+    );
+    
     // Clean target from trailing words
-    targetToken = targetToken.replace(/,$/, '');
+    if (targetToken) {
+      targetToken = targetToken.replace(/,$/, '').replace(/[)}\]]+$/, '');
+    }
+    
     // Task inference
     let task = 'Genel güvenlik testi yap';
     if (lower.includes('port') || lower.includes('açık port') || lower.includes('portları tara') || lower.includes('port taraması')) {
@@ -176,7 +185,8 @@ const ChatInterface = () => {
     } else if (lower.includes('xss')) {
       task = 'XSS testi yap';
     }
-    return { target: targetToken, task };
+    
+    return { target: targetToken || null, task };
   };
 
   const handleSendMessage = (e) => {
@@ -197,11 +207,34 @@ const ChatInterface = () => {
       avatar: 'U'
     });
     
-    // AI typing başlat
+    // Parse user intent
+    const { target, task } = parseUserIntent(message);
+    
+    // TARGET KONTROLÜ - Eğer target yoksa scan başlatma!
+    if (!target) {
+      console.log('❌ Target bulunamadı, sadece AI yanıt alınacak');
+      setIsTyping(true);
+      
+      // Backend'e target olmadan mesaj gönder (AI yanıt için)
+      if (connectionStatus === 'connected') {
+        apiRef.current.startScan('', message); // Boş target, backend AI yanıt verecek
+      } else {
+        // REST API ile
+        apiRef.current.startScanREST('', message)
+          .catch(error => {
+            console.error('AI yanıt alınamadı:', error);
+            setIsTyping(false);
+          });
+      }
+      
+      setMessage('');
+      return;
+    }
+    
+    // TARGET VAR - Scan başlat
+    console.log(`✅ Target bulundu: ${target}, scan başlatılıyor...`);
     setIsTyping(true);
     
-    // Gerçek güvenlik testi başlat
-    const { target, task } = parseUserIntent(message);
     if (connectionStatus === 'connected') {
       console.log('WebSocket ile scan başlatılıyor...');
       // WebSocket ile gönder
@@ -259,11 +292,12 @@ const ChatInterface = () => {
   ];
 
   // CVE sonuçları oluştuğunda sağ paneli otomatik aç
+  // SADECE scan results varsa aç (target olmadan açılmasın)
   useEffect(() => {
-    if (scanResults) {
+    if (scanResults && currentScan) {
       setContextOpen(true);
     }
-  }, [scanResults]);
+  }, [scanResults, currentScan]);
 
   const isExpanded = Boolean(scanResults);
 

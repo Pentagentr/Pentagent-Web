@@ -351,7 +351,17 @@ KURALLAR:
 SADECE OPTİMİZE EDİLMİŞ SORGUYU DÖNDÜR (açıklama yapma):"""
 
         response = await gemini_model.generate_content_async(optimization_prompt)
-        optimized = response.text.strip()
+        
+        # Response string veya object olabilir
+        if isinstance(response, str):
+            optimized = response.strip()
+        elif hasattr(response, 'text'):
+            optimized = response.text.strip()
+        elif hasattr(response, 'get'):
+            optimized = response.get('text', user_query).strip()
+        else:
+            logger.warning(f"Unexpected response type: {type(response)}")
+            optimized = str(response).strip()
         
         # Tırnak işaretlerini temizle
         optimized = optimized.strip('"\'` ')
@@ -364,7 +374,8 @@ SADECE OPTİMİZE EDİLMİŞ SORGUYU DÖNDÜR (açıklama yapma):"""
         return optimized
         
     except Exception as e:
-        logger.error(f"Query optimization error: {e}")
+        logger.error(f"LLM query oluşturma hatası: {e}")
+        logger.warning("LLM query oluşturamadı, basit query kullanılıyor")
         # Hata durumunda orijinal query'yi kullan
         return user_query
 

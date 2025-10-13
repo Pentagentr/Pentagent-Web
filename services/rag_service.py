@@ -370,7 +370,17 @@ Search Query:"""
             response = asyncio.get_event_loop().run_until_complete(
                 model.generate_content_async(prompt)
             )
-            query = response.text.strip()
+            
+            # Response string veya object olabilir
+            if isinstance(response, str):
+                query = response.strip()
+            elif hasattr(response, 'text'):
+                query = response.text.strip()
+            elif hasattr(response, 'get'):
+                query = response.get('text', '').strip()
+            else:
+                logger.warning(f"Unexpected response type: {type(response)}")
+                query = str(response).strip()
             
             # Query'yi temizle
             query = query.replace('"', '').replace("'", "").strip()
