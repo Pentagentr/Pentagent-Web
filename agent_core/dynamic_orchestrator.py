@@ -10,7 +10,6 @@ import logging
 import os
 from typing import Callable, Optional, Dict, Any, List
 from datetime import datetime
-import google.generativeai as genai
 from config import config
 from mcp_server.enhanced_mcp_tools import enhanced_mcp_server
 from agent_core.state import AgentState
