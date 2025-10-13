@@ -42,11 +42,11 @@ def extract_target_from_query(query: str) -> Optional[str]:
     if not query or not isinstance(query, str):
         return None
     
-    query = query.strip()
+    query = query.strip().lower()
     
     # 1. URL varsa direkt al
     url_pattern = r'https?://[^\s]+'
-    url_match = re.search(url_pattern, query)
+    url_match = re.search(url_pattern, query, re.IGNORECASE)
     if url_match:
         return url_match.group(0)
     
@@ -67,6 +67,37 @@ def extract_target_from_query(query: str) -> Optional[str]:
         ip = ip_match.group(0)
         if is_valid_ip(ip):
             return ip
+    
+    # 4. Bilinen marka isimlerini domain'e çevir
+    brand_to_domain = {
+        'google': 'google.com',
+        'twitter': 'twitter.com',
+        'facebook': 'facebook.com',
+        'amazon': 'amazon.com',
+        'microsoft': 'microsoft.com',
+        'apple': 'apple.com',
+        'netflix': 'netflix.com',
+        'youtube': 'youtube.com',
+        'instagram': 'instagram.com',
+        'linkedin': 'linkedin.com',
+        'github': 'github.com',
+        'reddit': 'reddit.com',
+        'stackoverflow': 'stackoverflow.com',
+        'medium': 'medium.com',
+        'yahoo': 'yahoo.com',
+        'bing': 'bing.com'
+    }
+    
+    # Türkçe karakterleri temizle
+    turkish_map = str.maketrans('ıİğĞüÜşŞöÖçÇ', 'iIgGuUsSOoCc')
+    query_clean = query.translate(turkish_map)
+    
+    # Kelime kelime kontrol et
+    words = re.findall(r'\b[a-z]+\b', query_clean)
+    for word in words:
+        if word in brand_to_domain:
+            logger.info(f"✅ Marka ismi tespit edildi: {word} → {brand_to_domain[word]}")
+            return brand_to_domain[word]
     
     return None
 
@@ -127,47 +158,62 @@ async def ai_extract_target(query: str, ai_model) -> Optional[str]:
     """
     🤖 AI ile akıllı target extraction
     
-    Gemini AI kullanarak query'den target çıkarır:
+    AI kullanarak query'den target çıkarır:
     - "google tara" → "google.com"
     - "twitter api test" → "twitter.com"
     - "amazon sitesini analiz et" → "amazon.com"
     - "facebook için zafiyet" → "facebook.com"
+    - "google ı xss için değerlendir" → "google.com"
     
     Args:
         query: Kullanıcı sorgusu
-        ai_model: Gemini model instance
+        ai_model: AI model instance
     
     Returns:
         Target (domain/URL/IP) veya None
     """
     try:
-        prompt = f"""Sen bir siber güvenlik asistanısın. Kullanıcının sorgusundan TARANACAk HEDEF domain/URL/IP'yi çıkar.
+        prompt = f"""Sen bir siber güvenlik asistanısın. Kullanıcının sorgusundan TARANACAK HEDEF domain/URL/IP'yi çıkar.
 
 KULLANICI SORGUSU: "{query}"
 
 GÖREV:
-1. Query'de bir hedef (domain, URL, IP) var mı belirle
-2. Varsa normalize et ve döndür
+1. Query'de bir hedef (domain, URL, IP, marka ismi) var mı belirle
+2. Varsa normalize et ve döndür (sadece domain, URL veya IP)
 3. Yoksa "NO_TARGET" döndür
 
 KURALLAR:
-- Marka ismi varsa domain'e çevir (google → google.com, twitter → twitter.com)
+- Marka/şirket ismi varsa domain'e çevir:
+  * google/Google → google.com
+  * twitter/Twitter → twitter.com
+  * facebook/Facebook → facebook.com
+  * amazon/Amazon → amazon.com
+  * microsoft/Microsoft → microsoft.com
+  * apple/Apple → apple.com
+  * netflix/Netflix → netflix.com
+  * youtube/YouTube → youtube.com
 - URL varsa domain çıkar (https://example.com/page → example.com)
 - www. kaldır (www.example.com → example.com)
+- Türkçe karakterler temizle (ı→i, ş→s, ğ→g, ü→u, ö→o, ç→c)
 - Sadece target döndür, açıklama yapma
 - Belirsiz ise NO_TARGET döndür
 
 ÖRNEKLER:
 "google.com tara" → google.com
 "google tara" → google.com
+"google ı xss için değerlendir" → google.com
 "twitter api testi" → twitter.com
 "amazon sitesini analiz et" → amazon.com
+"facebook için zafiyet tara" → facebook.com
 "https://mysite.com/admin tara" → mysite.com
 "192.168.1.1 port scan" → 192.168.1.1
+"example.com sql injection" → example.com
+"test.example.com" → test.example.com
 "tarama yap" → NO_TARGET
 "merhaba" → NO_TARGET
+"nasılsın" → NO_TARGET
 
-SADECE TARGET DÖNDÜR (tek satır):"""
+SADECE TARGET DÖNDÜR (tek satır, başka bir şey yazma):"""
 
         response = await ai_model.generate_content_async(prompt)
         result = response.text.strip()

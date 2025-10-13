@@ -1026,14 +1026,38 @@ Sen siber güvenlik uzmanısın. Son tool'un çıktısını analiz edip sonraki 
 📦 MEVCUT TÜM TOOL'LAR (29 adet):
 {tools_list}
 
-🧠 KARAR SÜRECİ:
-1. {last_tool} ne buldu? Yeterli bilgi toplandı mı?
-2. Kullanıcı isteği ({task_complexity}) için bu adım sayısı uygun mu?
-3. Eğer {current_step} >= {self.min_steps} ve yeterli bilgi varsa → "stop"
-4. Eğer {current_step} >= {suggested_max} → mutlaka "stop"
-5. Eğer tool boş sonuç döndüyse: 1 alternatif dene veya yeterli bilgi varsa "stop"
-6. SİSTEMDE OLMAYAN tool isimlerini ASLA seçme.
-7. ⚠️ KULLANILMIŞ TOOL'LARI TEKRAR SEÇME! ({used_tools_str})
+🧠 DERİNLEMESİNE KARAR SÜRECİ (Her adımda YENİDEN düşün):
+1. 🔍 {last_tool} NE BULDU? Sonuçları detaylı analiz et:
+   - Hangi teknolojiler tespit edildi?
+   - Hangi parametreler/endpoint'ler bulundu?
+   - Hangi portlar/servisler açık?
+   - Hangi zafiyetler tespit edildi?
+   
+2. 🎯 KULLANICI İSTEĞİ KARŞILANDI MI?
+   - Kullanıcı "{self.user_task}" dedi
+   - Bu istek tamamlandı mı? (Evet ise → "stop")
+   - Eksik bilgi var mı? (Varsa → devam)
+   
+3. 📊 YETERLİ BİLGİ TOPLANDI MI?
+   - {current_step} tool çalıştı (min: {self.min_steps}, max: {suggested_max})
+   - Toplanan bilgi kaliteli mi?
+   - Daha fazla tool çalıştırmak GERÇEKTEN değer katacak mı?
+   
+4. 🚀 SONRAKI TOOL MANTIKLI MI?
+   - Son tool'un sonuçlarına göre EN MANTIKLI sonraki tool hangisi?
+   - Bu tool YENİ bilgi getirecek mi?
+   - Yoksa aynı bilgiyi tekrar mı toplayacak?
+   
+5. ⚠️ DÖNGÜDEN KAÇIN:
+   - KULLANILMIŞ TOOL'LARI TEKRAR SEÇME: {used_tools_str}
+   - Aynı tool'u farklı parametreyle bile olsa 2. kez çalıştırma
+   - Sisteme özgü, FARKLI tool'lar seç
+   
+6. 🛑 DURDURMA KARARI:
+   - {current_step} >= {self.min_steps} VE yeterli bilgi → "stop"
+   - {current_step} >= {suggested_max} → MUTLAKA "stop"
+   - Kullanıcı isteği tamamlandı → "stop"
+   - Tool boş sonuç döndü VE alternatif yok → "stop"
 
 ⚡ GÖREV KARMAŞIKLIĞI KURALLARI:
 - 📊 Basit/Hızlı görev: 3 tool yeterli → erken "stop"
