@@ -246,10 +246,13 @@ class PentagentMCPServer:
     def _create_origin_ip_finder_tool(self):
         """ReconOriginIPFinderTool instance'ı oluştur"""
         try:
-            from tools.recon_origin_ip_finder import recon_origin_ip_finder
-            return recon_origin_ip_finder
+            from tools.recon_origin_ip_finder import OriginIPFinderModule
+            return OriginIPFinderModule()
         except ImportError as e:
             logger.error(f"ReconOriginIPFinderTool import edilemedi: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"ReconOriginIPFinderTool oluşturulurken hata: {e}")
             return None
     
     def _create_historical_analyzer_tool(self):
