@@ -13,10 +13,10 @@ const LoginPage = () => {
   const { login, currentUser } = useAuth();
   const navigate = useNavigate();
 
-  // Eğer kullanıcı zaten giriş yapmışsa, ana sayfaya yönlendir
+  // Eğer kullanıcı zaten giriş yapmışsa, chat sayfasına yönlendir
   useEffect(() => {
     if (currentUser) {
-      navigate('/');
+      navigate('/chat');
     }
   }, [currentUser, navigate]);
 
@@ -34,7 +34,7 @@ const LoginPage = () => {
     try {
       setLoading(true);
       await login(email, password);
-      navigate('/');
+      navigate('/chat');
     } catch (error) {
       console.error('Login error:', error);
       

@@ -20,7 +20,7 @@ const RegisterPage = () => {
   // Eğer kullanıcı zaten giriş yapmışsa, ana sayfaya yönlendir
   useEffect(() => {
     if (currentUser) {
-      navigate('/');
+      navigate('/chat');
     }
   }, [currentUser, navigate]);
 
@@ -69,7 +69,7 @@ const RegisterPage = () => {
     try {
       setLoading(true);
       await signup(formData.email, formData.password, formData.displayName);
-      navigate('/');
+      navigate('/chat');
     } catch (error) {
       console.error('Signup error:', error);
       

@@ -2,14 +2,12 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ChatPage from './pages/ChatPage';
 import RagSearch from './pages/RagSearch';
 import ErrorBoundary from './components/common/ErrorBoundary';
-// import Reports from './pages/Reports';
-// import Dashboard from './pages/Dashboard';
-// import LandingPage from './pages/LandingPage';
 
 function App() {
   return (
@@ -17,13 +15,14 @@ function App() {
       <Router>
         <AuthProvider>
           <Routes>
-            {/* Public routes - Authentication */}
+            {/* Public routes */}
+            <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             
             {/* Protected routes - Ana uygulama */}
             <Route 
-              path="/" 
+              path="/chat" 
               element={
                 <ProtectedRoute>
                   <ChatPage />
@@ -40,17 +39,8 @@ function App() {
               } 
             />
             
-            {/* Reports sayfası (gelecekte) */}
-            {/* <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} /> */}
-            
-            {/* Dashboard sayfası (gelecekte) */}
-            {/* <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} /> */}
-            
-            {/* Landing page (gelecekte) */}
-            {/* <Route path="/landing" element={<LandingPage />} /> */}
-            
-            {/* 404 - Login sayfasına yönlendir */}
-            <Route path="*" element={<Navigate to="/login" replace />} />
+            {/* 404 - Landing page'e yönlendir */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AuthProvider>
       </Router>
