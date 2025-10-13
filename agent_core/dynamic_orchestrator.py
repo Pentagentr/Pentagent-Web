@@ -79,32 +79,29 @@ Hangi hedefi taramak istersiniz?"""
         - Target yoksa: AI ile doğal sohbet + yönlendirme
         - Geçersiz target varsa: Hata mesajı
         """
-        # AI ile doğal yanıt oluştur (target olmadan)
+        # AI ile doğal yanıt oluştur (target olmadan) - KISA PROMPT
         try:
             if hasattr(self, 'model') and self.model:
-                # Gemini'den kısa, zeki yanıt al
-                casual_prompt = f"""Kullanıcı şunu yazdı: "{target}"
+                # KISA prompt - tek API çağrısı
+                casual_prompt = f"""User: "{target}"
 
-Sen bir AI siber güvenlik uzmanısın (Pentagent AI). Kullanıcı target vermeden mesaj attı.
+You're Pentagent AI, a cybersecurity assistant. User didn't provide a target.
 
-GÖREV:
-1. Kullanıcının mesajına KISA (max 2 cümle), ZEKİ, DOSTÇA cevap ver
-2. Sonra kısa bir yönlendirme yap: "Ben bir AI pentest aracıyım, bana taramak için bir hedef ver"
+Reply in Turkish:
+1. Respond to their message (1-2 sentences, friendly)
+2. Ask for a target to scan (brief, not pushy)
 
-ÖRNEK:
-Kullanıcı: "selam"
-Cevap: "Selam! Nasılsın? 👋 Ben Pentagent AI, siber güvenlik taramaları yapabilirim. Bana taramak için bir hedef (domain/URL/IP) verirsen, kapsamlı bir güvenlik analizi yapabilirim! 🛡️"
-
-KURALLAR:
-- KISA ve ÖZLÜ yaz (max 3-4 cümle)
-- Teknik terimler KULLANMA (normal konuş)
-- Emoji kullanabilirsin
-- Hedef iste ama BASKICI OLMA
-
-ŞİMDİ CEVAP VER:"""
+Max 3 sentences total. Use emojis."""
                 
                 response_obj = await self.model.generate_content_async(casual_prompt)
-                ai_response = response_obj.text.strip()
+                
+                # Response string veya object olabilir
+                if isinstance(response_obj, str):
+                    ai_response = response_obj.strip()
+                elif hasattr(response_obj, 'text'):
+                    ai_response = response_obj.text.strip()
+                else:
+                    ai_response = str(response_obj).strip()
                 
                 # AI yanıtı varsa kullan
                 if ai_response and len(ai_response) > 10:
