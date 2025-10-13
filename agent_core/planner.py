@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 from typing import Dict, Any, List, Optional
-import google.generativeai as genai
+from typing import Any
 from agent_core.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class Planner:
     """Stratejik planlama ve adaptasyon yapan AI beyni - Güvenli ve etik odaklı."""
     
-    def __init__(self, model: genai.GenerativeModel, mcp_server, status_callback=None):
+    def __init__(self, model: Any, mcp_server, status_callback=None):
         self.model = model
         self.mcp_server = mcp_server
         self.status_callback = status_callback

@@ -13,8 +13,8 @@ class Config:
     def __init__(self):
         self.project_root = Path(__file__).parent
         
-        # API Configuration
-        self.GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'AIzaSyBOKe4Et5zHvAjlOfuFOCZzWOFw5YFZiqk')
+        # API Configuration (Gemini deprecated)
+        self.GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
         
         # Security Research API Keys
         self.VIRUSTOTAL_API_KEY = os.getenv('VIRUSTOTAL_API_KEY', 'a3613c70e43afc77772f75985a4f7ba228baadd31cceefd6a79902effdaf41c0')
@@ -48,10 +48,18 @@ class Config:
         self.MAX_CONCURRENT_TOOLS = int(os.getenv('MAX_CONCURRENT_TOOLS', '5'))
         self.TOOL_TIMEOUT = int(os.getenv('TOOL_TIMEOUT', '300'))  # 5 minutes
         
-        # Gemini Configuration
-        self.GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.0-flash')
-        self.GEMINI_MAX_TOKENS = int(os.getenv('GEMINI_MAX_TOKENS', '8192'))
-        self.GEMINI_TEMPERATURE = float(os.getenv('GEMINI_TEMPERATURE', '0.1'))
+        # LLM Provider Configuration
+        # MODEL_PROVIDER: "groq" (default) or "huggingface"
+        self.MODEL_PROVIDER = os.getenv('MODEL_PROVIDER', 'groq').lower()
+        # Groq
+        self.GROQ_API_KEY = os.getenv('GROQ_API_KEY', '')
+        # Default Groq model (fast and strong)
+        self.GROQ_MODEL = os.getenv('GROQ_MODEL', 'llama-3.3-70b-versatile')
+        # Optional alias override (e.g., openai/gpt-oss-120b)
+        self.GROQ_MODEL_ALIAS = os.getenv('GROQ_MODEL_ALIAS', '')
+        # HuggingFace (optional)
+        self.HUGGINGFACE_TOKEN = os.getenv('HUGGINGFACE_TOKEN', '')
+        self.HF_MODEL_URL = os.getenv('HF_MODEL_URL', 'https://api-inference.huggingface.co/models/meta-llama/Llama-3.2-3B-Instruct')
 
 # Global configuration instance
 config = Config()

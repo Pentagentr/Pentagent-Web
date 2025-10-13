@@ -1,7 +1,7 @@
 # agent_core/orchestrator.py
 
 import asyncio
-import google.generativeai as genai
+from model_wrapper import UnifiedLLM
 from typing import Callable, Optional, Dict, Any
 from datetime import datetime
 from config import config
@@ -16,8 +16,8 @@ class AgentOrchestrator:
     
     def __init__(self, api_key: str, status_callback: Optional[Callable] = None):
         self.status_callback = status_callback or self._default_status_callback
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-2.5-flash')
+        # Ignore api_key (legacy). Use UnifiedLLM which reads env vars (GROQ).
+        self.model = UnifiedLLM()
         self.mcp_server = enhanced_mcp_server
         self.planner = Planner(self.model, self.mcp_server, self.status_callback)
         self.executor = Executor(self.model, self.mcp_server, self.status_callback)

@@ -1,5 +1,6 @@
 # Core Dependencies
-google-generativeai>=0.3.0
+# google-generativeai>=0.3.0  # Deprecated: replaced by Groq/HF wrapper
+groq>=0.4.0
 aiohttp>=3.8.0
 
 # Web and HTTP

@@ -1,13 +1,12 @@
 # agent_core/executor.py
 
 from typing import Dict, Any, List
-import google.generativeai as genai
 from agent_core.state import AgentState
 
 class Executor:
     """Plandaki adımları yürüten ve özel yetenekleri (örn: payload üretimi) barındıran modül."""
     
-    def __init__(self, model: genai.GenerativeModel, mcp_server, status_callback):
+    def __init__(self, model, mcp_server, status_callback):
         self.model = model
         self.mcp_server = mcp_server
         self.status_callback = status_callback

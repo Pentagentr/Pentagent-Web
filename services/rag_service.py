@@ -2,7 +2,7 @@
 RAG Servis Modülü
 CVE RAG sistemi ile entegrasyon için servis
 Qdrant üzerinden CVE araması yapar
-Gemini ile optimize query oluşturma
+LLM ile optimize query oluşturma
 """
 
 import logging
@@ -10,7 +10,7 @@ import sys
 import os
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
-import google.generativeai as genai
+from model_wrapper import UnifiedLLM
 from config import config
 
 # RAG modülünü import et
@@ -315,12 +315,12 @@ class RAGService:
             return []
         
         try:
-            # Gemini ile optimize query oluştur
-            query = self._generate_optimized_query_with_gemini(scan_results)
+            # LLM ile optimize query oluştur
+            query = self._generate_optimized_query_with_llm(scan_results)
             
             if not query:
                 # Fallback: basit query oluştur
-                logger.warning("Gemini query oluşturamadı, basit query kullanılıyor")
+                logger.warning("LLM query oluşturamadı, basit query kullanılıyor")
                 query = self._generate_query_from_scan(scan_results)
             
             if not query:
@@ -336,26 +336,19 @@ class RAGService:
             logger.error(f"Scan analizi hatası: {e}")
             return []
     
-    def _generate_optimized_query_with_gemini(self, scan_results: Dict[str, Any]) -> str:
+    def _generate_optimized_query_with_llm(self, scan_results: Dict[str, Any]) -> str:
         """
-        Gemini ile optimize RAG query oluştur.
+        LLM ile optimize RAG query oluştur.
         Scan sonuçlarını analiz edip en iyi CVE arama sorgusunu üretir.
-        
-        Args:
-            scan_results: Tarama sonuçları
-            
-        Returns:
-            Optimize edilmiş RAG query string
         """
         try:
-            # Gemini model başlat
-            genai.configure(api_key=config.GEMINI_API_KEY)
-            model = genai.GenerativeModel('gemini-pro')
+            # Unified LLM (Groq default)
+            model = UnifiedLLM()
             
             # Scan sonuçlarını özetle
             summary = self._summarize_scan_results(scan_results)
             
-            # Gemini'ye prompt gönder
+            # LLM'ye prompt gönder
             prompt = f"""Based on the following penetration test results, generate an optimized search query for a CVE (Common Vulnerabilities and Exposures) database.
 
 Scan Results:
@@ -372,30 +365,25 @@ Generate ONLY the search query, nothing else. Example format: "Apache 2.4.49 pat
 
 Search Query:"""
             
-            # Gemini'den yanıt al
-            response = model.generate_content(prompt)
+            # Yanıt al (sync wrapper değil; UnifiedLLM async bekliyor)
+            import asyncio
+            response = asyncio.get_event_loop().run_until_complete(
+                model.generate_content_async(prompt)
+            )
             query = response.text.strip()
             
             # Query'yi temizle
             query = query.replace('"', '').replace("'", "").strip()
             
-            logger.info(f"Gemini tarafından optimize edilmiş query: '{query}'")
+            logger.info(f"LLM tarafından optimize edilmiş query: '{query}'")
             return query
             
         except Exception as e:
-            logger.error(f"Gemini query oluşturma hatası: {e}")
+            logger.error(f"LLM query oluşturma hatası: {e}")
             return ""
     
     def _summarize_scan_results(self, scan_results: Dict[str, Any]) -> str:
-        """
-        Scan sonuçlarını Gemini için özet haline getirir.
-        
-        Args:
-            scan_results: Tarama sonuçları
-            
-        Returns:
-            Özet string
-        """
+        """Scan sonuçlarını LLM için özet haline getirir."""
         summary_parts = []
         
         # Target

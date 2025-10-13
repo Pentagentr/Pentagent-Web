@@ -13,9 +13,8 @@ import sys
 
 # ✅ CRITICAL: Set environment BEFORE any other imports!
 os.environ["PYTHONIOENCODING"] = "utf-8"
-os.environ["USE_HF_INFERENCE_API"] = "false"  # FORCE LOCAL BGE-M3!
+os.environ["USE_HF_INFERENCE_API"] = "true"  # TEST WITH HF INFERENCE API (canlı sistem simülasyonu)
 
-import asyncio
 import logging
 import time
 from typing import List, Dict, Any, Tuple
@@ -781,7 +780,7 @@ TEST_QUERIES = [
 
 # ==================== TEST EXECUTION ====================
 
-async def run_comprehensive_test():
+def run_comprehensive_test():
     """Kapsamlı RAG test suite (2022-2024 CVEs)"""
     print("\n" + "="*80)
     print(" "*15 + "RAG SEARCH TEST SUITE (2022-2024 CVEs)")
@@ -792,23 +791,40 @@ async def run_comprehensive_test():
     print("[*] RAG TEST CONFIGURATION:")
     print(f"[*] Qdrant Database: https://meryemarpaci-pentagent-qdrant.hf.space")
     print(f"[*] Collection: cve_collection_hybrid (verified)")
-    print(f"[*] Vectorization: LOCAL BGE-M3 Model (BAAI/bge-m3)")
+    
+    use_hf_api = os.getenv('USE_HF_INFERENCE_API', 'false').lower() == 'true'
+    if use_hf_api:
+        print(f"[*] Vectorization: HuggingFace Inference API (PRODUCTION MODE)")
+        print(f"[*] Sparse Vector: IMPROVED Smart Generation (TF-IDF-like)")
+    else:
+        print(f"[*] Vectorization: LOCAL BGE-M3 Model (BAAI/bge-m3)")
+        print(f"[*] Sparse Vector: Native BGE-M3 Lexical Weights")
+    
     print(f"[*] Testing: Both Dense + Sparse vectors + RRF")
     print(f"[*] Hybrid Search: RRF Algorithm (Reciprocal Rank Fusion)")
     print(f"[*] USE_HF_INFERENCE_API: {os.getenv('USE_HF_INFERENCE_API', 'not set')}")
     print("="*80 + "\n")
     
-    print("[*] Loading LOCAL BGE-M3 model...")
+    if use_hf_api:
+        print("[*] Initializing HuggingFace Inference API...")
+    else:
+        print("[*] Loading LOCAL BGE-M3 model...")
+    
     config_obj = SearchConfig(
         collection_name="cve_collection_hybrid",
         qdrant_host="https://meryemarpaci-pentagent-qdrant.hf.space",
         qdrant_port=443,
         qdrant_https=True,
-        huggingface_token=None  # LOCAL BGE-M3!
+        huggingface_token=None
     )
     
     search_engine = CVESearchEngine(config_obj)
-    print("[+] BGE-M3 Model loaded successfully!")
+    
+    if use_hf_api:
+        print("[+] HuggingFace Inference API ready (with IMPROVED sparse)!")
+    else:
+        print("[+] BGE-M3 Model loaded successfully!")
+    
     print("[+] Qdrant connection established!")
     print("[+] Ready to test HYBRID SEARCH with RRF!\n")
     
@@ -842,7 +858,7 @@ async def run_comprehensive_test():
         # Execute search
         start_time = time.time()
         try:
-            results = await search_engine.search_cve(query, limit=10)
+            results = search_engine.search(query, limit=10)
             execution_time = time.time() - start_time
             stats["execution_times"].append(execution_time)
             
@@ -942,11 +958,11 @@ async def run_comprehensive_test():
 
 if __name__ == "__main__":
     try:
-        stats = asyncio.run(run_comprehensive_test())
+        stats = run_comprehensive_test()
         
         # Optionally save to file
         results_file = os.path.join(os.path.dirname(__file__), "RAG_TEST_RESULTS.md")
-        with open(results_file, "w", encoding="utf-8") as f:
+        with open(results_file, "w", encoding="utf-8", errors="replace") as f:
             f.write(f"# RAG Test Results ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})\n\n")
             f.write(f"## Overall Results\n\n")
             f.write(f"- **Total Tests:** {stats['total']}\n")

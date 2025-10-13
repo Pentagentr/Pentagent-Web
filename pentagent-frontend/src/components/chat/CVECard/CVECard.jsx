@@ -98,3 +98,5 @@ const CVECard = ({ cve }) => {
 
 export default CVECard;
 
+
+

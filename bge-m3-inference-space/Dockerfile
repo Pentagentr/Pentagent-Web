@@ -1,0 +1,41 @@
+# BGE-M3 Custom Inference Space
+# Native sparse + dense vector generation
+
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# System dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# ✅ Create cache directory with proper permissions
+RUN mkdir -p /app/.cache && chmod -R 777 /app/.cache
+
+# ✅ Set HuggingFace cache to writable directory
+ENV HF_HOME=/app/.cache
+ENV TRANSFORMERS_CACHE=/app/.cache
+ENV HF_DATASETS_CACHE=/app/.cache
+
+# Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ✅ Download BGE-M3 model to /app/.cache (build sırasında)
+RUN python -c "from FlagEmbedding import BGEM3FlagModel; BGEM3FlagModel('BAAI/bge-m3', use_fp16=False)"
+
+# Copy application
+COPY app.py .
+
+# Expose port
+EXPOSE 7860
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:7860/health || exit 1
+
+# Run
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
+

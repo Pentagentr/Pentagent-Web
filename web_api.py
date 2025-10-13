@@ -23,6 +23,7 @@ sys.path.insert(0, project_root)
 from agent_core.dynamic_orchestrator import DynamicAgentOrchestrator
 from config import config
 from services.rag_service import get_rag_service
+from model_wrapper import UnifiedLLM
 
 # Logging konfigürasyonu
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -87,22 +88,21 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+# Global LLM model (RAG query optimization için)
+gemini_model = None
+
 @app.on_event("startup")
 async def startup_event():
     """Uygulama başlatıldığında API key kontrolü yap"""
+    global gemini_model
     try:
         logger.info("Pentagent API başlatılıyor...")
         
-        # Gemini API key kontrolü
-        api_key = config.GEMINI_API_KEY
-        if not api_key or api_key == 'YOUR_REAL_GEMINI_API_KEY_HERE' or api_key == 'YOUR_GEMINI_API_KEY_HERE':
-            logger.error("GEMINI_API_KEY bulunamadı!")
-            logger.error("Lütfen environment variable veya config.py dosyasında GEMINI_API_KEY'i ayarlayın!")
-            logger.error("Linux/Mac: export GEMINI_API_KEY='your_key'")
-            logger.error("Windows: set GEMINI_API_KEY=your_key")
-            return
+        # Unified LLM model'i başlat (RAG query optimization için)
+        # Uses env: MODEL_PROVIDER, GROQ_API_KEY, GROQ_MODEL
+        gemini_model = UnifiedLLM()
         
-        logger.info(f"✅ API Key bulundu: {api_key[:10]}...")
+        logger.info(f"✅ LLM provider hazır (MODEL_PROVIDER={config.MODEL_PROVIDER})")
         logger.info("✅ Pentagent API başarıyla başlatıldı!")
         logger.info("💡 Her scan için yeni orchestrator instance oluşturulacak (modüler)")
         
@@ -308,24 +308,85 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.error(f"Traceback: {traceback.format_exc()}")
         manager.disconnect(websocket)
 
+# ==================== RAG QUERY OPTIMIZATION ====================
+
+async def optimize_rag_query(user_query: str) -> str:
+    """
+    🤖 AI ile RAG sorgusu optimize et
+    
+    Kullanıcının doğal dil sorgusu → CVE aramasına optimize edilmiş kısa sorgu
+    
+    Örnek:
+        "SQL injection nasıl test edilir?" → "SQL injection CVE testing methods"
+        "Apache için kritik güvenlik zafiyetleri" → "Apache critical security vulnerabilities"
+    """
+    global gemini_model
+    
+    if not gemini_model:
+        logger.warning("Gemini model yok, query optimize edilmeden kullanılacak")
+        return user_query
+    
+    try:
+        optimization_prompt = f"""Sen bir CVE veritabanı arama uzmanısın. Kullanıcının doğal dil sorgusu veriliyor.
+
+KULLANICI SORGUSU: "{user_query}"
+
+GÖREV:
+Kullanıcının sorgusunu CVE araması için OPTIMIZE ET. 
+
+KURALLAR:
+1. KISA ve NET olmalı (max 5-7 kelime)
+2. CVE veritabanında kullanılan teknik terimleri kullan
+3. Gereksiz kelimeleri kaldır ("nasıl", "neden", "ne", vb.)
+4. İngilizce terimleri tercih et (CVE'ler İngilizce)
+5. Sadece anahtar kelimeleri tut
+
+ÖRNEKLER:
+"SQL injection nasıl test edilir?" → "SQL injection testing methods"
+"Apache için kritik güvenlik zafiyetleri" → "Apache critical vulnerabilities"
+"WordPress eklentilerinde XSS" → "WordPress plugin XSS vulnerabilities"
+"Kubernetes container escape" → "Kubernetes container escape CVE"
+"Remote code execution Laravel" → "Laravel remote code execution"
+
+SADECE OPTİMİZE EDİLMİŞ SORGUYU DÖNDÜR (açıklama yapma):"""
+
+        response = await gemini_model.generate_content_async(optimization_prompt)
+        optimized = response.text.strip()
+        
+        # Tırnak işaretlerini temizle
+        optimized = optimized.strip('"\'` ')
+        
+        # Çok uzunsa kes (max 100 karakter)
+        if len(optimized) > 100:
+            optimized = optimized[:100]
+        
+        logger.info(f"🤖 Query optimized: '{user_query}' → '{optimized}'")
+        return optimized
+        
+    except Exception as e:
+        logger.error(f"Query optimization error: {e}")
+        # Hata durumunda orijinal query'yi kullan
+        return user_query
+
+
 # ==================== RAG ENDPOINTS ====================
 
 @app.post("/api/rag/search")
 async def rag_search(request: Dict[str, Any]):
     """
-    RAG sistemi üzerinde CVE araması yap.
+    RAG sistemi üzerinde CVE araması yap (AI ile query optimization).
     
     Body:
-        - query: Arama sorgusu
+        - query: Arama sorgusu (AI ile optimize edilecek)
         - limit: Maksimum sonuç sayısı (default: 5)
         - severity: Opsiyonel severity filtresi (CRITICAL, HIGH, MEDIUM, LOW)
     """
     try:
-        query = request.get("query", "").strip()
+        original_query = request.get("query", "").strip()
         limit = min(int(request.get("limit", 5)), 50)  # Max 50
         severity = request.get("severity")
         
-        if not query:
+        if not original_query:
             raise HTTPException(status_code=400, detail="Query gerekli")
         
         # RAG servisini al
@@ -336,12 +397,17 @@ async def rag_search(request: Dict[str, Any]):
                 detail="RAG servisi kullanılamıyor. Qdrant'ın çalıştığından emin olun."
             )
         
-        # CVE araması yap
-        results = rag_service.search_cve(query, limit=limit, severity=severity)
+        # 🤖 AI ile query'yi optimize et
+        optimized_query = await optimize_rag_query(original_query)
+        
+        # CVE araması yap (optimize edilmiş query ile)
+        results = rag_service.search_cve(optimized_query, limit=limit, severity=severity)
         
         return {
             "success": True,
-            "query": query,
+            "original_query": original_query,
+            "optimized_query": optimized_query,
+            "query": optimized_query,  # Backward compatibility
             "total_results": len(results),
             "severity_filter": severity,
             "results": [r.to_dict() for r in results]

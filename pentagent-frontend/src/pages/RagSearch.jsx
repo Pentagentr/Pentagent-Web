@@ -21,6 +21,7 @@ const RagSearch = () => {
   const [stats, setStats] = useState(null);
   const [selectedCve, setSelectedCve] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [optimizedQuery, setOptimizedQuery] = useState(null);
 
   // Sayfa yüklendiğinde stats al
   useEffect(() => {
@@ -47,6 +48,7 @@ const RagSearch = () => {
     setLoading(true);
     setError('');
     setResults([]);
+    setOptimizedQuery(null);
 
     try {
       const data = await pentagentAPI.searchCVE({
@@ -56,6 +58,11 @@ const RagSearch = () => {
       });
 
       setResults(data.results);
+      
+      // AI ile optimize edilmiş query'yi kaydet
+      if (data.optimized_query && data.optimized_query !== query.trim()) {
+        setOptimizedQuery(data.optimized_query);
+      }
       
       if (data.results.length === 0) {
         setError('Sonuç bulunamadı. Farklı arama terimleri deneyin.');
@@ -166,6 +173,27 @@ const RagSearch = () => {
         {/* Results */}
         {results.length > 0 && (
           <div className="space-y-3">
+            {/* AI Optimization Notice */}
+            {optimizedQuery && (
+              <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-3 mb-3">
+                <div className="flex items-start gap-2">
+                  <div className="flex-shrink-0 mt-0.5">
+                    <div className="w-5 h-5 rounded-full bg-purple-500/20 flex items-center justify-center">
+                      <span className="text-purple-400 text-xs">✨</span>
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-medium text-purple-300 mb-1">
+                      AI Optimized Search
+                    </p>
+                    <p className="text-xs text-text-secondary">
+                      Your query was optimized: <span className="text-purple-400 font-mono">{optimizedQuery}</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-medium text-text-primary">
                 {results.length} Results Found

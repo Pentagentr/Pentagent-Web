@@ -34,8 +34,9 @@ class DynamicAgentOrchestrator:
     
     def __init__(self, api_key: str, status_callback: Optional[Callable] = None):
         self.status_callback = status_callback or self._default_status_callback
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-2.5-flash')
+        from model_wrapper import UnifiedLLM
+        # Ignore legacy api_key; UnifiedLLM reads env (GROQ)
+        self.model = UnifiedLLM()
         self.mcp_server = enhanced_mcp_server
         self.executor = Executor(self.model, self.mcp_server, self.status_callback)
         self.analyzer = Analyzer(self.model, self.status_callback)
@@ -74,19 +75,61 @@ Hangi hedefi taramak istersiniz?"""
         return None
     
     async def _send_invalid_target_response(self, target: str, error: str, status_callback):
-        """Geçersiz hedef için kısa yanıt"""
-        response = f"""Belirttiğiniz hedef geçerli görünmüyor: "{target}"
+        """
+        Geçersiz hedef için AKILLI YANIT
+        - Target yoksa: AI ile doğal sohbet + yönlendirme
+        - Geçersiz target varsa: Hata mesajı
+        """
+        # AI ile doğal yanıt oluştur (target olmadan)
+        try:
+            if hasattr(self, 'model') and self.model:
+                # Gemini'den kısa, zeki yanıt al
+                casual_prompt = f"""Kullanıcı şunu yazdı: "{target}"
 
-❌ Hata: {error}
+Sen bir AI siber güvenlik uzmanısın (Pentagent AI). Kullanıcı target vermeden mesaj attı.
 
-✅ Geçerli format örnekleri:
-• Domain: example.com
-• URL: https://example.com
-• IP: 192.168.1.1
+GÖREV:
+1. Kullanıcının mesajına KISA (max 2 cümle), ZEKİ, DOSTÇA cevap ver
+2. Sonra kısa bir yönlendirme yap: "Ben bir AI pentest aracıyım, bana taramak için bir hedef ver"
 
-Lütfen geçerli bir hedef belirtin."""
+ÖRNEK:
+Kullanıcı: "selam"
+Cevap: "Selam! Nasılsın? 👋 Ben Pentagent AI, siber güvenlik taramaları yapabilirim. Bana taramak için bir hedef (domain/URL/IP) verirsen, kapsamlı bir güvenlik analizi yapabilirim! 🛡️"
+
+KURALLAR:
+- KISA ve ÖZLÜ yaz (max 3-4 cümle)
+- Teknik terimler KULLANMA (normal konuş)
+- Emoji kullanabilirsin
+- Hedef iste ama BASKICI OLMA
+
+ŞİMDİ CEVAP VER:"""
+                
+                response_obj = await self.model.generate_content_async(casual_prompt)
+                ai_response = response_obj.text.strip()
+                
+                # AI yanıtı varsa kullan
+                if ai_response and len(ai_response) > 10:
+                    await status_callback(ai_response, "ai_response")
+                    return None
         
-        await status_callback(response, "ai_response")
+        except Exception as e:
+            logger.error(f"AI casual response error: {e}")
+        
+        # Fallback: Basit yanıt (AI çalışmazsa)
+        fallback_response = f"""Merhaba! 👋
+
+Ben Pentagent AI, siber güvenlik uzmanı asistanınızım. 
+
+Bana taramak için bir hedef verirsen, kapsamlı güvenlik analizi yapabilirim:
+
+📋 Örnek:
+• "example.com tara"
+• "https://mysite.com için zafiyet analizi"
+• "192.168.1.1 port taraması"
+
+Hangi hedefi taramak istersin?"""
+        
+        await status_callback(fallback_response, "ai_response")
         return None
     
     def _complete_tool_params(self, tool_name: str, params: dict, status_callback=None) -> dict:
@@ -395,10 +438,7 @@ Lütfen geçerli bir hedef belirtin."""
             # Target direkt verilmiş - validate et
             is_valid, normalized_target, error_msg = validate_target(target)
             if not is_valid:
-                # Geçersiz - AI ile düzeltmeyi dene
-                await status_callback(f"⚠️ Target geçersiz, AI ile düzeltme deneniyor...", "ai_thinking")
-                
-                # AI'a sor
+                # Geçersiz - AI ile düzeltmeyi dene (sessizce)
                 ai_target = None
                 if hasattr(self, 'model') and self.model:
                     from agent_core.target_validator import ai_extract_target
@@ -407,10 +447,11 @@ Lütfen geçerli bir hedef belirtin."""
                     ai_target = await ai_extract_target(combined_query, self.model)
                 
                 if ai_target:
+                    # ✅ AI target buldu - devam et
                     target = ai_target
-                    await status_callback(f"🤖 AI ile düzeltildi: {target}", "info")
+                    await status_callback(f"🎯 Hedef belirlendi: {target}", "info")
                 else:
-                    await status_callback(f"❌ Geçersiz hedef: {error_msg}", "error")
+                    # ❌ Target bulunamadı - kullanıcı ile sohbet et (RAG yok)
                     await self._send_invalid_target_response(target, error_msg, status_callback)
                     return None
             else:

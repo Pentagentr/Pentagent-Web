@@ -4,7 +4,6 @@ import asyncio
 import json
 import logging
 from typing import Dict, Any, Optional, List
-import google.generativeai as genai
 from datetime import datetime
 from agent_core.state import AgentState
 
@@ -13,7 +12,7 @@ logger = logging.getLogger(__name__)
 class Analyzer:
     """Araç çıktısını yorumlayan ve insan tarafından anlaşılır hale getiren modül."""
     
-    def __init__(self, model: genai.GenerativeModel, status_callback):
+    def __init__(self, model, status_callback):
         self.model = model
         self.status_callback = status_callback
         
@@ -29,8 +28,8 @@ class Analyzer:
             "recommendation_summary": str
         }
         
-    async def _call_gemini_json(self, prompt: str) -> Dict[str, Any]:
-        """Gemini'yi JSON formatında yanıt vermesi için çağırır."""
+    async def _call_llm_json(self, prompt: str) -> Dict[str, Any]:
+        """LLM'i JSON dönecek şekilde çağırır (sağlam parse ile)."""
         try:
             response = await self.model.generate_content_async(prompt)
             response_text = response.text.strip()
@@ -53,7 +52,7 @@ class Analyzer:
             logger.error(f"Ham yanıt: {response_text[:500]}...")
             return {}
         except Exception as e:
-            logger.error(f"Gemini API hatası: {e}")
+            logger.error(f"LLM API hatası: {e}")
             return {}
 
     async def analyze_result(self, tool_name: str, tool_result: Dict[str, Any], state: AgentState) -> Optional[Dict[str, Any]]:
@@ -301,7 +300,7 @@ class Analyzer:
         }}
         """
 
-        analysis_result = await self._call_gemini_json(prompt)
+        analysis_result = await self._call_llm_json(prompt)
 
         # Analiz sonucunu kullanıcıya detaylı göster
         if thought := analysis_result.get("thought"):
@@ -452,7 +451,7 @@ class Analyzer:
         }}
         """
         
-        result = await self._call_gemini_json(prompt)
+        result = await self._call_llm_json(prompt)
         return result
 
     def _categorize_finding(self, finding: Dict[str, Any]) -> str:
