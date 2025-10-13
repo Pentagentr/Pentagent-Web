@@ -788,13 +788,15 @@ Siber güvenlik uzmanı olarak {target} hedefi için ilk tool'u seç.
 📋 KULLANICI GÖREVİ: {user_task or "Güvenlik testi"}
 
 🧠 AKILLI BAŞLANGIÇ:
-- Kullanıcı "XSS testi" dedi mi? → verify_xss (direkt zafiyet testi)
-- Kullanıcı "SQL injection" dedi mi? → verify_sqli (direkt zafiyet testi)
+- Kullanıcı "XSS testi" dedi mi? → enum_web_crawler (önce parametre bul) SONRA verify_xss
+- Kullanıcı "SQL injection" dedi mi? → enum_web_crawler (önce parametre bul) SONRA verify_sqli
 - Kullanıcı "subdomain keşfi" dedi mi? → enum_subdomain_bruteforcer
 - Kullanıcı "port tarama" dedi mi? → enum_port_scanner
 - Kullanıcı "hızlı scan" dedi mi? → enum_tech_detector (quick)
 - Kullanıcı "detaylı test" dedi mi? → enum_port_scanner (comprehensive)
 - Genel test → enum_tech_detector veya enum_port_scanner
+
+⚠️ ÖNEMLİ: verify_xss, verify_sqli gibi zafiyet testleri için ÖNCE enum_web_crawler ile parametre bul!
 
 ⚡ ESNEKLİK:
 - Spesifik istek varsa direkt o tool'u kullan
@@ -992,6 +994,7 @@ Sen siber güvenlik uzmanısın. Son tool'un çıktısını analiz edip sonraki 
 📋 KULLANICI GÖREVİ: {self.user_task or "Genel güvenlik testi"}
 📈 ADIM: {current_step}/{suggested_max} (Görev: {task_complexity})
 💡 MİNİMUM: {self.min_steps} tool (yeterli bilgi toplanmışsa erken durdurabilirsin)
+🚫 KULLANILMIŞ TOOL'LAR: {used_tools_str}
 
 🧠 KARAR SÜRECİ:
 1. {last_tool} ne buldu? Yeterli bilgi toplandı mı?
@@ -1000,6 +1003,7 @@ Sen siber güvenlik uzmanısın. Son tool'un çıktısını analiz edip sonraki 
 4. Eğer {current_step} >= {suggested_max} → mutlaka "stop"
 5. Eğer tool boş sonuç döndüyse: 1 alternatif dene veya yeterli bilgi varsa "stop"
 6. SİSTEMDE OLMAYAN tool isimlerini ASLA seçme.
+7. ⚠️ KULLANILMIŞ TOOL'LARI TEKRAR SEÇME! ({used_tools_str})
 
 ⚡ GÖREV KARMAŞIKLIĞI KURALLARI:
 - 📊 Basit/Hızlı görev: 3 tool yeterli → erken "stop"
@@ -1012,6 +1016,13 @@ Sen siber güvenlik uzmanısın. Son tool'un çıktısını analiz edip sonraki 
 - ✅ Kullanıcı isteği tamamlandı (örn: XSS testi yapıldı) → "stop"
 - ✅ Hedef yanıt vermiyor veya bilgi toplanamıyor → "stop"
 - ❌ Gereksiz yere {suggested_max} tool'a kadar çalıştırma!
+
+🎯 TOOL ÇEŞİTLİLİĞİ ÖNERİLERİ:
+1. **Reconnaissance**: enum_tech_detector → enum_port_scanner → enum_web_crawler
+2. **Vulnerability Testing**: verify_sqli → verify_xss → verify_lfi
+3. **Infrastructure**: vuln_http_header_analyzer → enum_directory_bruteforce
+4. **Domain Intel**: recon_whois_lookup → enum_subdomain_bruteforcer
+5. **FARKLI kategorilerden tool seç** - aynı kategoriden 2'den fazla tool kullanma!
 
 🎯 ÇIKTI FORMATI (SADECE JSON):
 {{
