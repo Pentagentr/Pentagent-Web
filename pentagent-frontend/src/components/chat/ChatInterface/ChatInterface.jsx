@@ -41,6 +41,16 @@ const ChatInterface = () => {
           setConnectionStatus('connected');
         }
         break;
+      
+      case 'ai_response':
+        // Target olmadan gelen AI yanıtları
+        addMessage({
+          type: 'ai',
+          content: data.message,
+          timestamp: data.timestamp || new Date().toLocaleTimeString()
+        });
+        setIsTyping(false);
+        break;
         
       case 'scan_status':
         if (data.status_type === 'ai_thinking') {

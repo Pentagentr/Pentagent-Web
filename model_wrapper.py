@@ -80,18 +80,9 @@ class UnifiedLLM:
                 messages=[{"role": "user", "content": prompt}],
                 temperature=temperature,
                 max_tokens=max_tokens,
-                timeout=30.0,  # 30 saniye timeout
             )
 
-        try:
-            # 30 saniye timeout ile çalıştır
-            response = await asyncio.wait_for(
-                asyncio.get_event_loop().run_in_executor(None, _call),
-                timeout=30.0
-            )
-        except asyncio.TimeoutError:
-            logger.error(f"Groq API timeout (30s) - Model: {self.model_name}")
-            raise TimeoutError(f"Groq API timeout after 30 seconds")
+        response = await asyncio.get_event_loop().run_in_executor(None, _call)
 
         class Response:
             def __init__(self, text: str):

@@ -168,14 +168,25 @@ const ChatArea = ({ conversationId, isTyping, messages = [], currentScan }) => {
           }
         })}
 
-        {/* Typing Indicator */}
-        {isTyping && (
+        {/* Typing Indicator - SADECE AI düşünme mesajları yoksa göster */}
+        {isTyping && !messages.some(m => m.type === 'ai_thinking' || m.type === 'ai_reasoning') && (
           <div className="flex items-start gap-4 animate-fadeIn">
             <div className="w-10 h-10 bg-gradient-to-br from-platinum-500 to-platinum-600 rounded-xl flex items-center justify-center flex-shrink-0">
               <Brain className="w-5 h-5 text-obsidian-950" />
             </div>
             <div className="flex-1">
-              <ThinkingAnimation />
+              <div className="bg-obsidian-900 border border-obsidian-700 rounded-2xl rounded-bl-sm p-4">
+                <div className="flex items-center gap-2">
+                  <Brain className="w-4 h-4 text-platinum-500" />
+                  <span className="text-xs font-medium text-platinum-500 uppercase tracking-wide">AI Assistant</span>
+                  <div className="flex gap-1 ml-2">
+                    <div className="w-1.5 h-1.5 bg-platinum-500 rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
+                    <div className="w-1.5 h-1.5 bg-platinum-500 rounded-full animate-pulse" style={{ animationDelay: '200ms' }} />
+                    <div className="w-1.5 h-1.5 bg-platinum-500 rounded-full animate-pulse" style={{ animationDelay: '400ms' }} />
+                  </div>
+                </div>
+                <p className="text-sm text-text-secondary mt-3">Düşünüyor...</p>
+              </div>
             </div>
           </div>
         )}
