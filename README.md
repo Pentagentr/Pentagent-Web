@@ -12,8 +12,8 @@
 ## 🎯 Overview
 
 **Pentagent** is an autonomous security testing platform that combines:
-- 🤖 **AI-Driven Testing** - Powered by Google Gemini for intelligent decision-making
-- 🔍 **RAG-Enhanced Intelligence** - 95K+ CVE database with semantic search
+- 🤖 **AI-Driven Testing** - Powered by GPT OSS 120B for intelligent decision-making
+- 🔍 **RAG-Enhanced Intelligence** - 95K+ CVE database with reranker optimization
 - 🎨 **Modern Interface** - Real-time scanning with WebSocket updates
 - 🛠️ **30+ Security Tools** - Automated vulnerability detection and verification
 
@@ -88,12 +88,13 @@
 React Frontend (Firebase Hosting)
     ↓ HTTPS / WebSocket
 FastAPI Backend (Render.com)
-    ├─ AI Orchestrator (Google Gemini)
+    ├─ AI Orchestrator (GPT OSS 120B via Groq)
     ├─ Security Tools (30+ modules)
     └─ RAG Service
         ↓ REST API
 Qdrant Vector DB (HuggingFace Space)
-    └─ 95K+ CVE Embeddings (BGE-M3)
+    ├─ 95K+ CVE Embeddings (BGE-M3)
+    └─ Reranker (BAAI/bge-reranker-base)
 ```
 
 ---
@@ -193,10 +194,10 @@ After pentest completion:
 
 ### Backend
 - **Framework:** FastAPI (async Python)
-- **AI:** Groq API (llama-3.3-70b-versatile)
+- **AI Model:** GPT OSS 120B (via Groq API)
 - **Vector Store:** Qdrant (HuggingFace Space)
 - **Embeddings:** BGE-M3 (BAAI/bge-m3)
-- **Reranker:** BAAI/bge-reranker-base
+- **Reranker:** BAAI/bge-reranker-base (HuggingFace API)
 - **WebSocket:** Native FastAPI support
 
 ### Frontend
@@ -340,13 +341,13 @@ This project is licensed under the **Apache License 2.0** - see the [LICENSE](LI
 
 ## 🙏 Acknowledgments
 
-- **Groq** - Fast LLM inference (llama-3.3-70b)
-- **Qdrant** - Vector database
+- **GPT OSS 120B** - AI reasoning model (via Groq API)
+- **Qdrant** - Vector database engine
 - **BAAI** - BGE-M3 embeddings & bge-reranker-base
-- **HuggingFace** - Model hosting & inference API
-- **NVD/MITRE** - CVE data
-- **FastAPI** - Backend framework
-- **React** - Frontend framework
+- **HuggingFace** - Model hosting & inference API  
+- **NVD/MITRE** - CVE data source
+- **FastAPI** - High-performance backend framework
+- **React** - Modern frontend framework
 
 ---
 
