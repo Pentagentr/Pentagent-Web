@@ -30,7 +30,10 @@
 ### 🔍 RAG CVE Intelligence
 - **95,000+ CVE vectors** from NVD database
 - **Hybrid search** (Dense 70% + Sparse 30%)
-- **Semantic similarity** matching with BGE-M3 embeddings
+- **BGE-M3 embeddings** (1024 dimensions)
+- **BAAI/bge-reranker-base** for result optimization
+- **Reranking pipeline:** Vector Search → Rerank → Top Results
+- **Hybrid scoring:** 30% vector + 70% reranker (better relevance)
 - **Real-time suggestions** based on scan results
 
 ### 🛠️ Security Tools (30+)
@@ -190,9 +193,10 @@ After pentest completion:
 
 ### Backend
 - **Framework:** FastAPI (async Python)
-- **AI:** Google Gemini API
-- **Vector Store:** Qdrant
-- **Embeddings:** BGE-M3 (BAAI)
+- **AI:** Groq API (llama-3.3-70b-versatile)
+- **Vector Store:** Qdrant (HuggingFace Space)
+- **Embeddings:** BGE-M3 (BAAI/bge-m3)
+- **Reranker:** BAAI/bge-reranker-base
 - **WebSocket:** Native FastAPI support
 
 ### Frontend
@@ -214,13 +218,16 @@ After pentest completion:
 ### CVE Database
 - **Total CVEs:** 95,237 (NVD 2022-2024)
 - **Embedding Model:** BGE-M3 (1024 dimensions)
-- **Search Type:** Hybrid (Dense + Sparse)
-- **Response Time:** <300ms average
+- **Reranker:** BAAI/bge-reranker-base (HuggingFace)
+- **Search Type:** Hybrid (Dense + Sparse) + Reranking
+- **Pipeline:** Query → Vector Search (10) → Rerank → Top 5
+- **Response Time:** <500ms average (with reranking)
 
 ### Search Capabilities
-- Semantic similarity matching
-- Keyword-based search
-- Severity filtering
+- Semantic similarity matching (BGE-M3 embeddings)
+- Intelligent reranking (BAAI/bge-reranker-base)
+- Keyword-based search with BM25
+- Severity filtering (CRITICAL/HIGH/MEDIUM/LOW)
 - CVSS score integration
 - Attack vector classification
 
@@ -278,9 +285,13 @@ Pentagent/
 - [x] Autonomous AI-driven pentesting
 - [x] 30+ integrated security tools
 - [x] Real-time WebSocket updates
-- [x] RAG-enhanced CVE search
+- [x] RAG-enhanced CVE search with reranking
+- [x] BAAI/bge-reranker-base integration
 - [x] Interactive chat interface
 - [x] Context-aware scanning
+- [x] Chrome/Selenium fallback system
+- [x] Token-optimized AI prompts
+- [x] Smart loop prevention
 
 ### Planned Features 🔮
 - [ ] Multi-target scanning
@@ -329,9 +340,10 @@ This project is licensed under the **Apache License 2.0** - see the [LICENSE](LI
 
 ## 🙏 Acknowledgments
 
-- **Google Gemini** - AI orchestration
+- **Groq** - Fast LLM inference (llama-3.3-70b)
 - **Qdrant** - Vector database
-- **BAAI BGE-M3** - Embedding model
+- **BAAI** - BGE-M3 embeddings & bge-reranker-base
+- **HuggingFace** - Model hosting & inference API
 - **NVD/MITRE** - CVE data
 - **FastAPI** - Backend framework
 - **React** - Frontend framework
