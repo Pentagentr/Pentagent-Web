@@ -1351,10 +1351,10 @@ class TechDetectorModule(MCPTool):
             
             # HIZLI MOD: Sadece temel analizler (favicon, error_page, selenium, aggressive analizler devre dışı)
             # Bu analizler çok yavaş ve çoğu zaman gereksiz
-                favicon_tech = set()
-                error_page_tech = set()
-                selenium_tech = set()
-                aggressive_tech = set()
+            favicon_tech = set()
+            error_page_tech = set()
+            selenium_tech = set()
+            aggressive_tech = set()
             
             # Not: İhtiyaç halinde bu analizleri aşağıdaki parametreyle aktif edebilirsiniz:
             # scan_type = params.get("scan_type", "quick")  # "quick" veya "deep"

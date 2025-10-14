@@ -81,7 +81,7 @@ TOOL_MAPPING = {
     },
     "recon_origin_ip_finder": {
         "module": "tools.recon_origin_ip_finder",
-        "class": "recon_origin_ip_finder",  # Module level object
+        "class": "OriginIPFinderModule",  # Correct class name
         "category": "reconnaissance",
         "description": "CloudFlare bypass ve origin IP bulma",
         "priority": "medium"

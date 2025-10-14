@@ -976,6 +976,11 @@ JSON{{
         """Tool sonucuna göre sonraki tool'u belirle - OPTİMİZE EDİLMİŞ"""
         available_tools = self.mcp_server.get_tool_list()['categories']
         
+        # Create all_tools set from available tools
+        all_tools = set()
+        for cat, tools in available_tools.items():
+            all_tools.update(tools)
+        
         # Tool sonucunu özetle (token tasarrufu)
         summarized_result = self._summarize_tool_result(last_result)
         
