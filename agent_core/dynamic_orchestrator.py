@@ -356,13 +356,16 @@ Hangi hedefi taramak istersin?"""
                             item_str = str(item)[:50]
                             await status_callback(f"    • {item_str}", "ai_reasoning")
             
-            # Tool önerilerini göster (varsa)
+            # Tool önerilerini göster (varsa) - KISA VE ÖZ
             recommendations = result.get("recommendations", [])
             if recommendations and len(recommendations) > 0:
                 await status_callback(f"  💡 Tool Önerileri: {len(recommendations)} öneri", "ai_reasoning")
                 for i, rec in enumerate(recommendations[:2], 1):
                     rec_tool = rec.get("tool", "unknown")
-                    rec_reason = rec.get("reason", "")[:60]
+                    rec_reason = rec.get("reason", "")[:80]  # 80 karakter limit
+                    # Çok uzun mesajları truncate et
+                    if len(rec_reason) >= 80:
+                        rec_reason = rec_reason[:77] + "..."
                     await status_callback(f"    {i}. {rec_tool}: {rec_reason}", "ai_reasoning")
         
         except Exception as e:
@@ -575,15 +578,23 @@ Hangi hedefi taramak istersin?"""
                 # AKILLI DÖNGÜ KONTROLÜ - Aynı tool+parametre kombinasyonunu engelle
                 tool_usage_count[tool_name] = tool_usage_count.get(tool_name, 0) + 1
                 
-                # Aynı tool+parametre kombinasyonu mu?
-                tool_param_key = f"{tool_name}_{str(sorted(params.items()))}"
+                # Aynı tool AYNI PARAMETRELERLE 2. kez mi çalışıyor?
+                tool_param_key = f"{tool_name}_{str(sorted(params.items()) if params else '')}"
                 recent_tool_params = [
-                    f"{h.get('tool')}_{str(sorted(h.get('params', {}).items()))}" 
-                    for h in self.execution_history[-2:]  # Son 2 adım
+                    f"{h.get('tool')}_{str(sorted(h.get('params', {}).items()) if h.get('params') else '')}" 
+                    for h in self.execution_history[-3:]  # Son 3 adımı kontrol et
                 ]
                 
                 if tool_param_key in recent_tool_params:
-                    await status_callback(f"⚠️ {tool_name} aynı parametrelerle tekrar edildi, atlanıyor", "warning")
+                    await status_callback(f"⚠️ {tool_name} aynı parametrelerle tekrar edildi (döngü tespit edildi), atlanıyor", "warning")
+                    next_tool_decision = await self._ai_force_alternative_strategy(tool_name, current_step)
+                    if next_tool_decision.get("action") == "stop":
+                        break
+                    continue
+                
+                # Aynı tool farklı parametrelerle ama ÇOK SIKÇA mı çalışıyor?
+                if tool_usage_count.get(tool_name, 0) > 2:
+                    await status_callback(f"⚠️ {tool_name} 3. kez çalıştırılmak isteniyor, döngü riski - atlanıyor", "warning")
                     next_tool_decision = await self._ai_force_alternative_strategy(tool_name, current_step)
                     if next_tool_decision.get("action") == "stop":
                         break
@@ -1173,6 +1184,25 @@ Sen siber güvenlik uzmanısın. Son tool'un çıktısını analiz edip sonraki 
         """Başarısız tool için karar ver - OPTİMİZE"""
         error_msg = error_result.get("error", "Bilinmeyen hata")
         
+        # ÖNEMLİ: Selenium hatası mı? Otomatik olarak HTTP alternatifine geç
+        if "Selenium" in error_msg or "WebDriver" in error_msg or "Chrome" in error_msg:
+            if failed_tool == "verify_xss":
+                await self.status_callback("🔄 Selenium mevcut değil, verify_xss_http alternatifine geçiliyor", "info")
+                return {
+                    "action": "continue",
+                    "tool": "verify_xss_http",
+                    "params": {"url": self.current_target, "parameter": "search", "method": "GET"},
+                    "reasoning": "Selenium mevcut değil (Render ortamı), HTTP-based XSS testi kullanılıyor"
+                }
+            elif failed_tool == "enum_web_crawler":
+                await self.status_callback("🔄 Selenium mevcut değil, crawler atlanıyor", "info")
+                return {
+                    "action": "continue",
+                    "tool": "enum_directory_bruteforce",
+                    "params": {"url": self.current_target, "wordlist_type": "general"},
+                    "reasoning": "Web crawler Selenium gerektirir, directory bruteforce alternatifi kullanılıyor"
+                }
+        
         prompt = f"""
 {failed_tool} başarısız oldu. Alternatif tool seç.
 
@@ -1184,7 +1214,9 @@ Sen siber güvenlik uzmanısın. Son tool'un çıktısını analiz edip sonraki 
 ⚡ ALTERNATİFLER:
 - enum_port_scanner başarısız → enum_tech_detector veya recon_whois_lookup
 - recon_whois_lookup başarısız → enum_port_scanner (quick)
-- enum_tech_detector başarısız → enum_web_crawler
+- enum_tech_detector başarısız → enum_web_crawler VEYA enum_directory_bruteforce
+- verify_xss başarısız → verify_xss_http (Selenium gerektirmez)
+- enum_web_crawler başarısız → enum_directory_bruteforce
 
 JSON{{
     "action": "continue|stop",

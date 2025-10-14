@@ -150,9 +150,9 @@ class EnumDirectoryBruteforcerTool(MCPTool):
                 
                 # 3. Gerçek bulgu
                 content = await r.read() # İçeriği tekrar okumamak için
-                finding = {"url": full_url, "path": path, "status": r.status, "length": len(content)}
+                finding = {"url": full_url, "path": path, "status_code": r.status, "content_length": len(content)}
                 context.found_paths.append(finding)
-                logger.info(f"Bulundu: [{finding['status']}] {finding['url']} (Boyut: {finding['length']})")
+                logger.info(f"Bulundu: [{finding['status_code']}] {finding['url']} (Boyut: {finding['content_length']})")
 
         except (aiohttp.ClientError, asyncio.TimeoutError):
             pass # Bağlantı hatalarını sessizce geç
