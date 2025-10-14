@@ -747,41 +747,24 @@ Hangi hedefi taramak istersin?"""
             return self._create_final_state(target, user_task, success=False)
     
     async def _ai_force_alternative_strategy(self, repeated_tool: str, current_step: int) -> Dict[str, Any]:
-        """AI'ya döngüden çıkması için alternatif strateji geliştirme zorla"""
-        available_tools = self.mcp_server.list_tools()
-        
-        # Son kullanılan tool'ları listele (sadece referans)
+        """Döngü tespit - alternatif strateji - KISA"""
         recent_tools = [h.get("tool") for h in self.execution_history[-3:]]
         recent_tools_str = ", ".join(recent_tools)
         
         prompt = f"""
-⚠️ '{repeated_tool}' aynı parametrelerle tekrar edildi. Alternatif yaklaşım gerekli.
+DÖNGÜ: '{repeated_tool}' tekrarlandı.
+HEDEF: {self.current_target}
+ADIM: {current_step}/{self.suggested_steps}
+SON TOOL'LAR: {recent_tools_str}
 
-🎯 HEDEF: {self.current_target}
-📋 KULLANICI GÖREVİ: {self.user_task or "Genel güvenlik testi"}
-📈 ADIM: {current_step} (min: {self.min_steps}, önerilen: {self.suggested_steps})
-🔄 SON KULLANILAN TOOL'LAR: {recent_tools_str}
+ALTERNATIF:
+- Farklı tool seç VEYA
+- {current_step}>={self.min_steps} ise "stop"
 
-💡 ERKEN DURDURMA: {current_step} >= {self.min_steps} ve yeterli bilgi varsa "stop"
+JSON (TÜRKÇE):
+{{"action":"continue|stop","tool":"tool_adı","params":{{"target":"{self.current_target}"}},"reasoning":"TÜRKÇE: Neden?"}}
 
-🧠 ALTERNATİF YAKLAŞIMLAR:
-1. **Farklı Tool**: Aynı bilgiyi başka tool ile al
-2. **Farklı Parametreler**: {repeated_tool}'u farklı parametre ile kullan
-3. **Tamamlama**: Yeterli bilgi toplandıysa "stop" de
-
-💡 ÖNERİLER:
-- enum_tech_detector boş → enum_web_crawler (sayfa yapısını öğren)
-- enum_port_scanner boş → recon_whois_lookup (domain bilgisi)
-- Hiç bilgi toplanamıyorsa → vuln_http_header_analyzer (header'lar hep çalışır)
-
-JSON{{
-    "action": "continue|stop",
-    "tool": "alternatif_tool",
-    "params": {{"target": "{self.current_target}", "scan_type": "quick"}},
-    "reasoning": "Neden bu alternatif seçildi? Döngüden nasıl çıkılıyor?"
-}}
-
-⚠️ ÖNEMLİ: Reasoning'i kendin üret, SADECE JSON döndür!
+⚠️ SADECE JSON + TÜRKÇE!
         """
         
         try:
@@ -797,7 +780,7 @@ JSON{{
             return {"action": "stop", "reasoning": "Alternatif strateji geliştirilemedi - test durduruluyor"}
 
     async def _ai_decide_first_tool(self, target: str, user_task: str = None) -> Dict[str, Any]:
-        """AI ile ilk tool'u belirle - Kullanıcı görevine göre"""
+        """AI ile ilk tool'u belirle - KISALTILMIŞ"""
         available_tools = self.mcp_server.get_tool_list()['categories']
         all_tools = set()
         for cat, tools in available_tools.items():
@@ -806,45 +789,26 @@ JSON{{
         # Context bilgilerini hazırla
         target_type = self._classify_target(target)
         
-        # TÜM TOOL'LARI detaylı şekilde listele
-        tools_list = self._get_detailed_tools_info()
+        # KISA TOOL LİSTESİ (token tasarrufu)
+        tools_brief = ", ".join(sorted(list(all_tools)))
         
         prompt = f"""
-Siber güvenlik uzmanı olarak {target} hedefi için ilk tool'u seç.
+SEN: Siber güvenlik uzmanısın.
+HEDEF: {target} ({target_type})
+GÖREV: {user_task or "Güvenlik testi"}
 
-🎯 HEDEF: {target} (Tip: {target_type})
-📋 KULLANICI GÖREVİ: {user_task or "Güvenlik testi"}
+TOOL'LAR: {tools_brief}
 
-📦 MEVCUT TÜM TOOL'LAR (29 adet):
-{tools_list}
+KARARLAR:
+- XSS/SQLi test → enum_web_crawler (parametre bul)
+- Subdomain → enum_subdomain_bruteforcer
+- Port → enum_port_scanner
+- Genel → enum_tech_detector
 
-🧠 AKILLI BAŞLANGIÇ:
-- Kullanıcı "XSS testi" dedi mi? → enum_web_crawler (önce parametre bul) SONRA verify_xss
-- Kullanıcı "SQL injection" dedi mi? → enum_web_crawler (önce parametre bul) SONRA verify_sqli
-- Kullanıcı "subdomain keşfi" dedi mi? → enum_subdomain_bruteforcer
-- Kullanıcı "port tarama" dedi mi? → enum_port_scanner
-- Kullanıcı "hızlı scan" dedi mi? → enum_tech_detector (quick)
-- Kullanıcı "detaylı test" dedi mi? → enum_port_scanner (comprehensive)
-- Genel test → enum_tech_detector veya enum_port_scanner
+JSON ÇIKTı (TÜRKÇE reasoning):
+{{"success":true,"action":"continue","tool":"tool_adı","params":{{"target":"{target}"}},"reasoning":"TÜRKÇE: Neden seçildi, ne bulunacak?"}}
 
-⚠️ ÖNEMLİ: verify_xss, verify_sqli gibi zafiyet testleri için ÖNCE enum_web_crawler ile parametre bul!
-
-⚡ ESNEKLİK:
-- Spesifik istek varsa direkt o tool'u kullan
-- Genel test için temel bilgi toplama ile başla
-- Kullanıcı isteğine odaklan, gereksiz adım atma
-
-JSON{{
-    "success": true,
-    "action": "continue",
-    "tool": "tool_name",
-    "params": {{"target": "{target}", "scan_type": "quick"}},
-    "reasoning": "Neden bu tool seçildi? Ne bulunması bekleniyor? Kullanıcı isteğine nasıl cevap veriyor?"
-}}
-
-⚠️ ÖNEMLİ: 
-- Reasoning'i kendin üret, hazır örnek kullanma!
-- SADECE JSON döndür, başka metin ekleme!
+⚠️ SADECE JSON + TÜRKÇE reasoning!
 """
         
         try:
@@ -998,7 +962,7 @@ JSON{{
         return summary
     
     async def _ai_decide_next_tool(self, last_tool: str, last_result: Dict[str, Any], current_step: int) -> Dict[str, Any]:
-        """Tool sonucuna göre sonraki tool'u belirle - OPTİMİZE EDİLMİŞ"""
+        """Sonraki tool - KISALTILMIŞ"""
         available_tools = self.mcp_server.get_tool_list()['categories']
         
         # Create all_tools set from available tools
@@ -1011,157 +975,37 @@ JSON{{
         
         # Kullanılmış tool'ları listele
         used_tools = [h.get("tool") for h in self.execution_history]
-        used_tools_str = ", ".join(set(used_tools))
+        used_tools_str = ", ".join(set(used_tools))[:50]  # Kısalt
         
-        # Tool'un önerilerini çıkar
+        # Tool'un önerilerini çıkar - KISA
         tool_recommendations = last_result.get("recommendations", [])
         recommendations_text = ""
         if tool_recommendations:
-            recommendations_text = "\n\n🎯 TOOL ÖNERİLERİ (Bu tool'un bulduklarına göre):\n"
-            for i, rec in enumerate(tool_recommendations[:3], 1):  # İlk 3 öneri
-                recommendations_text += f"{i}. {rec.get('tool', 'unknown')}: {rec.get('reason', 'Öneri yok')}\n"
+            recommendations_text = f"\nÖNERİLER: {', '.join([rec.get('tool', '') for rec in tool_recommendations[:2]])}"
         
-        # TÜM TOOL'LARI listele
-        tools_list = self._get_detailed_tools_info()
-        
-        # Kullanıcı görevine göre hedef step sayısı ayarla (class değişkenini güncelle)
-        task_keywords = (self.user_task or "").lower()
-        if any(word in task_keywords for word in ["hızlı", "quick", "basit", "simple"]):
-            self.suggested_steps = 3
-            task_complexity = "basit"
-        elif any(word in task_keywords for word in ["detaylı", "comprehensive", "full", "kapsamlı"]):
-            self.suggested_steps = 8
-            task_complexity = "detaylı"
-        elif any(word in task_keywords for word in ["spesifik", "specific", "sadece", "only"]):
-            self.suggested_steps = 3
-            task_complexity = "spesifik"
-        else:
-            self.suggested_steps = 5
-            task_complexity = "normal"
+        # KISA TOOL LİSTESİ
+        tools_brief = ", ".join(sorted(list(all_tools)))
         
         suggested_max = self.suggested_steps
         
         prompt = f"""
-Sen siber güvenlik uzmanısın. Son tool'un çıktısını analiz edip sonraki adımı belirle.
+SON TOOL: {last_tool}
+SONUÇ: {summarized_result.get('ai_summary', '')[:150]}{recommendations_text}
+HEDEF: {self.current_target}
+ADIM: {current_step}/{suggested_max} (min:{self.min_steps})
+KULLANILMIŞ: {used_tools_str}
+TOOL'LAR: {tools_brief}
 
-🔧 SON TOOL: {last_tool}
-📊 SONUÇ ÖZETİ: {json.dumps(summarized_result, indent=2, default=str)}{recommendations_text}
+KARAR VER:
+1. {last_tool} başarılı mı? Ne buldu?
+2. {current_step}>={self.min_steps} ve yeterli bilgi var mı? → "stop"
+3. Kullanıcı isteği tamamlandı mı? → "stop"
+4. Sonraki tool mantıklı mı? Döngüye girmeyelim
 
-🎯 HEDEF: {self.current_target}
-📋 KULLANICI GÖREVİ: {self.user_task or "Genel güvenlik testi"}
-📈 ADIM: {current_step}/{suggested_max} (Görev: {task_complexity})
-💡 MİNİMUM: {self.min_steps} tool (yeterli bilgi toplanmışsa erken durdurabilirsin)
-🚫 KULLANILMIŞ TOOL'LAR: {used_tools_str}
+JSON (TÜRKÇE reasoning):
+{{"action":"continue|stop","tool":"tool_adı","params":{{"target":"{self.current_target}"}},"reasoning":"TÜRKÇE: Neden, ne bulunacak?"}}
 
-📦 MEVCUT TÜM TOOL'LAR (29 adet):
-{tools_list}
-
-🧠 DERİNLEMESİNE KARAR SÜRECİ (Her adımda YENİDEN düşün):
-1. 🔍 {last_tool} NE BULDU? Sonuçları detaylı analiz et:
-   - Hangi teknolojiler tespit edildi?
-   - Hangi parametreler/endpoint'ler bulundu?
-   - Hangi portlar/servisler açık?
-   - Hangi zafiyetler tespit edildi?
-   
-2. 🎯 KULLANICI İSTEĞİ KARŞILANDI MI?
-   - Kullanıcı "{self.user_task}" dedi
-   - Bu istek tamamlandı mı? (Evet ise → "stop")
-   - Eksik bilgi var mı? (Varsa → devam)
-   
-3. 📊 YETERLİ BİLGİ TOPLANDI MI?
-   - {current_step} tool çalıştı (min: {self.min_steps}, max: {suggested_max})
-   - Toplanan bilgi kaliteli mi?
-   - Daha fazla tool çalıştırmak GERÇEKTEN değer katacak mı?
-   
-4. 🚀 SONRAKI TOOL MANTIKLI MI?
-   - Son tool'un sonuçlarına göre EN MANTIKLI sonraki tool hangisi?
-   - Bu tool YENİ bilgi getirecek mi?
-   - Yoksa aynı bilgiyi tekrar mı toplayacak?
-   
-5. ⚠️ DÖNGÜDEN KAÇIN:
-   - KULLANILMIŞ TOOL'LARI TEKRAR SEÇME: {used_tools_str}
-   - Aynı tool'u farklı parametreyle bile olsa 2. kez çalıştırma
-   - Sisteme özgü, FARKLI tool'lar seç
-   
-6. 🛑 DURDURMA KARARI:
-   - {current_step} >= {self.min_steps} VE yeterli bilgi → "stop"
-   - {current_step} >= {suggested_max} → MUTLAKA "stop"
-   - Kullanıcı isteği tamamlandı → "stop"
-   - Tool boş sonuç döndü VE alternatif yok → "stop"
-
-⚡ GÖREV KARMAŞIKLIĞI KURALLARI:
-- 📊 Basit/Hızlı görev: 3 tool yeterli → erken "stop"
-- 📊 Normal görev: 5 tool hedefle → yeterli bilgi varsa erken "stop"
-- 📊 Detaylı görev: 8 tool kullan → kapsamlı test
-- 📊 Spesifik zafiyet: 2-3 tool (direkt test + kontrol) → erken "stop"
-
-⚠️ ERKEN DURDURMA KRİTERLERİ:
-- ✅ Minimum {self.min_steps} tool çalıştı VE yeterli bilgi toplandı → "stop"
-- ✅ Kullanıcı isteği tamamlandı (örn: XSS testi yapıldı) → "stop"
-- ✅ Hedef yanıt vermiyor veya bilgi toplanamıyor → "stop"
-- ❌ Gereksiz yere {suggested_max} tool'a kadar çalıştırma!
-
-🎯 SENARYO BAZLI TOOL SEÇİMİ:
-
-**Web Application Pentest:**
-1. enum_tech_detector (teknoloji keşfi)
-2. enum_web_crawler (parametre bulma)
-3. verify_sqli + verify_xss + verify_lfi (zafiyet testleri)
-4. vuln_http_header_analyzer (güvenlik header'ları)
-5. enum_directory_bruteforce (gizli dizinler)
-6. api_finder_active (API endpoint'leri)
-
-**Network Pentest:**
-1. enum_port_scanner (port tarama)
-2. service_fingerprinting (servis versiyonları)
-3. enum_firewall_detector (WAF tespiti)
-4. recon_origin_ip_finder (gerçek IP)
-
-**API Security Test:**
-1. api_finder_active (API keşfi)
-2. recon_api_endpoint_finder (endpoint'ler)
-3. api_vuln_jwt_tester (JWT zafiyetleri)
-4. api_vuln_idor_scanner (IDOR testleri)
-
-**Domain Intelligence:**
-1. recon_whois_lookup (domain bilgisi)
-2. enum_subdomain_bruteforcer (subdomain'ler)
-3. rec_dns_analyzer (DNS analizi)
-4. rec_audit_email_security (email güvenlik)
-5. rec_intel_code_scanner (kod sızıntıları)
-6. rec_intel_historical_analyzer (tarihsel analiz)
-
-**Cloud Security:**
-1. cloud_s3_bucket_scanner (S3 bucket'ları)
-2. infra_exposed_panels_finder (yönetim panelleri)
-
-**Comprehensive Pentest (Detaylı):**
-- Yukarıdaki TÜM kategorilerden tool'lar kullan
-- Her kategoriden en az 1-2 tool seç
-- Toplam 8-10 farklı tool kullan
-
-🎯 ÇIKTI FORMATI (SADECE JSON):
-{{
-    "action": "continue|stop",
-    "tool": "optimal_next_tool_name",
-    "params": {{
-        "target": "{self.current_target}",  // enum_port_scanner, enum_tech_detector için
-        "url": "{self.current_target}",     // verify_xss, verify_sqli, vuln_http_header_analyzer için
-        "domain": "{self.current_target}",  // enum_subdomain_bruteforcer için
-        "parameter": "search",  // ÖNEMLİ: verify_xss, verify_sqli için MUTLAKA gerekli! (örn: "id", "q", "search")
-        "method": "GET",        // verify_xss, verify_sqli için (GET veya POST)
-        "scan_type": "quick",   // opsiyonel
-        "max_depth": 3          // enum_web_crawler için
-    }},
-    "reasoning": "Neden bu tool seçildi? Ne bulunması bekleniyor? Kullanıcı isteğine nasıl cevap veriyor?"
-}}
-
-⚠️ KRİTİK: 
-- verify_xss, verify_sqli, verify_lfi için "parameter" ZORUNLU!
-- Reasoning'i kendin üret, hazır örnek kullanma!
-- SADECE JSON döndür, başka metin ekleme!
-
-⚠️ ÖNEMLİ: Sadece JSON formatında yanıt ver, başka açıklama yapma!
+⚠️ SADECE JSON + TÜRKÇE!
 """
         
         try:
@@ -1221,28 +1065,21 @@ Sen siber güvenlik uzmanısın. Son tool'un çıktısını analiz edip sonraki 
                 }
         
         prompt = f"""
-{failed_tool} başarısız oldu. Alternatif tool seç.
+{failed_tool} başarısız.
+HATA: {error_msg[:100]}
+HEDEF: {self.current_target}
+ADIM: {current_step}/{self.min_steps}
 
-❌ HATA: {error_msg[:200]}
-🎯 HEDEF: {self.current_target}
-📈 ADIM: {current_step} (min: {self.min_steps})
-💡 ERKEN DURDURMA: Yeterli bilgi toplandıysa "stop"
+ALTERNATIF:
+- port_scanner → tech_detector
+- tech_detector → directory_bruteforce
+- web_crawler → directory_bruteforce
+- {current_step}>={self.min_steps} ise "stop"
 
-⚡ ALTERNATİFLER:
-- enum_port_scanner başarısız → enum_tech_detector veya recon_whois_lookup
-- recon_whois_lookup başarısız → enum_port_scanner (quick)
-- enum_tech_detector başarısız → enum_web_crawler VEYA enum_directory_bruteforce
-- verify_xss başarısız → verify_xss_http (Selenium gerektirmez)
-- enum_web_crawler başarısız → enum_directory_bruteforce
+JSON (TÜRKÇE):
+{{"action":"continue|stop","tool":"tool_adı","params":{{"target":"{self.current_target}"}},"reasoning":"TÜRKÇE: Neden?"}}
 
-JSON{{
-    "action": "continue|stop",
-    "tool": "alt_tool_name",
-    "params": {{"target": "{self.current_target}", "profile": "quick"}},
-    "reasoning": "Neden bu tool başarısız oldu? Alternatif tool nasıl sorunu çözecek?"
-}}
-
-⚠️ ÖNEMLİ: Reasoning'i kendin üret, SADECE JSON döndür!
+⚠️ SADECE JSON + TÜRKÇE!
 """
         
         try:
