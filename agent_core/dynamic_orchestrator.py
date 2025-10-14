@@ -244,33 +244,36 @@ Hangi hedefi taramak istersin?"""
             await asyncio.sleep(0.1)
 
     async def _display_tool_results(self, tool_name: str, result: dict, status_callback):
-        """Tool sonuçlarını detaylı ve anlaşılır şekilde göster"""
+        """Tool sonuçlarını TEK MESAJDA detaylı ve anlaşılır şekilde göster"""
         try:
             data = result.get("data", {})
             ai_summary = result.get("ai_summary", "")
             
-            # AI Summary varsa göster
+            # TEK MESAJ İÇİN BUFFER
+            output_lines = []
+            
+            # AI Summary varsa ekle
             if ai_summary:
-                await status_callback(f"📊 AI Analizi: {ai_summary}", "ai_reasoning")
+                output_lines.append(f"📊 AI Analizi: {ai_summary}")
             
             # Tool'a özel sonuç gösterimi
             if tool_name == "enum_port_scanner":
                 open_ports = data.get("open_ports", [])
                 if open_ports:
                     ports_str = ", ".join([str(p) for p in open_ports[:10]])
-                    await status_callback(f"  🔓 Açık Portlar: {ports_str}", "ai_reasoning")
+                    output_lines.append(f"  🔓 Açık Portlar: {ports_str}")
                     if len(open_ports) > 10:
-                        await status_callback(f"  ... ve {len(open_ports) - 10} port daha", "ai_reasoning")
+                        output_lines.append(f"      ... ve {len(open_ports) - 10} port daha")
             
             elif tool_name == "enum_tech_detector":
                 technologies = data.get("detected_technologies", [])
                 if technologies:
-                    await status_callback(f"  ⚙️ Tespit Edilen Teknolojiler:", "ai_reasoning")
+                    output_lines.append(f"  ⚙️ Tespit Edilen Teknolojiler:")
                     for tech in technologies[:5]:
                         tech_name = tech.get("technology", "Unknown")
                         tech_version = tech.get("version", "")
                         version_str = f" v{tech_version}" if tech_version else ""
-                        await status_callback(f"    • {tech_name}{version_str}", "ai_reasoning")
+                        output_lines.append(f"      • {tech_name}{version_str}")
             
             elif tool_name == "enum_web_crawler":
                 parameters = data.get("parameters", [])
@@ -279,61 +282,68 @@ Hangi hedefi taramak istersin?"""
                 
                 if parameters:
                     params_str = ", ".join([str(p) for p in parameters[:10]])
-                    await status_callback(f"  🔍 Bulunan Parametreler: {params_str}", "ai_reasoning")
+                    output_lines.append(f"  🔍 Bulunan Parametreler: {params_str}")
                 if forms:
-                    await status_callback(f"  📝 Bulunan Form'lar: {len(forms)} adet", "ai_reasoning")
+                    output_lines.append(f"  📝 Bulunan Form'lar: {len(forms)} adet")
                 if endpoints:
-                    await status_callback(f"  🌐 Keşfedilen Endpoint'ler: {len(endpoints)} adet", "ai_reasoning")
+                    output_lines.append(f"  🌐 Keşfedilen Endpoint'ler: {len(endpoints)} adet")
             
             elif tool_name == "recon_whois_lookup":
                 domain_info = data.get("domain_info", {})
                 if domain_info:
                     registrar = domain_info.get("registrar", "Unknown")
                     creation = domain_info.get("creation_date", "Unknown")
-                    await status_callback(f"  🌐 Registrar: {registrar}", "ai_reasoning")
-                    await status_callback(f"  📅 Oluşturulma: {creation}", "ai_reasoning")
+                    output_lines.append(f"  🌐 Registrar: {registrar}")
+                    output_lines.append(f"  📅 Oluşturulma: {creation}")
+            
+            elif tool_name == "recon_origin_ip_finder":
+                potential_ips = data.get("potential_origin_ips", [])
+                if potential_ips:
+                    output_lines.append(f"  🎯 Origin IP'ler: {len(potential_ips)} adet")
+                    for ip_data in potential_ips[:3]:
+                        ip = ip_data.get("ip", "Unknown")
+                        risk = ip_data.get("risk_level", "unknown")
+                        output_lines.append(f"      • {ip} (Risk: {risk})")
             
             elif tool_name in ["verify_xss", "verify_sqli", "verify_lfi"]:
                 vulnerabilities = data.get("vulnerabilities", [])
                 findings = data.get("findings", [])
                 
                 if vulnerabilities:
-                    await status_callback(f"  🚨 {len(vulnerabilities)} zafiyet bulundu!", "ai_reasoning")
+                    output_lines.append(f"  🚨 {len(vulnerabilities)} zafiyet bulundu!")
                     for vuln in vulnerabilities[:3]:
                         severity = vuln.get("severity", "unknown")
-                        desc = vuln.get("description", "")
-                        await status_callback(f"    • [{severity.upper()}] {desc[:100]}", "ai_reasoning")
+                        desc = vuln.get("description", "")[:80]
+                        output_lines.append(f"      • [{severity.upper()}] {desc}")
                 elif findings:
-                    await status_callback(f"  🚨 {len(findings)} bulgu tespit edildi", "ai_reasoning")
+                    output_lines.append(f"  🚨 {len(findings)} bulgu tespit edildi")
                 else:
-                    await status_callback(f"  ✓ Zafiyet tespit edilmedi", "ai_reasoning")
+                    output_lines.append(f"  ✓ Zafiyet tespit edilmedi")
             
             elif tool_name == "vuln_http_header_analyzer":
-                headers = data.get("headers", {})
                 missing_headers = data.get("missing_security_headers", [])
-                
                 if missing_headers:
-                    await status_callback(f"  ⚠️ Eksik Güvenlik Header'ları: {', '.join(missing_headers[:5])}", "ai_reasoning")
+                    output_lines.append(f"  ⚠️ Eksik Güvenlik Header'ları: {', '.join(missing_headers[:5])}")
                 else:
-                    await status_callback(f"  ✓ Tüm güvenlik header'ları mevcut", "ai_reasoning")
+                    output_lines.append(f"  ✓ Tüm güvenlik header'ları mevcut")
             
             elif tool_name == "enum_subdomain_bruteforcer":
                 subdomains = data.get("subdomains", [])
                 if subdomains:
-                    await status_callback(f"  🎯 Bulunan Subdomain'ler: {len(subdomains)} adet", "ai_reasoning")
+                    output_lines.append(f"  🎯 Bulunan Subdomain'ler: {len(subdomains)} adet")
                     for subdomain in subdomains[:5]:
-                        await status_callback(f"    • {subdomain}", "ai_reasoning")
+                        output_lines.append(f"      • {subdomain}")
             
             elif tool_name == "enum_directory_bruteforce":
                 directories = data.get("directories", [])
                 files = data.get("files", [])
                 
                 if directories:
-                    await status_callback(f"  📁 Bulunan Dizinler: {len(directories)} adet", "ai_reasoning")
-                    for dir_item in directories[:5]:
-                        await status_callback(f"    • {dir_item}", "ai_reasoning")
+                    output_lines.append(f"  📁 Bulunan Dizinler: {len(directories)} adet")
+                    for dir_item in directories[:3]:
+                        output_lines.append(f"      • {dir_item}")
                 if files:
-                    await status_callback(f"  📄 Bulunan Dosyalar: {len(files)} adet", "ai_reasoning")
+                    output_lines.append(f"  📄 Bulunan Dosyalar: {len(files)} adet")
             
             # Genel durumda - veri noktası sayısı
             else:
@@ -343,30 +353,32 @@ Hangi hedefi taramak istersin?"""
                 elif isinstance(data, list):
                     data_points = len(data)
                 
-                if data_points > 0:
-                    await status_callback(f"  📊 {data_points} veri noktası toplandı", "ai_reasoning")
+                if data_points > 0 and data_points <= 10:  # Max 10 veri noktası göster
+                    output_lines.append(f"  📊 {data_points} veri noktası toplandı")
                     
                     # İlk birkaç veri noktasını göster
                     if isinstance(data, dict):
                         for key, value in list(data.items())[:3]:
-                            value_str = str(value)[:50]
-                            await status_callback(f"    • {key}: {value_str}", "ai_reasoning")
-                    elif isinstance(data, list):
-                        for item in data[:3]:
-                            item_str = str(item)[:50]
-                            await status_callback(f"    • {item_str}", "ai_reasoning")
+                            value_str = str(value)[:60]
+                            if len(str(value)) > 60:
+                                value_str += "..."
+                            output_lines.append(f"      • {key}: {value_str}")
             
-            # Tool önerilerini göster (varsa) - KISA VE ÖZ
+            # Tool önerilerini ekle (varsa) - KISA VE ÖZ
             recommendations = result.get("recommendations", [])
             if recommendations and len(recommendations) > 0:
-                await status_callback(f"  💡 Tool Önerileri: {len(recommendations)} öneri", "ai_reasoning")
+                output_lines.append(f"  💡 Tool Önerileri: {len(recommendations)} öneri")
                 for i, rec in enumerate(recommendations[:2], 1):
                     rec_tool = rec.get("tool", "unknown")
-                    rec_reason = rec.get("reason", "")[:80]  # 80 karakter limit
-                    # Çok uzun mesajları truncate et
-                    if len(rec_reason) >= 80:
-                        rec_reason = rec_reason[:77] + "..."
-                    await status_callback(f"    {i}. {rec_tool}: {rec_reason}", "ai_reasoning")
+                    rec_reason = rec.get("reason", "")[:70]  # 70 karakter limit
+                    if len(rec.get("reason", "")) > 70:
+                        rec_reason += "..."
+                    output_lines.append(f"      {i}. {rec_tool}: {rec_reason}")
+            
+            # TEK MESAJDA GÖNDER
+            if output_lines:
+                combined_message = "\n".join(output_lines)
+                await status_callback(combined_message, "ai_reasoning")
         
         except Exception as e:
             logger.error(f"Result display error: {e}")
@@ -1184,23 +1196,23 @@ Sen siber güvenlik uzmanısın. Son tool'un çıktısını analiz edip sonraki 
         """Başarısız tool için karar ver - OPTİMİZE"""
         error_msg = error_result.get("error", "Bilinmeyen hata")
         
-        # ÖNEMLİ: Selenium hatası mı? Otomatik olarak HTTP alternatifine geç
-        if "Selenium" in error_msg or "WebDriver" in error_msg or "Chrome" in error_msg:
+        # ÖNEMLİ: Selenium/Chrome hatası mı? Otomatik olarak HTTP alternatifine geç
+        if any(keyword in error_msg for keyword in ["Selenium", "WebDriver", "Chrome binary", "Chrome", "chromedriver"]):
             if failed_tool == "verify_xss":
-                await self.status_callback("🔄 Selenium mevcut değil, verify_xss_http alternatifine geçiliyor", "info")
+                await self.status_callback("🔄 Selenium/Chrome mevcut değil, verify_xss_http alternatifine geçiliyor", "info")
                 return {
                     "action": "continue",
                     "tool": "verify_xss_http",
                     "params": {"url": self.current_target, "parameter": "search", "method": "GET"},
-                    "reasoning": "Selenium mevcut değil (Render ortamı), HTTP-based XSS testi kullanılıyor"
+                    "reasoning": "Selenium/Chrome mevcut değil (Render ortamı), HTTP-based XSS testi kullanılıyor"
                 }
             elif failed_tool == "enum_web_crawler":
-                await self.status_callback("🔄 Selenium mevcut değil, crawler atlanıyor", "info")
+                await self.status_callback("🔄 Chrome binary bulunamadı, enum_tech_detector alternatifine geçiliyor", "info")
                 return {
                     "action": "continue",
-                    "tool": "enum_directory_bruteforce",
-                    "params": {"url": self.current_target, "wordlist_type": "general"},
-                    "reasoning": "Web crawler Selenium gerektirir, directory bruteforce alternatifi kullanılıyor"
+                    "tool": "enum_tech_detector",
+                    "params": {"url": self.current_target, "scan_type": "quick"},
+                    "reasoning": "Web crawler Chrome gerektirir, tech detector (HTTP-only) alternatifi kullanılıyor"
                 }
         
         prompt = f"""
