@@ -3,11 +3,14 @@ RAG Servis Modülü
 CVE RAG sistemi ile entegrasyon için servis
 Qdrant üzerinden CVE araması yapar
 LLM ile optimize query oluşturma
+BAAI/bge-reranker-base ile sonuç reranking
 """
 
 import logging
 import sys
 import os
+import asyncio
+import aiohttp
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from model_wrapper import UnifiedLLM
@@ -181,22 +184,126 @@ class RAGService:
         """RAG servisinin kullanılabilir olup olmadığını kontrol et"""
         return self._available and self._engine is not None
     
+    async def _rerank_results(self, query: str, results: List[CVEResult]) -> List[CVEResult]:
+        """
+        HuggingFace BAAI/bge-reranker-base ile sonuçları yeniden sırala.
+        
+        Args:
+            query: Orijinal arama sorgusu
+            results: Qdrant'tan gelen ilk sonuçlar
+            
+        Returns:
+            Rerank edilmiş CVE sonuçları
+        """
+        if not config.USE_RERANKER:
+            logger.info("Reranker devre dışı, orijinal sıralama kullanılıyor")
+            return results
+        
+        if not config.HUGGINGFACE_TOKEN:
+            logger.warning("HuggingFace token yok, reranker atlanıyor")
+            return results
+        
+        if not results or len(results) == 0:
+            return results
+        
+        try:
+            logger.info(f"🔄 Reranker başlatılıyor: {len(results)} sonuç sıralanacak")
+            
+            # HuggingFace Reranker API'ye istek hazırla
+            headers = {
+                "Authorization": f"Bearer {config.HUGGINGFACE_TOKEN}",
+                "Content-Type": "application/json"
+            }
+            
+            # Query ve documents hazırla
+            documents = [f"{r.cve_id}: {r.description[:500]}" for r in results]
+            
+            payload = {
+                "inputs": {
+                    "query": query,
+                    "documents": documents
+                }
+            }
+            
+            # HuggingFace API'ye istek gönder
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    config.RERANKER_API_URL,
+                    headers=headers,
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=30)
+                ) as response:
+                    if response.status != 200:
+                        logger.warning(f"Reranker API hatası: {response.status}")
+                        return results
+                    
+                    rerank_scores = await response.json()
+                    
+                    # Rerank skorlarını işle
+                    if isinstance(rerank_scores, list):
+                        # Sonuçları rerank skoruna göre sırala
+                        reranked = []
+                        for idx, score in enumerate(rerank_scores):
+                            if idx < len(results):
+                                # Orijinal CVE'yi kopyala ve rerank skorunu ekle
+                                cve = results[idx]
+                                # Score'u güncelle (rerank score daha önemli)
+                                original_score = cve.score
+                                rerank_score = score if isinstance(score, (int, float)) else score.get('score', 0)
+                                
+                                # Rerank score ile birleştir (ağırlıklı ortalama)
+                                combined_score = (original_score * 0.3) + (rerank_score * 0.7)
+                                
+                                reranked.append({
+                                    "cve": cve,
+                                    "original_score": original_score,
+                                    "rerank_score": rerank_score,
+                                    "combined_score": combined_score
+                                })
+                        
+                        # Combined score'a göre sırala
+                        reranked.sort(key=lambda x: x['combined_score'], reverse=True)
+                        
+                        # Sadece CVE'leri döndür
+                        reranked_cves = [item['cve'] for item in reranked]
+                        
+                        logger.info(f"✅ Reranking tamamlandı: {len(reranked_cves)} sonuç yeniden sıralandı")
+                        
+                        # Sıralama değişikliğini logla
+                        for i, item in enumerate(reranked[:3], 1):
+                            logger.info(f"  #{i}: {item['cve'].cve_id} (orijinal: {item['original_score']:.3f}, rerank: {item['rerank_score']:.3f}, combined: {item['combined_score']:.3f})")
+                        
+                        return reranked_cves
+                    else:
+                        logger.warning(f"Beklenmeyen reranker yanıtı: {type(rerank_scores)}")
+                        return results
+                        
+        except asyncio.TimeoutError:
+            logger.warning("Reranker timeout, orijinal sıralama kullanılıyor")
+            return results
+        except Exception as e:
+            logger.error(f"Reranker hatası: {e}")
+            logger.info("Reranker başarısız, orijinal sıralama kullanılıyor")
+            return results
+    
     def search_cve(
         self,
         query: str,
         limit: int = 5,
-        severity: Optional[str] = None
+        severity: Optional[str] = None,
+        use_reranker: Optional[bool] = None
     ) -> List[CVEResult]:
         """
-        CVE araması yap.
+        CVE araması yap ve reranker ile optimize et.
         
         Args:
             query: Arama sorgusu
             limit: Maksimum sonuç sayısı (default: 5)
             severity: Severity filtresi (CRITICAL, HIGH, MEDIUM, LOW)
+            use_reranker: Reranker kullanılsın mı? (None: config'den al)
             
         Returns:
-            CVEResult listesi
+            Rerank edilmiş CVEResult listesi
         """
         # Lazy initialization: engine None ise tekrar başlat
         if self._engine is None and not self._available:
@@ -210,15 +317,19 @@ class RAGService:
         try:
             logger.info(f"CVE araması yapılıyor: '{query}' (limit={limit}, severity={severity})")
             
+            # Reranker kullanılacaksa daha fazla sonuç al
+            reranker_enabled = use_reranker if use_reranker is not None else config.USE_RERANKER
+            fetch_limit = config.RERANKER_TOP_K if reranker_enabled else limit
+            
             # Severity filtresi varsa
             if severity:
                 results = self._engine.search_by_severity(
                     query=query,
                     severity=severity,
-                    limit=limit
+                    limit=fetch_limit
                 )
             else:
-                results = self._engine.search(query, limit=limit)
+                results = self._engine.search(query, limit=fetch_limit)
             
             # SearchResult'ları CVEResult'a dönüştür - TÜM DETAYLARLA
             cve_results = []
@@ -243,8 +354,41 @@ class RAGService:
                     impact_score=metadata.get('impact_score')
                 ))
             
-            logger.info(f"✅ {len(cve_results)} CVE bulundu (tüm detaylarla)")
-            return cve_results
+            logger.info(f"✅ {len(cve_results)} CVE bulundu (vektör araması)")
+            
+            # Reranker ile optimize et
+            if reranker_enabled and len(cve_results) > 1:
+                logger.info(f"🔄 Reranker başlatılıyor ({len(cve_results)} sonuç)...")
+                
+                # Async reranker'ı sync context'te çalıştır
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # Event loop zaten çalışıyorsa thread pool kullan
+                        import concurrent.futures
+                        with concurrent.futures.ThreadPoolExecutor() as pool:
+                            reranked_results = pool.submit(
+                                asyncio.run, 
+                                self._rerank_results(query, cve_results)
+                            ).result(timeout=30)
+                    else:
+                        # Event loop çalışmıyorsa direkt çalıştır
+                        reranked_results = loop.run_until_complete(
+                            self._rerank_results(query, cve_results)
+                        )
+                    
+                    # Limit'e göre kes
+                    reranked_results = reranked_results[:limit]
+                    logger.info(f"✅ Reranking tamamlandı, en iyi {len(reranked_results)} sonuç döndürülüyor")
+                    return reranked_results
+                    
+                except Exception as e:
+                    logger.error(f"Reranker çalıştırma hatası: {e}")
+                    logger.info("Reranker başarısız, orijinal sonuçlar döndürülüyor")
+                    return cve_results[:limit]
+            else:
+                # Reranker kullanılmıyor, direkt döndür
+                return cve_results[:limit]
             
         except Exception as e:
             logger.error(f"CVE arama hatası: {e}")
@@ -348,28 +492,41 @@ class RAGService:
             # Scan sonuçlarını özetle
             summary = self._summarize_scan_results(scan_results)
             
-            # LLM'ye prompt gönder
-            prompt = f"""Based on the following penetration test results, generate an optimized search query for a CVE (Common Vulnerabilities and Exposures) database.
+            # LLM'ye prompt gönder - KISA (token tasarrufu)
+            prompt = f"""Penetration test sonuçları için CVE database query oluştur.
 
-Scan Results:
-{summary}
+Scan Sonuçları:
+{summary[:500]}
 
-Requirements:
-- Focus on the most critical vulnerabilities found
-- Include specific technology/software names and versions if available
-- Use terms that would match CVE descriptions
-- Keep it concise (max 100 characters)
-- Prioritize network-facing vulnerabilities
+Query kuralları:
+- En kritik zafiyet odaklı
+- Teknoloji/versiyon ekle
+- Max 100 karakter
+- SADECE query döndür
 
-Generate ONLY the search query, nothing else. Example format: "Apache 2.4.49 path traversal remote code execution"
-
-Search Query:"""
+Query:"""
             
-            # Yanıt al (sync wrapper değil; UnifiedLLM async bekliyor)
+            # Yanıt al - Event loop sorunu çözümü
             import asyncio
-            response = asyncio.get_event_loop().run_until_complete(
-                model.generate_content_async(prompt)
-            )
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Event loop zaten çalışıyor - thread pool kullan
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as pool:
+                        response = pool.submit(
+                            asyncio.run,
+                            model.generate_content_async(prompt)
+                        ).result(timeout=30)
+                else:
+                    # Event loop çalışmıyor - direkt çalıştır
+                    response = loop.run_until_complete(
+                        model.generate_content_async(prompt)
+                    )
+            except RuntimeError as e:
+                # Event loop hatasını yakala
+                logger.warning(f"Event loop hatası: {e}, basit query kullanılıyor")
+                return self._generate_query_from_scan(scan_results)
             
             # Response string veya object olabilir
             if isinstance(response, str):
@@ -385,7 +542,7 @@ Search Query:"""
             # Query'yi temizle
             query = query.replace('"', '').replace("'", "").strip()
             
-            logger.info(f"LLM tarafından optimize edilmiş query: '{query}'")
+            logger.info(f"✅ LLM optimize query: '{query}'")
             return query
             
         except Exception as e:
