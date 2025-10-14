@@ -216,12 +216,13 @@ class RAGService:
             }
             
             # Query ve documents hazırla
+            # BAAI/bge-reranker formatı: source_sentence + sentences listesi
             documents = [f"{r.cve_id}: {r.description[:500]}" for r in results]
             
             payload = {
                 "inputs": {
-                    "query": query,
-                    "documents": documents
+                    "source_sentence": query,
+                    "sentences": documents
                 }
             }
             
@@ -234,10 +235,13 @@ class RAGService:
                     timeout=aiohttp.ClientTimeout(total=30)
                 ) as response:
                     if response.status != 200:
+                        error_text = await response.text()
                         logger.warning(f"Reranker API hatası: {response.status}")
+                        logger.warning(f"API yanıtı: {error_text[:200]}")
                         return results
                     
                     rerank_scores = await response.json()
+                    logger.info(f"Reranker yanıtı alındı: {type(rerank_scores)}")
                     
                     # Rerank skorlarını işle
                     if isinstance(rerank_scores, list):
