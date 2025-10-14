@@ -300,10 +300,12 @@ Hangi hedefi taramak istersin?"""
                 potential_ips = data.get("potential_origin_ips", [])
                 if potential_ips:
                     output_lines.append(f"  🎯 Origin IP'ler: {len(potential_ips)} adet")
-                    for ip_data in potential_ips[:3]:
+                    for ip_data in potential_ips[:5]:  # 5 IP göster (3'ten artırıldı)
                         ip = ip_data.get("ip", "Unknown")
                         risk = ip_data.get("risk_level", "unknown")
-                        output_lines.append(f"      • {ip} (Risk: {risk})")
+                        confidence = ip_data.get("confidence", "")
+                        conf_str = f" | Conf: {confidence}" if confidence else ""
+                        output_lines.append(f"      • {ip} (Risk: {risk}{conf_str})")
             
             elif tool_name in ["verify_xss", "verify_sqli", "verify_lfi"]:
                 vulnerabilities = data.get("vulnerabilities", [])
@@ -353,25 +355,25 @@ Hangi hedefi taramak istersin?"""
                 elif isinstance(data, list):
                     data_points = len(data)
                 
-                if data_points > 0 and data_points <= 10:  # Max 10 veri noktası göster
+                if data_points > 0 and data_points <= 15:  # Max 15 veri noktası göster (10'dan artırıldı)
                     output_lines.append(f"  📊 {data_points} veri noktası toplandı")
                     
                     # İlk birkaç veri noktasını göster
                     if isinstance(data, dict):
-                        for key, value in list(data.items())[:3]:
-                            value_str = str(value)[:60]
-                            if len(str(value)) > 60:
+                        for key, value in list(data.items())[:5]:  # 5 item göster (3'ten artırıldı)
+                            value_str = str(value)[:100]  # 100 karakter (60'tan artırıldı)
+                            if len(str(value)) > 100:
                                 value_str += "..."
                             output_lines.append(f"      • {key}: {value_str}")
             
-            # Tool önerilerini ekle (varsa) - KISA VE ÖZ
+            # Tool önerilerini ekle (varsa)
             recommendations = result.get("recommendations", [])
             if recommendations and len(recommendations) > 0:
                 output_lines.append(f"  💡 Tool Önerileri: {len(recommendations)} öneri")
-                for i, rec in enumerate(recommendations[:2], 1):
+                for i, rec in enumerate(recommendations[:3], 1):  # 3 öneri göster (2'den artırıldı)
                     rec_tool = rec.get("tool", "unknown")
-                    rec_reason = rec.get("reason", "")[:70]  # 70 karakter limit
-                    if len(rec.get("reason", "")) > 70:
+                    rec_reason = rec.get("reason", "")[:120]  # 120 karakter (70'ten artırıldı)
+                    if len(rec.get("reason", "")) > 120:
                         rec_reason += "..."
                     output_lines.append(f"      {i}. {rec_tool}: {rec_reason}")
             
@@ -1196,10 +1198,13 @@ Sen siber güvenlik uzmanısın. Son tool'un çıktısını analiz edip sonraki 
         """Başarısız tool için karar ver - OPTİMİZE"""
         error_msg = error_result.get("error", "Bilinmeyen hata")
         
-        # ÖNEMLİ: Selenium/Chrome hatası mı? Otomatik olarak HTTP alternatifine geç
-        if any(keyword in error_msg for keyword in ["Selenium", "WebDriver", "Chrome binary", "Chrome", "chromedriver"]):
+        # ÖNEMLİ: Selenium/Chrome hatası mı? Otomatik olarak alternatife geç
+        chrome_keywords = ["Selenium", "WebDriver", "Chrome binary", "Chrome", "chromedriver", "cannot find Chrome"]
+        if any(keyword in error_msg for keyword in chrome_keywords):
+            logger.info(f"🔄 Chrome/Selenium hatası tespit edildi: {failed_tool}")
+            
             if failed_tool == "verify_xss":
-                await self.status_callback("🔄 Selenium/Chrome mevcut değil, verify_xss_http alternatifine geçiliyor", "info")
+                await self.status_callback("🔄 Selenium/Chrome mevcut değil → verify_xss_http", "info")
                 return {
                     "action": "continue",
                     "tool": "verify_xss_http",
@@ -1207,12 +1212,12 @@ Sen siber güvenlik uzmanısın. Son tool'un çıktısını analiz edip sonraki 
                     "reasoning": "Selenium/Chrome mevcut değil (Render ortamı), HTTP-based XSS testi kullanılıyor"
                 }
             elif failed_tool == "enum_web_crawler":
-                await self.status_callback("🔄 Chrome binary bulunamadı, enum_tech_detector alternatifine geçiliyor", "info")
+                await self.status_callback("🔄 Chrome binary yok → enum_directory_bruteforce", "info")
                 return {
                     "action": "continue",
-                    "tool": "enum_tech_detector",
-                    "params": {"url": self.current_target, "scan_type": "quick"},
-                    "reasoning": "Web crawler Chrome gerektirir, tech detector (HTTP-only) alternatifi kullanılıyor"
+                    "tool": "enum_directory_bruteforce",
+                    "params": {"url": self.current_target, "wordlist_type": "general"},
+                    "reasoning": "Web crawler Chrome gerektirir, directory bruteforce (HTTP-only) alternatifi kullanılıyor"
                 }
         
         prompt = f"""
