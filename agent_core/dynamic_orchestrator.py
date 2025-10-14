@@ -752,19 +752,21 @@ Hangi hedefi taramak istersin?"""
         recent_tools_str = ", ".join(recent_tools)
         
         prompt = f"""
-DÖNGÜ: '{repeated_tool}' tekrarlandı.
-HEDEF: {self.current_target}
-ADIM: {current_step}/{self.suggested_steps}
-SON TOOL'LAR: {recent_tools_str}
+⚠️ DÖNGÜ TESPİT EDİLDİ: '{repeated_tool}' aynı parametrelerle tekrar edildi!
 
-ALTERNATIF:
-- Farklı tool seç VEYA
-- {current_step}>={self.min_steps} ise "stop"
+🎯 HEDEF: {self.current_target}
+📋 GÖREV: {self.user_task or "Genel test"}
+📈 ADIM: {current_step}/{self.suggested_steps} (min:{self.min_steps})
+🔄 SON TOOL'LAR: {recent_tools_str}
 
-JSON (TÜRKÇE):
-{{"action":"continue|stop","tool":"tool_adı","params":{{"target":"{self.current_target}"}},"reasoning":"TÜRKÇE: Neden?"}}
+💡 ÇÖZÜM SEÇENEKLERİ:
+1. Farklı tool seç (örn: tech_detector → directory_bruteforce)
+2. {current_step}>={self.min_steps} ve yeterli bilgi → "stop"
 
-⚠️ SADECE JSON + TÜRKÇE!
+JSON ÇIKTI (Reasoning MUTLAKA TÜRKÇE):
+{{"action":"continue|stop","tool":"tool_adı","params":{{"target":"{self.current_target}"}},"reasoning":"TÜRKÇE: Döngüden nasıl çıkılıyor, alternatif tool neden seçildi?"}}
+
+⚠️ KRİTİK: Reasoning MUTLAKA TÜRKÇE + SADECE JSON!
         """
         
         try:
@@ -789,26 +791,27 @@ JSON (TÜRKÇE):
         # Context bilgilerini hazırla
         target_type = self._classify_target(target)
         
-        # KISA TOOL LİSTESİ (token tasarrufu)
-        tools_brief = ", ".join(sorted(list(all_tools)))
+        # DENGELI TOOL LİSTESİ - performans ve token dengesi
+        tools_compact = ", ".join(sorted(list(all_tools)))[:300]  # İlk 300 karakter
         
         prompt = f"""
-SEN: Siber güvenlik uzmanısın.
-HEDEF: {target} ({target_type})
-GÖREV: {user_task or "Güvenlik testi"}
+Siber güvenlik uzmanı olarak {target} için ilk tool'u seç.
 
-TOOL'LAR: {tools_brief}
+🎯 HEDEF: {target} ({target_type})
+📋 GÖREV: {user_task or "Güvenlik testi"}
+📦 TOOL'LAR: {tools_compact}... (29 tool mevcut)
 
-KARARLAR:
-- XSS/SQLi test → enum_web_crawler (parametre bul)
-- Subdomain → enum_subdomain_bruteforcer
-- Port → enum_port_scanner
-- Genel → enum_tech_detector
+🧠 AKILLI BAŞLANGIÇ KURALLARI:
+- XSS/SQLi test → enum_web_crawler (önce parametre bul)
+- Subdomain keşfi → enum_subdomain_bruteforcer  
+- Port tarama → enum_port_scanner
+- Genel test → enum_tech_detector (hızlı)
+- Domain bilgisi → recon_whois_lookup
 
-JSON ÇIKTı (TÜRKÇE reasoning):
-{{"success":true,"action":"continue","tool":"tool_adı","params":{{"target":"{target}"}},"reasoning":"TÜRKÇE: Neden seçildi, ne bulunacak?"}}
+JSON ÇIKTI (Reasoning MUTLAKA TÜRKÇE):
+{{"success":true,"action":"continue","tool":"tool_adı","params":{{"target":"{target}"}},"reasoning":"TÜRKÇE: Tool neden seçildi ve ne bulunması bekleniyor?"}}
 
-⚠️ SADECE JSON + TÜRKÇE reasoning!
+⚠️ KRİTİK: Reasoning MUTLAKA TÜRKÇE + SADECE JSON!
 """
         
         try:
@@ -983,29 +986,38 @@ JSON ÇIKTı (TÜRKÇE reasoning):
         if tool_recommendations:
             recommendations_text = f"\nÖNERİLER: {', '.join([rec.get('tool', '') for rec in tool_recommendations[:2]])}"
         
-        # KISA TOOL LİSTESİ
-        tools_brief = ", ".join(sorted(list(all_tools)))
+        # DENGELI TOOL LİSTESİ
+        tools_compact = ", ".join(sorted(list(all_tools)))[:250]
         
         suggested_max = self.suggested_steps
         
         prompt = f"""
-SON TOOL: {last_tool}
-SONUÇ: {summarized_result.get('ai_summary', '')[:150]}{recommendations_text}
-HEDEF: {self.current_target}
-ADIM: {current_step}/{suggested_max} (min:{self.min_steps})
-KULLANILMIŞ: {used_tools_str}
-TOOL'LAR: {tools_brief}
+Sen siber güvenlik uzmanısın. Son tool çıktısını analiz et ve sonraki adımı belirle.
 
-KARAR VER:
-1. {last_tool} başarılı mı? Ne buldu?
-2. {current_step}>={self.min_steps} ve yeterli bilgi var mı? → "stop"
-3. Kullanıcı isteği tamamlandı mı? → "stop"
-4. Sonraki tool mantıklı mı? Döngüye girmeyelim
+🔧 SON TOOL: {last_tool}
+📊 SONUÇ: {summarized_result.get('ai_summary', '')[:200]}{recommendations_text}
+🎯 HEDEF: {self.current_target}
+📋 GÖREV: {self.user_task or "Genel test"}
+📈 ADIM: {current_step}/{suggested_max} (min:{self.min_steps})
+🚫 KULLANILMIŞ: {used_tools_str}
+📦 TOOL'LAR: {tools_compact}...
 
-JSON (TÜRKÇE reasoning):
-{{"action":"continue|stop","tool":"tool_adı","params":{{"target":"{self.current_target}"}},"reasoning":"TÜRKÇE: Neden, ne bulunacak?"}}
+🧠 KARAR SÜRECİ:
+1. {last_tool} ne buldu? Başarılı mı?
+2. Kullanıcı isteği tamamlandı mı?
+3. {current_step}>={self.min_steps} ve yeterli bilgi → "stop"
+4. Sonraki tool mantıklı mı? (Döngüden kaçın!)
 
-⚠️ SADECE JSON + TÜRKÇE!
+💡 SENARYO ÖRNEKLERİ:
+- Port bulundu → service_fingerprinting (detay)
+- Teknoloji bulundu → verify_xss/sqli (ama parametre gerekli!)
+- Subdomain bulundu → her birine test
+- Yeterli bilgi toplandı → "stop"
+
+JSON ÇIKTI (Reasoning MUTLAKA TÜRKÇE):
+{{"action":"continue|stop","tool":"tool_adı","params":{{"target":"{self.current_target}"}},"reasoning":"TÜRKÇE: Tool neden seçildi, ne bulunması bekleniyor?"}}
+
+⚠️ KRİTİK: Reasoning MUTLAKA TÜRKÇE + SADECE JSON!
 """
         
         try:
