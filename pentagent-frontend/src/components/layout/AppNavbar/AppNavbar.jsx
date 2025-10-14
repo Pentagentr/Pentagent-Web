@@ -15,7 +15,7 @@ const AppNavbar = () => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   
   const navItems = [
-    { path: '/', label: 'Pentest', icon: MessageSquare },
+    { path: '/chat', label: 'Pentest', icon: MessageSquare },
     { path: '/rag-search', label: 'CVE Database', icon: Database }
   ];
   
@@ -32,7 +32,7 @@ const AppNavbar = () => {
     <nav className="w-full bg-obsidian-900/90 backdrop-blur-md border-b border-platinum-500/10 flex-shrink-0 shadow-lg">
       <div className="max-w-7xl mx-auto px-4 h-11 flex items-center justify-between">
         {/* Logo - Sol */}
-        <Link to="/" className="flex items-center gap-2 group flex-shrink-0">
+        <Link to={currentUser ? "/chat" : "/"} className="flex items-center gap-2 group flex-shrink-0">
           <Shield className="w-4 h-4 text-platinum-500 group-hover:text-purple-400 transition-colors duration-300" />
           <span className="text-sm font-bold bg-gradient-to-r from-platinum-400 to-purple-400 bg-clip-text text-transparent">
             PENTAGENT
