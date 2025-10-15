@@ -536,13 +536,22 @@ class RAGService:
             prompt = f"""Sen bir pentest uzmanısın. Aşağıdaki JSON formatındaki GÜVENLİK BULGULARINI analiz et ve CVE database query oluştur.
 
 📊 JSON BULGULAR:
-{json_findings[:800]}
+{json_findings[:1000]}
 
 Query kuralları:
-- JSON'daki bulgulara odaklan (title, severity, description, technology)
-- Teknoloji versiyonu varsa ekle
-- Max 100 karakter, ÖZLÜ ve KRİTİK
+- JSON'daki bulgulara odaklan (title, severity, description, technology, evidence)
+- Teknoloji adı ve versiyonu varsa ekle (örn: WordPress 5.0, Apache 2.4.49)
+- Web teknolojileri tespit edilmişse: "web application vulnerability [technology]"
+- API endpoint'ler varsa: "API security vulnerability"
+- Form/parametre varsa: "web application input validation vulnerability"
+- Max 120 karakter, ÖZLÜ ve SPESİFİK
 - SADECE query string döndür, açıklama YAPMA
+
+Örnekler:
+- "WordPress 5.0 vulnerability CVE"
+- "Apache 2.4.49 path traversal CVE"
+- "web application SQL injection vulnerability"
+- "API security authentication bypass CVE"
 
 CVE Query:"""
             
@@ -611,19 +620,54 @@ CVE Query:"""
                 if not isinstance(tool_result, dict):
                     continue
                 
-                # Web crawler bulguları
+                # Tool_ prefix'li sonuçları da işle
+                if tool_name.startswith("tool_"):
+                    tool_name = tool_name[5:]  # "tool_" prefix'ini kaldır
+                
+                # Web crawler bulguları - DETAYLI ANALİZ
                 if "web_crawler" in tool_name.lower():
                     forms = tool_result.get("forms", [])
                     endpoints = tool_result.get("endpoints", [])
                     parameters = tool_result.get("parameters", [])
+                    pages = tool_result.get("pages", [])
+                    technologies = tool_result.get("technologies", [])
                     
-                    if forms or endpoints or parameters:
+                    # Teknoloji tespiti varsa ayrı bulgu ekle
+                    if technologies:
+                        tech_str = ", ".join(technologies[:5])  # İlk 5 teknoloji
                         findings.append({
-                            "title": "Web Application Discovery",
+                            "title": f"Web Technologies Detected: {tech_str}",
                             "severity": "medium",
-                            "description": f"Web uygulamasında {len(forms)} form, {len(endpoints)} endpoint, {len(parameters)} parametre tespit edildi",
-                            "technology": "Web Application",
+                            "description": f"Web uygulamasında {len(technologies)} teknoloji tespit edildi: {tech_str}",
+                            "technology": tech_str,
                             "target": target
+                        })
+                    
+                    # Form ve parametre bulguları
+                    if forms or parameters:
+                        form_count = len(forms)
+                        param_count = len(parameters)
+                        param_list = ", ".join(parameters[:10])  # İlk 10 parametre
+                        
+                        findings.append({
+                            "title": "Interactive Web Elements Discovered",
+                            "severity": "medium", 
+                            "description": f"Web uygulamasında {form_count} form ve {param_count} parametre tespit edildi. Parametreler: {param_list}",
+                            "technology": "Web Application",
+                            "target": target,
+                            "evidence": f"Forms: {form_count}, Parameters: {param_list}"
+                        })
+                    
+                    # Endpoint bulguları
+                    if endpoints:
+                        endpoint_list = ", ".join(endpoints[:10])  # İlk 10 endpoint
+                        findings.append({
+                            "title": f"API Endpoints Discovered ({len(endpoints)} total)",
+                            "severity": "medium",
+                            "description": f"Web uygulamasında {len(endpoints)} API endpoint tespit edildi: {endpoint_list}",
+                            "technology": "Web API",
+                            "target": target,
+                            "evidence": f"Endpoints: {endpoint_list}"
                         })
                 
                 # Admin panel bulguları
@@ -635,6 +679,19 @@ CVE Query:"""
                             "severity": "high",
                             "description": f"{len(panels)} admin panel ve management interface keşfedildi",
                             "technology": "Infrastructure",
+                            "target": target
+                        })
+                
+                # Teknoloji tespiti bulguları
+                elif "technologies" in tool_name.lower():
+                    technologies = tool_result if isinstance(tool_result, list) else tool_result.get("technologies", [])
+                    if technologies:
+                        tech_str = ", ".join(technologies[:5])
+                        findings.append({
+                            "title": f"Technology Stack Detected: {tech_str}",
+                            "severity": "medium",
+                            "description": f"Web uygulamasında {len(technologies)} teknoloji tespit edildi: {tech_str}",
+                            "technology": tech_str,
                             "target": target
                         })
                 

@@ -1469,12 +1469,12 @@ class ReportGenerator:
                                 # Tool'a göre finding oluştur
                                 if "vulnerabilities" in data:
                                     for vuln in data["vulnerabilities"]:
-                finding = {
+                                        finding = {
                                             'title': vuln.get('type', f'{tool_name} vulnerability'),
                                             'severity': vuln.get('severity', 'medium'),
                                             'description': vuln.get('description', 'Vulnerability detected'),
                                             'evidence': vuln.get('evidence', 'Proof of concept available'),
-                    'target': state.target,
+                                            'target': state.target,
                                             'technology': 'Web Application'
                                         }
                                         state.findings.append(finding)

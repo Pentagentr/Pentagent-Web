@@ -1322,15 +1322,47 @@ Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu haz�
                 if "forms" in data:
                     self.discovered_information["forms"] = data["forms"]
                 
-                # Web crawler bulgularını GERÇEK BULGU olarak ekle
-                if "parameters" in data or "forms" in data:
+                # Endpoint'leri kaydet
+                if "endpoints" in data:
+                    self.discovered_information["endpoints"] = data["endpoints"]
+                
+                # Sayfa sayısını kaydet
+                if "pages" in data:
+                    self.discovered_information["pages"] = data["pages"]
+                
+                # Teknoloji bilgilerini kaydet
+                if "technologies" in data:
+                    self.discovered_information["technologies"] = data["technologies"]
+                
+                # Web crawler bulgularını DETAYLI BULGU olarak ekle
+                params = data.get('parameters', [])
+                forms = data.get('forms', [])
+                endpoints = data.get('endpoints', [])
+                pages = data.get('pages', [])
+                technologies = data.get('technologies', [])
+                
+                if params or forms or endpoints or pages:
+                    # Ana web uygulaması bulgusu
                     finding = {
-                        "title": "Web Application Discovery",
+                        "title": "Web Application Structure Discovered",
                         "severity": "medium",
-                        "description": f"Web uygulamasında {len(data.get('parameters', []))} parametre ve {len(data.get('forms', []))} form tespit edildi",
-                        "evidence": f"Parametreler: {data.get('parameters', [])[:5]}, Formlar: {data.get('forms', [])[:3]}",
+                        "description": f"Web uygulamasında {len(pages)} sayfa, {len(params)} parametre, {len(forms)} form ve {len(endpoints)} endpoint tespit edildi",
+                        "evidence": f"Sayfalar: {len(pages)}, Parametreler: {params[:5]}, Formlar: {len(forms)}, Endpoint'ler: {endpoints[:3]}",
                         "target": self.current_target,
                         "technology": "Web Application"
+                    }
+                    self._add_finding(finding)
+                
+                # Teknoloji bulgusu ayrı
+                if technologies:
+                    tech_list = ", ".join(technologies[:5])
+                    finding = {
+                        "title": f"Web Technologies Detected: {tech_list}",
+                        "severity": "medium",
+                        "description": f"Web uygulamasında {len(technologies)} teknoloji tespit edildi: {tech_list}",
+                        "evidence": f"Technologies: {tech_list}",
+                        "target": self.current_target,
+                        "technology": tech_list
                     }
                     self._add_finding(finding)
             
@@ -1855,11 +1887,17 @@ Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu haz�
             # Bulguları RAG servisine gönder
             logger.info(f"🔍 {len(findings)} bulgu RAG servisine gönderiliyor...")
             
-            # Scan results formatında hazırla
+            # Scan results formatında hazırla - TOOL SONUÇLARINI DA EKLE
             scan_results = {
                 "target": self.current_target,
                 "findings": findings
             }
+            
+            # Tool sonuçlarını da ekle (RAG için daha detaylı analiz)
+            if hasattr(self, 'discovered_information'):
+                for tool_name, tool_data in self.discovered_information.items():
+                    if tool_data and isinstance(tool_data, (dict, list)):
+                        scan_results[f"tool_{tool_name}"] = tool_data
             
             # RAG servisinden spesifik query oluştur
             optimized_query = await rag_service.generate_optimized_query(scan_results)
