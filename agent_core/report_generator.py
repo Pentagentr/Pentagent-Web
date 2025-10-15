@@ -1427,34 +1427,63 @@ class ReportGenerator:
     async def generate_comprehensive_report(self, state: AgentState, final_analysis: Dict[str, Any], execution_results: Dict[str, Any]) -> Dict[str, Any]:
         """Dynamic orchestrator için kapsamlı ve dinamik rapor oluşturur - RAG entegrasyonu ile"""
         try:
-            # Final analysis'den findings oluştur
-            vulnerabilities = final_analysis.get("security_vulnerabilities", [])
-            
-            # AgentState'e findings ekle
-            if not hasattr(state, 'findings'):
+            # State'den findings al - final_analysis'den değil!
+            if not hasattr(state, 'findings') or not state.findings:
                 state.findings = []
-            
-            # Vulnerabilities'i findings formatına çevir - RAG ile zenginleştirilmiş
-            enhanced_findings = []
-            for vuln in vulnerabilities:
-                finding = {
-                    'title': vuln.get('type', 'Unknown Vulnerability'),
-                    'severity': vuln.get('severity', 'low'),
-                    'description': vuln.get('description', 'No description available'),
-                    'cvss_score': vuln.get('cvss_score', 'N/A'),
-                    'evidence': vuln.get('description', 'No evidence available'),
-                    'recommendation_summary': vuln.get('recommendation', 'No recommendation available'),
-                    'business_impact': vuln.get('business_impact', 'Business impact not assessed'),
-                    'exploitability': vuln.get('exploitability', 'Unknown'),
-                    'cve_id': vuln.get('cve_id', None),
-                    'target': state.target,
-                    'technology': vuln.get('technology', None)
-                }
+                logger.warning("⚠️ State'de bulgu yok, execution_results'tan oluşturuluyor")
                 
+                # Execution results'tan findings oluştur
+                for tool_name, tool_result in execution_results.items():
+                    if isinstance(tool_result, dict) and tool_result.get("success", False):
+                        data = tool_result.get("data", {})
+                        
+                        # Tool'a göre finding oluştur
+                        if "vulnerabilities" in data:
+                            for vuln in data["vulnerabilities"]:
+                                finding = {
+                                    'title': vuln.get('type', f'{tool_name} vulnerability'),
+                                    'severity': vuln.get('severity', 'medium'),
+                                    'description': vuln.get('description', 'Vulnerability detected'),
+                                    'evidence': vuln.get('evidence', 'Proof of concept available'),
+                                    'target': state.target,
+                                    'technology': 'Web Application'
+                                }
+                                state.findings.append(finding)
+                        
+                        # Admin panel bulguları
+                        elif "discovered_panels" in data:
+                            panels = data["discovered_panels"]
+                            if panels:
+                                finding = {
+                                    'title': 'Exposed Admin Panels',
+                                    'severity': 'high',
+                                    'description': f'{len(panels)} admin panel ve management interface keşfedildi',
+                                    'evidence': f'Discovered panels: {panels[:3]}',
+                                    'target': state.target,
+                                    'technology': 'Infrastructure'
+                                }
+                                state.findings.append(finding)
+                        
+                        # Missing headers
+                        elif "missing_security_headers" in data:
+                            headers = data["missing_security_headers"]
+                            if headers:
+                                finding = {
+                                    'title': 'Missing Security Headers',
+                                    'severity': 'medium',
+                                    'description': f'Eksik güvenlik header\'ları: {", ".join(headers)}',
+                                    'evidence': f'Missing headers: {headers}',
+                                    'target': state.target,
+                                    'technology': 'HTTP'
+                                }
+                                state.findings.append(finding)
+            
+            # Bulguları RAG ile zenginleştir
+            enhanced_findings = []
+            for finding in state.findings:
                 # RAG ile bulguyu zenginleştir
                 enhanced_finding = await self._rag_enhance_finding(finding)
                 enhanced_findings.append(enhanced_finding)
-                state.findings.append(enhanced_finding)
             
             # RAG'a tarama sonuçlarını kaydet
             await self._rag_store_scan_results(state.target, enhanced_findings, execution_results)

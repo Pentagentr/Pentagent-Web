@@ -25,8 +25,6 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
   const sections = [
     { id: 'yonetici-ozeti', title: 'Yönetici Özeti', icon: FileText },
     { id: 'metodoloji', title: 'Metodoloji', icon: Shield },
-    { id: 'risk-matrisi', title: 'Risk Matrisi', icon: TrendingUp },
-    { id: 'bulgular-ozet', title: 'Bulgular Özeti', icon: AlertTriangle },
     { id: 'detayli-bulgular', title: 'Detaylı Bulgular', icon: Target },
     { id: 'oneriler', title: 'Öneriler', icon: CheckCircle }
   ];
@@ -194,75 +192,7 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
     );
   };
 
-  // 3. RİSK MATRİSİ
-  const renderRiskMatrisi = () => {
-    const data = report.structured_data?.risk_matrix || {};
-    
-    return (
-      <div className="space-y-4">
-        <p className="text-sm text-text-secondary">{data.aciklama}</p>
-        
-        {data.seviyeler && Object.entries(data.seviyeler).map(([seviye, detay]) => (
-          <div key={seviye} className="bg-obsidian-900/50 border border-platinum-500/10 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <div className={`px-3 py-1 rounded font-semibold text-sm ${
-                seviye === 'KRITIK' ? 'bg-rose-500/20 text-rose-500' :
-                seviye === 'YÜKSEK' ? 'bg-rose-400/20 text-rose-400' :
-                seviye === 'ORTA' ? 'bg-amber-500/20 text-amber-500' :
-                'bg-emerald-500/20 text-emerald-500'
-              }`}>
-                {seviye}
-              </div>
-              <div className="flex-1">
-                <div className="text-xs text-text-tertiary mb-1">{detay.aralik}</div>
-                <div className="text-xs text-text-secondary">{detay.aciklama}</div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  };
-
-  // 4. BULGULAR ÖZETİ
-  const renderBulgularOzet = () => {
-    const data = report.structured_data?.findings_summary || {};
-    
-    return (
-      <div className="space-y-6">
-        <p className="text-sm text-text-secondary">
-          Toplam <span className="font-bold text-text-primary">{data.toplam || 0}</span> bulgu tespit edildi.
-        </p>
-        
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {data.ciddiyete_gore && Object.entries(data.ciddiyete_gore).map(([severity, count]) => (
-            <div key={severity} className={`p-4 rounded-lg border ${getSeverityColor(severity)}`}>
-              <div className="text-2xl font-bold mb-1">{count}</div>
-              <div className="text-xs uppercase">{getSeverityText(severity)}</div>
-            </div>
-          ))}
-        </div>
-        
-        {data.owasp_kategorileri && Object.keys(data.owasp_kategorileri).length > 0 && (
-          <div className="bg-obsidian-900/50 border border-platinum-500/10 rounded-lg p-5">
-            <h4 className="text-sm font-medium text-text-primary mb-3">OWASP Kategorileri</h4>
-            <div className="space-y-2">
-              {Object.entries(data.owasp_kategorileri).map(([kategori, sayi]) => (
-                <div key={kategori} className="flex items-center justify-between text-sm">
-                  <span className="text-text-secondary">{kategori}</span>
-                  <span className="px-2 py-1 bg-platinum-500/10 text-platinum-400 rounded text-xs font-medium">
-                    {sayi}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // 5. DETAYLI BULGULAR
+  // 3. DETAYLI BULGULAR (Risk Matrix ve Bulgular Özeti kaldırıldı)
   const renderDetayliBulgular = () => {
     const findings = report.structured_data?.detailed_findings || [];
     const cveReferences = report.structured_data?.cve_references || [];
@@ -468,8 +398,6 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
     switch (currentSection) {
       case 'yonetici-ozeti': return renderYoneticiOzeti();
       case 'metodoloji': return renderMetodoloji();
-      case 'risk-matrisi': return renderRiskMatrisi();
-      case 'bulgular-ozet': return renderBulgularOzet();
       case 'detayli-bulgular': return renderDetayliBulgular();
       case 'oneriler': return renderOneriler();
       default: return <div className="text-center py-12 text-text-secondary">Yükleniyor...</div>;

@@ -588,23 +588,12 @@ CVE Query:"""
     def _extract_security_findings(self, scan_results: Dict[str, Any]) -> str:
         """
         Scan sonuçlarından SPESİFİK GÜVENLİK BULGULARINI çıkar - CVE query için.
-        Endpoint, form, admin panel gibi spesifik bulgulara odaklanır.
+        Tool bulgularına dayalı spesifik query oluşturur.
         """
         security_findings = []
+        target = scan_results.get("target", "target")
         
-        # 1. ÖNCE: Vulnerabilities listesini kontrol et
-        if "vulnerabilities" in scan_results:
-            vulns = scan_results["vulnerabilities"]
-            if isinstance(vulns, list):
-                for vuln in vulns[:5]:
-                    if isinstance(vuln, dict):
-                        vuln_type = vuln.get("type", "")
-                        severity = vuln.get("severity", "")
-                        desc = vuln.get("description", "")
-                        if vuln_type:
-                            security_findings.append(f"🚨 {vuln_type} ({severity}): {desc[:80]}")
-        
-        # 2. Tool sonuçlarında SPESİFİK bulguları ara
+        # 1. Tool sonuçlarında SPESİFİK bulguları ara
         for tool_name, tool_result in scan_results.items():
             if not isinstance(tool_result, dict):
                 continue
@@ -616,39 +605,35 @@ CVE Query:"""
                 parameters = tool_result.get("parameters", [])
                 
                 if forms:
-                    security_findings.append(f"📝 Login Forms: {len(forms)} adet tespit edildi")
+                    security_findings.append(f"{target} web application login forms vulnerability")
                 if endpoints:
                     login_endpoints = [ep for ep in endpoints if any(word in ep.lower() for word in ['login', 'auth', 'signin'])]
                     if login_endpoints:
-                        security_findings.append(f"🔐 Login Endpoints: {', '.join(login_endpoints[:3])}")
+                        security_findings.append(f"{target} authentication endpoint security vulnerability")
                 if parameters:
                     sensitive_params = [p for p in parameters if any(word in p.lower() for word in ['user', 'pass', 'id', 'token', 'key'])]
                     if sensitive_params:
-                        security_findings.append(f"🔑 Sensitive Parameters: {', '.join(sensitive_params[:3])}")
+                        security_findings.append(f"{target} parameter injection vulnerability")
             
             # b) Admin panel discovery
             elif "exposed_panels" in tool_name.lower() or "infra" in tool_name.lower():
                 panels = tool_result.get("discovered_panels", [])
                 if panels:
-                    panel_types = []
-                    for panel in panels[:3]:
-                        if "admin" in panel.lower():
-                            panel_types.append("Admin Panel")
-                        elif "phpmyadmin" in panel.lower():
-                            panel_types.append("phpMyAdmin")
+                    for panel in panels[:2]:
+                        if "phpmyadmin" in panel.lower():
+                            security_findings.append(f"{target} phpMyAdmin exposed panel vulnerability")
                         elif "cpanel" in panel.lower():
-                            panel_types.append("cPanel")
+                            security_findings.append(f"{target} cPanel exposed management interface")
                         elif "jenkins" in panel.lower():
-                            panel_types.append("Jenkins")
-                        else:
-                            panel_types.append("Management Interface")
-                    security_findings.append(f"🏗️ Exposed Panels: {', '.join(panel_types)}")
+                            security_findings.append(f"{target} Jenkins CI/CD exposed vulnerability")
+                        elif "admin" in panel.lower():
+                            security_findings.append(f"{target} admin panel exposed authentication bypass")
             
             # c) API endpoint discovery
             elif "api" in tool_name.lower():
                 api_endpoints = tool_result.get("api_endpoints", [])
                 if api_endpoints:
-                    security_findings.append(f"🔌 API Endpoints: {len(api_endpoints)} adet tespit edildi")
+                    security_findings.append(f"{target} API endpoint security vulnerability")
             
             # d) Directory bruteforce - Sensitive directories
             elif "directory" in tool_name.lower():
@@ -658,53 +643,62 @@ CVE Query:"""
                     if any(word in dir_path.lower() for word in ['admin', 'backup', 'config', 'logs', 'test', 'dev']):
                         sensitive_dirs.append(dir_path)
                 if sensitive_dirs:
-                    security_findings.append(f"📁 Sensitive Directories: {', '.join(sensitive_dirs[:3])}")
+                    security_findings.append(f"{target} sensitive directory exposure vulnerability")
             
             # e) Missing security headers
             elif "header" in tool_name.lower():
                 missing_headers = tool_result.get("missing_security_headers", [])
                 if missing_headers:
-                    headers_str = ", ".join(missing_headers[:3])
-                    security_findings.append(f"⚠️ Missing Headers: {headers_str}")
+                    if "X-Frame-Options" in missing_headers:
+                        security_findings.append(f"{target} clickjacking vulnerability missing X-Frame-Options")
+                    if "X-XSS-Protection" in missing_headers:
+                        security_findings.append(f"{target} XSS protection vulnerability")
+                    if "Content-Security-Policy" in missing_headers:
+                        security_findings.append(f"{target} CSP injection vulnerability")
             
-            # f) Vulnerable components/dependencies
-            elif "dependency" in tool_name.lower() or "component" in tool_name.lower():
-                vulnerable_deps = tool_result.get("vulnerable_dependencies", [])
-                if vulnerable_deps:
-                    security_findings.append(f"📦 Vulnerable Dependencies: {len(vulnerable_deps)} adet")
-            
-            # g) Technology detection - Versiyon bilgisi varsa CVE için önemli
+            # f) Technology detection - Versiyon bilgisi varsa CVE için önemli
             elif "tech" in tool_name.lower():
                 technologies = tool_result.get("technologies", []) or tool_result.get("detected_technologies", [])
                 if technologies and isinstance(technologies, list):
-                    tech_vulns = []
-                    for tech in technologies[:3]:
+                    for tech in technologies[:2]:
                         if isinstance(tech, dict):
                             tech_name = tech.get("name", "") or tech.get("technology", "")
                             version = tech.get("version", "")
                             if tech_name and version and version != "N/A":
-                                tech_vulns.append(f"{tech_name} {version}")
-                    if tech_vulns:
-                        security_findings.append(f"💻 Technologies: {', '.join(tech_vulns)}")
+                                security_findings.append(f"{target} {tech_name} {version} vulnerability")
+            
+            # g) Vulnerability scanners
+            elif any(vuln_tool in tool_name.lower() for vuln_tool in ["verify_xss", "verify_sqli", "verify_lfi"]):
+                vulnerabilities = tool_result.get("vulnerabilities", [])
+                if vulnerabilities:
+                    for vuln in vulnerabilities[:2]:
+                        vuln_type = vuln.get("type", "").lower()
+                        if "xss" in vuln_type:
+                            security_findings.append(f"{target} cross-site scripting XSS vulnerability")
+                        elif "sql" in vuln_type:
+                            security_findings.append(f"{target} SQL injection vulnerability")
+                        elif "lfi" in vuln_type:
+                            security_findings.append(f"{target} local file inclusion vulnerability")
         
-        # 3. Context'ten spesifik bulguları çıkar
+        # 2. Context'ten spesifik bulguları çıkar
         context = scan_results.get("context_summary", {})
         if isinstance(context, dict):
             # Forms bulundu mu?
             forms = context.get("forms", [])
             if forms:
-                security_findings.append(f"📝 Context Forms: {len(forms)} adet")
+                security_findings.append(f"{target} web application form vulnerability")
             
             # Parameters bulundu mu?
             parameters = context.get("parameters", [])
             if parameters:
-                security_findings.append(f"🔑 Context Parameters: {', '.join(parameters[:3])}")
+                security_findings.append(f"{target} parameter manipulation vulnerability")
         
-        # Sonuç
+        # Sonuç - spesifik vulnerability queries
         if security_findings:
-            return "\n".join(security_findings)
+            # En spesifik 3 bulguyu al ve birleştir
+            return " ".join(security_findings[:3])
         else:
-            return "No security findings detected"
+            return f"{target} web application security vulnerability"
     
     def _summarize_scan_results(self, scan_results: Dict[str, Any]) -> str:
         """Scan sonuçlarını LLM için özet haline getirir - GERÇEK SCAN FORMATI."""
