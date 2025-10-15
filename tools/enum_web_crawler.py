@@ -348,7 +348,7 @@ class EnumWebCrawlerTool(MCPTool):
         
         return recommendations
 
-    async def run_tool(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def run_tool(self, params: Dict[str, Any]) -> Dict[str, Any]:
         start_url = params.get("url")
         if not start_url: 
             return self._create_final_output(
@@ -369,12 +369,8 @@ class EnumWebCrawlerTool(MCPTool):
         self._add_reasoning(context.ai_reasoning_log, "initialization", f"Hedef {context.target_domain} için tarama başlatılıyor (Motor: Selenium).")
         
         try:
-            # Selenium'un bloklayıcı doğası nedeniyle, onu asyncio'nun event loop'unda
-            # bir thread executor içinde çalıştırıyoruz. Bu, en iyi ve en güvenli yöntemdir.
-            loop = asyncio.get_running_loop()
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                # _crawl_sync fonksiyonunu ayrı bir thread'de çalıştır ve sonucunu bekle.
-                context = await loop.run_in_executor(pool, self._crawl_sync, context)
+            # Selenium'u direkt senkron olarak çalıştır
+            context = self._crawl_sync(context)
             return self._build_final_json(context)
         except Exception as e:
             logger.error(f"Execute metodunda kritik hata: {repr(e)}", exc_info=True)
