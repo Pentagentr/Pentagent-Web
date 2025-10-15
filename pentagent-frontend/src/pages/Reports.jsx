@@ -46,16 +46,20 @@ const Reports = () => {
   };
 
   const handleGenerateNewReport = async () => {
+    console.log('🚀 RAPOR OLUŞTURMA BAŞLADI'); // DEBUG
     setGenerating(true);
     setError(null);
 
     try {
       const pendingReportStr = localStorage.getItem('pendingReport');
+      console.log('📦 localStorage pendingReport:', pendingReportStr); // DEBUG
+      
       if (!pendingReportStr) {
         throw new Error('Rapor verileri bulunamadı');
       }
 
       const pendingReport = JSON.parse(pendingReportStr);
+      console.log('📄 Parsed pendingReport:', pendingReport); // DEBUG
 
       // Backend'e rapor oluşturma isteği
       const response = await fetch(`${pentagentAPI.baseURL}/api/generate-report`, {
@@ -68,12 +72,18 @@ const Reports = () => {
         }),
       });
 
+      console.log('📡 Backend response status:', response.status); // DEBUG
+
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('❌ Backend error:', errorData); // DEBUG
         throw new Error(errorData.detail || 'Rapor oluşturulamadı');
       }
 
       const reportData = await response.json();
+      console.log('✅ Backend reportData:', reportData); // DEBUG
+      console.log('📊 structured_data:', reportData.structured_data); // DEBUG
+      console.log('🛡️ vulnerabilities:', reportData.vulnerabilities); // DEBUG
 
       // Firestore'a kaydet
       const savedReport = await reportService.saveReport(currentUser.uid, {
@@ -87,6 +97,8 @@ const Reports = () => {
         download_url: reportData.download_url,
         createdAt: reportData.createdAt
       });
+
+      console.log('💾 Firestore savedReport:', savedReport); // DEBUG
 
       // localStorage'ı temizle
       localStorage.removeItem('pendingReport');

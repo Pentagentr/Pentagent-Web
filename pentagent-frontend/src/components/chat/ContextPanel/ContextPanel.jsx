@@ -76,6 +76,10 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
     
     try {
       const data = await pentagentAPI.analyzeScanResults(scanResults, 5);
+      console.log('🔍 RAG API Response:', data); // DEBUG
+      console.log('📝 LLM Query:', data.llm_query); // DEBUG
+      console.log('📊 Scan Summary:', data.scan_summary); // DEBUG
+      
       setCveResults(data.results || []);
       setLlmQuery(data.llm_query || '');
       setScanSummary(data.scan_summary || '');
@@ -103,6 +107,10 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
 
   // Rapor oluşturma handler
   const handleGenerateReport = async () => {
+    console.log('📄 RAPOR OLUŞTURULUYOR'); // DEBUG
+    console.log('📊 scanResults:', scanResults); // DEBUG
+    console.log('🛡️ cveResults:', cveResults); // DEBUG
+    
     if (!scanResults || !cveResults || cveResults.length === 0) {
       alert('Rapor oluşturmak için önce tarama yapın ve CVE sonuçlarını bekleyin.');
       return;
@@ -122,6 +130,8 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
         target: scanResults.target || 'Unknown Target',
         generatedAt: new Date().toISOString()
       };
+      
+      console.log('💾 reportData:', reportData); // DEBUG
       
       localStorage.setItem('pendingReport', JSON.stringify(reportData));
       
