@@ -514,27 +514,31 @@ class RAGService:
     
     def _generate_optimized_query_with_llm(self, scan_results: Dict[str, Any]) -> str:
         """
-        LLM ile optimize RAG query oluştur.
+        LLM ile optimize RAG query oluştur - SADECE GÜVENLİK BULGULARI.
         Scan sonuçlarını analiz edip en iyi CVE arama sorgusunu üretir.
         """
         try:
             # Unified LLM (Groq default)
             model = UnifiedLLM()
             
-            # Scan sonuçlarını özetle
-            summary = self._summarize_scan_results(scan_results)
+            # Scan sonuçlarını özetle - GÜVENLİK BULGULARINA ODAKLANARAK
+            summary = self._extract_security_findings(scan_results)
             
-            # LLM'ye prompt gönder - BULGULARA YÖNELİK
-            prompt = f"""Penetration test BULGULARINA göre CVE database query oluştur.
+            if not summary or summary == "No security findings detected":
+                logger.warning("⚠️ Hiç güvenlik bulgusu yok, generic query kullanılıyor")
+                return "web application security vulnerability exploitation"
+            
+            # LLM'ye prompt gönder - KRİTİK: SADECE GÜVENLİK BULGULARI
+            prompt = f"""Sen bir pentest uzmanısın. Tespit edilen GÜVENLİK BULGULARINI analiz et ve CVE database query oluştur.
 
-Tarama Bulguları:
-{summary[:800]}
+🚨 TESPİT EDİLEN GÜVENLİK BULGULARI:
+{summary[:600]}
 
 Query kuralları:
-- Tespit edilen ZAFİYETLERE odaklan (SQL injection, XSS, vb)
-- Teknoloji/versiyon varsa ekle
-- Max 120 karakter
-- SADECE query döndür, açıklama yok
+- SADECE güvenlik zafiyetlerine odaklan (XSS, SQLi, CSRF, missing headers, vulnerable components)
+- Teknoloji versiyonu varsa ekle
+- Max 100 karakter, ÖZLÜ ve KRİTİK
+- SADECE query string döndür, açıklama YAPMA
 
 CVE Query:"""
             
@@ -580,6 +584,73 @@ CVE Query:"""
         except Exception as e:
             logger.error(f"LLM query oluşturma hatası: {e}")
             return ""
+    
+    def _extract_security_findings(self, scan_results: Dict[str, Any]) -> str:
+        """
+        Scan sonuçlarından SADECE GÜVENLİK BULGULARINI çıkar - CVE query için.
+        Generic data (ports, technologies) ATLANIR.
+        """
+        security_findings = []
+        
+        # 1. ÖNCE: Vulnerabilities listesini kontrol et
+        if "vulnerabilities" in scan_results:
+            vulns = scan_results["vulnerabilities"]
+            if isinstance(vulns, list):
+                for vuln in vulns[:5]:  # İlk 5 zafiyet
+                    if isinstance(vuln, dict):
+                        vuln_type = vuln.get("type", "")
+                        severity = vuln.get("severity", "")
+                        desc = vuln.get("description", "")
+                        if vuln_type:
+                            security_findings.append(f"🚨 {vuln_type} ({severity}): {desc[:80]}")
+        
+        # 2. Tool sonuçlarında zafiyet ara
+        vuln_keywords = ["xss", "sqli", "sql_injection", "lfi", "rfi", "csrf", "ssrf", 
+                        "xxe", "idor", "broken_auth", "sensitive_data", "xml"]
+        
+        for tool_name, tool_result in scan_results.items():
+            if not isinstance(tool_result, dict):
+                continue
+            
+            # a) Tool adında zafiyet keyword'ü var mı?
+            if any(kw in tool_name.lower() for kw in vuln_keywords):
+                tool_findings = tool_result.get("vulnerabilities") or tool_result.get("findings", [])
+                if tool_findings:
+                    security_findings.append(f"🔴 {tool_name}: {len(tool_findings)} zafiyet tespit edildi")
+            
+            # b) Missing security headers
+            if "header" in tool_name.lower():
+                missing_headers = tool_result.get("missing_security_headers", [])
+                if missing_headers:
+                    headers_str = ", ".join(missing_headers[:3])
+                    security_findings.append(f"⚠️ Missing Headers: {headers_str}")
+            
+            # c) Vulnerable components/dependencies
+            if "dependency" in tool_name.lower() or "component" in tool_name.lower():
+                vulnerable_deps = tool_result.get("vulnerable_dependencies", [])
+                if vulnerable_deps:
+                    security_findings.append(f"📦 Vulnerable Dependencies: {len(vulnerable_deps)} adet")
+        
+        # 3. Tespit edilen teknolojiler (versiyon bilgisi varsa CVE için önemli)
+        tech_vulns = []
+        if "technologies" in scan_results:
+            technologies = scan_results["technologies"]
+            if isinstance(technologies, list):
+                for tech in technologies[:3]:
+                    if isinstance(tech, dict):
+                        tech_name = tech.get("name", "")
+                        version = tech.get("version", "")
+                        if version and version != "N/A":
+                            tech_vulns.append(f"{tech_name} {version}")
+        
+        if tech_vulns:
+            security_findings.append(f"💻 Teknolojiler: {', '.join(tech_vulns)}")
+        
+        # Sonuç
+        if security_findings:
+            return "\n".join(security_findings)
+        else:
+            return "No security findings detected"
     
     def _summarize_scan_results(self, scan_results: Dict[str, Any]) -> str:
         """Scan sonuçlarını LLM için özet haline getirir - GERÇEK SCAN FORMATI."""

@@ -1123,18 +1123,31 @@ JSON (TÜRKÇE):
             return fallback
 
     async def _analyze_final_results(self) -> Dict[str, Any]:
-        """Final sonuçları analiz et"""
+        """Final sonuçları analiz et - SADECE gerçek tool çıktıları"""
+        # METADATA'YI FİLTRELE: sadece tool data'sını al
+        clean_results = []
+        for step in self.execution_history:
+            tool_data = {
+                "tool": step.get("tool"),
+                "success": step.get("success", False),
+                "data": step.get("result", {}).get("data", {}),  # SADECE data
+                "ai_summary": step.get("result", {}).get("ai_summary", "")
+            }
+            # Boş sonuçları atla
+            if tool_data["data"] or tool_data["ai_summary"]:
+                clean_results.append(tool_data)
+        
         prompt = f"""
 Sen dünya çapında tanınan bir siber güvenlik uzmanısın ve penetrasyon testi konusunda 15+ yıl deneyime sahipsin.
 Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu hazırlaman gerekiyor.
 
 📊 TEST SONUÇLARI VE DETAYLI ANALİZ:
 
-🔧 ÇALIŞTIRILAN TOOL'LAR VE SONUÇLARI:
-{json.dumps(self.execution_history, indent=2, default=str)}
+🔧 ÇALIŞTIRILAN TOOL'LAR VE SONUÇLARI (SADECE TOOL ÇIKTILARI):
+{json.dumps(clean_results, indent=2, default=str, ensure_ascii=False)[:3000]}
 
 🎯 KEŞFEDİLEN BİLGİLER VE CONTEXT:
-{json.dumps(self.discovered_information, indent=2, default=str)}
+{json.dumps(self.discovered_information, indent=2, default=str, ensure_ascii=False)[:2000]}
 
 📈 TEST METRİKLERİ:
 - Hedef: {self.current_target}
