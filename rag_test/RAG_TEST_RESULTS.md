@@ -1,20 +1,15 @@
-# RAG Test Results (2025-10-13 02:03:21)
+# RAG Test Results (2025-10-15 20:47:36)
 
 ## Overall Results
 
 - **Total Tests:** 100
-- **Passed:** 82 (82.0%) -> Beklenen keyword'ler CVE açıklamalarında mevcut
-- **Failed:** 18 -> Arama beklenen sonuçları bulamadı
+- **Passed:** 55 (55.0%)
+- **Failed:** 45
 
 ## Category Results
 
-- **COMPLEX:** 4/5 (80.0%)
+- **COMPLEX:** 0/5 (0.0%)
 - **CVE_DIRECT:** 15/15 (100.0%)
-- **HYBRID:** 11/15 (73.3%) -> CV + Context
-- **PURE_SEMANTIC:** 33/40 (82.5%)
-- **VERSION_BASED:** 19/25 (76.0%)
-
-
-
-
-
+- **HYBRID:** 9/15 (60.0%)
+- **PURE_SEMANTIC:** 25/40 (62.5%)
+- **VERSION_BASED:** 6/25 (24.0%)

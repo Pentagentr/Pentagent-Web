@@ -524,19 +524,19 @@ class RAGService:
             # Scan sonuçlarını özetle
             summary = self._summarize_scan_results(scan_results)
             
-            # LLM'ye prompt gönder - KISA (token tasarrufu)
-            prompt = f"""Penetration test sonuçları için CVE database query oluştur.
+            # LLM'ye prompt gönder - BULGULARA YÖNELİK
+            prompt = f"""Penetration test BULGULARINA göre CVE database query oluştur.
 
-Scan Sonuçları:
-{summary[:500]}
+Tarama Bulguları:
+{summary[:800]}
 
 Query kuralları:
-- En kritik zafiyet odaklı
-- Teknoloji/versiyon ekle
-- Max 100 karakter
-- SADECE query döndür
+- Tespit edilen ZAFİYETLERE odaklan (SQL injection, XSS, vb)
+- Teknoloji/versiyon varsa ekle
+- Max 120 karakter
+- SADECE query döndür, açıklama yok
 
-Query:"""
+CVE Query:"""
             
             # Yanıt al - Event loop sorunu çözümü
             import asyncio

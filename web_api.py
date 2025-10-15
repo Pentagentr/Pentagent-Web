@@ -679,12 +679,16 @@ async def generate_security_report(request: Dict[str, Any]):
             logger.warning("⚠️ Hiç bulgu bulunamadı, scan_results direkt parse ediliyor")
             logger.info(f"📊 scan_results FULL: {scan_results}")
             
+            # SAÇMALIK FİLTRESİ: user_task, start_time, target gibi meta alanları atla
+            SKIP_KEYS = {'target', 'user_task', 'start_time', 'end_time', 'execution_time', 'status', 'conversation_id'}
+            
             # Basit format: {"tool_name": "result_string"} veya nested
             for key, value in scan_results.items():
-                if key == "target":
+                # Meta alanları atla
+                if key in SKIP_KEYS:
                     continue
                     
-                # String sonuç mu?
+                # String sonuç mu ve anlamlı mı?
                 if isinstance(value, str) and len(value) > 10:
                     finding = {
                         'title': f"{key} Sonucu",
