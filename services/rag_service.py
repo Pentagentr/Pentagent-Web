@@ -187,10 +187,11 @@ class RAGService:
     async def _rerank_results(self, query: str, results: List[CVEResult]) -> List[CVEResult]:
         """
         HuggingFace BAAI/bge-reranker-base ile sonuçları yeniden sırala.
+        403 hatası durumunda FALLBACK: Metin benzerliği ile sıralama
         
         Args:
             query: Orijinal arama sorgusu
-            results: Qdrant'tan gelen ilk sonuçlar
+            results: Qdrant'tan gelen ilk sonuçlar (sparse+dense birleşik)
             
         Returns:
             Rerank edilmiş CVE sonuçları
@@ -199,17 +200,18 @@ class RAGService:
             logger.info("Reranker devre dışı, orijinal sıralama kullanılıyor")
             return results
         
-        if not config.HUGGINGFACE_TOKEN:
-            logger.warning("HuggingFace token yok, reranker atlanıyor")
-            return results
-        
         if not results or len(results) == 0:
             return results
+        
+        # HuggingFace token kontrolü - yoksa fallback
+        if not config.HUGGINGFACE_TOKEN:
+            logger.warning("HuggingFace token yok, fallback reranking kullanılıyor")
+            return self._fallback_rerank(query, results)
         
         try:
             logger.info(f"🔄 Reranker başlatılıyor: {len(results)} sonuç sıralanacak")
             
-            # HuggingFace Reranker API'ye istek hazırla
+            # HuggingFace Inference API (Serverless) kullan - Inference Providers yerine
             headers = {
                 "Authorization": f"Bearer {config.HUGGINGFACE_TOKEN}",
                 "Content-Type": "application/json"
@@ -218,6 +220,9 @@ class RAGService:
             # Query ve documents hazırla
             # BAAI/bge-reranker formatı: source_sentence + sentences listesi
             documents = [f"{r.cve_id}: {r.description[:500]}" for r in results]
+            
+            # INFERENCE API (Serverless Endpoint)
+            inference_url = "https://api-inference.huggingface.co/models/BAAI/bge-reranker-base"
             
             payload = {
                 "inputs": {
@@ -229,16 +234,22 @@ class RAGService:
             # HuggingFace API'ye istek gönder
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    config.RERANKER_API_URL,
+                    inference_url,
                     headers=headers,
                     json=payload,
                     timeout=aiohttp.ClientTimeout(total=30)
                 ) as response:
+                    if response.status == 403:
+                        error_text = await response.text()
+                        logger.warning(f"⚠️ Reranker API 403 (Yetki hatası): {error_text[:200]}")
+                        logger.info("🔄 Fallback reranking kullanılıyor...")
+                        return self._fallback_rerank(query, results)
+                    
                     if response.status != 200:
                         error_text = await response.text()
                         logger.warning(f"Reranker API hatası: {response.status}")
                         logger.warning(f"API yanıtı: {error_text[:200]}")
-                        return results
+                        return self._fallback_rerank(query, results)
                     
                     rerank_scores = await response.json()
                     logger.info(f"Reranker yanıtı alındı: {type(rerank_scores)}")
@@ -287,7 +298,48 @@ class RAGService:
             return results
         except Exception as e:
             logger.error(f"Reranker hatası: {e}")
-            logger.info("Reranker başarısız, orijinal sıralama kullanılıyor")
+            logger.info("Reranker başarısız, fallback reranking kullanılıyor")
+            return self._fallback_rerank(query, results)
+    
+    def _fallback_rerank(self, query: str, results: List[CVEResult]) -> List[CVEResult]:
+        """
+        Fallback reranking: Basit metin benzerliği ile sıralama.
+        HuggingFace API çalışmazsa bu kullanılır.
+        """
+        try:
+            logger.info(f"📊 Fallback reranking başlatılıyor ({len(results)} sonuç)")
+            
+            # Basit token overlap skoru hesapla
+            query_tokens = set(query.lower().split())
+            
+            scored_results = []
+            for cve in results:
+                # CVE açıklamasındaki token'ları al
+                desc_tokens = set(cve.description.lower().split())
+                
+                # Token overlap skoru
+                overlap = len(query_tokens.intersection(desc_tokens))
+                total = len(query_tokens.union(desc_tokens))
+                overlap_score = overlap / total if total > 0 else 0
+                
+                # Orijinal skor ile birleştir (ağırlıklı ortalama)
+                combined_score = (cve.score * 0.5) + (overlap_score * 0.5)
+                
+                scored_results.append({
+                    "cve": cve,
+                    "combined_score": combined_score
+                })
+            
+            # Combined score'a göre sırala
+            scored_results.sort(key=lambda x: x['combined_score'], reverse=True)
+            
+            reranked = [item['cve'] for item in scored_results]
+            logger.info(f"✅ Fallback reranking tamamlandı")
+            
+            return reranked
+            
+        except Exception as e:
+            logger.error(f"Fallback reranking hatası: {e}")
             return results
     
     def search_cve(
