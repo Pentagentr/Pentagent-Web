@@ -1228,9 +1228,13 @@ Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu haz�
         """Profesyonel penetrasyon test raporu oluştur"""
         try:
             from agent_core.report_generator import ReportGenerator
+            from services.rag_service import RAGService
             
-            # Report generator'ı başlat
-            report_gen = ReportGenerator()
+            # RAG servisini başlat
+            rag_service = RAGService()
+            
+            # Report generator'ı RAG ile başlat
+            report_gen = ReportGenerator(rag_client=rag_service)
             
             # Execution history'yi AgentState formatına çevir
             state = self._create_final_state(self.current_target, self.user_task, success=True)
@@ -1242,6 +1246,11 @@ Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu haz�
             if findings:
                 logger.info(f"📊 {len(findings)} bulgu state'e ekleniyor")
                 state.findings = findings
+            
+            # Tool bulgularını RAG'a gönder ve spesifik query oluştur
+            if findings and rag_service:
+                logger.info("🔍 Tool bulguları RAG'a gönderiliyor...")
+                await self._send_findings_to_rag_for_query(rag_service, findings)
             
             # Profesyonel rapor oluştur
             report_data = await report_gen.generate_comprehensive_report(
@@ -1835,3 +1844,40 @@ Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu haz�
         if hasattr(self, 'current_session_id'):
             print(f"   🆔 Session ID: {self.current_session_id}")
         print("=" * 80)
+
+    async def _send_findings_to_rag_for_query(self, rag_service, findings: List[Dict[str, Any]]):
+        """Tool bulgularını RAG'a gönder ve spesifik CVE query oluştur"""
+        try:
+            if not findings:
+                logger.warning("⚠️ Hiç bulgu yok, RAG query oluşturulamıyor")
+                return
+            
+            # Bulguları RAG servisine gönder
+            logger.info(f"🔍 {len(findings)} bulgu RAG servisine gönderiliyor...")
+            
+            # Scan results formatında hazırla
+            scan_results = {
+                "target": self.current_target,
+                "findings": findings
+            }
+            
+            # RAG servisinden spesifik query oluştur
+            optimized_query = await rag_service.generate_optimized_query(scan_results)
+            
+            if optimized_query:
+                logger.info(f"✅ RAG query oluşturuldu: {optimized_query}")
+                
+                # RAG'dan CVE'leri ara
+                rag_results = await rag_service.search(optimized_query)
+                
+                if rag_results:
+                    logger.info(f"🎯 {len(rag_results)} CVE bulundu")
+                    # CVE'leri context'e ekle
+                    self.discovered_information["rag_cves"] = rag_results[:5]  # Top 5
+                else:
+                    logger.warning("⚠️ RAG'dan CVE bulunamadı")
+            else:
+                logger.warning("⚠️ RAG query oluşturulamadı")
+                
+        except Exception as e:
+            logger.error(f"RAG query oluşturma hatası: {e}")

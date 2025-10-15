@@ -512,6 +512,10 @@ class RAGService:
             logger.error(f"Scan analizi hatası: {e}")
             return {'results': [], 'query': '', 'summary': ''}
     
+    async def generate_optimized_query(self, scan_results: Dict[str, Any]) -> str:
+        """Public metod - LLM ile optimize RAG query oluştur"""
+        return self._generate_optimized_query_with_llm(scan_results)
+    
     def _generate_optimized_query_with_llm(self, scan_results: Dict[str, Any]) -> str:
         """
         LLM ile optimize RAG query oluştur - SADECE GÜVENLİK BULGULARI.
@@ -591,6 +595,12 @@ CVE Query:"""
         """
         try:
             import json
+            
+            # Eğer scan_results'da zaten findings array'i varsa onu kullan
+            if "findings" in scan_results and scan_results["findings"]:
+                findings = scan_results["findings"]
+                logger.info(f"📊 Mevcut {len(findings)} bulgu kullanılıyor")
+                return json.dumps(findings, indent=2, ensure_ascii=False)
             
             # Tool sonuçlarından bulguları çıkar
             findings = []
