@@ -1469,12 +1469,12 @@ class ReportGenerator:
                                 # Tool'a göre finding oluştur
                                 if "vulnerabilities" in data:
                                     for vuln in data["vulnerabilities"]:
-                                        finding = {
+                finding = {
                                             'title': vuln.get('type', f'{tool_name} vulnerability'),
                                             'severity': vuln.get('severity', 'medium'),
                                             'description': vuln.get('description', 'Vulnerability detected'),
                                             'evidence': vuln.get('evidence', 'Proof of concept available'),
-                                            'target': state.target,
+                    'target': state.target,
                                             'technology': 'Web Application'
                                         }
                                         state.findings.append(finding)
@@ -1575,9 +1575,9 @@ class ReportGenerator:
                 "risk_score": risk_score,
                 "scope": state.target,
                 "duration": "45 minutes",
-                "vulnerabilities_found": len(vulnerabilities),
-                "critical_findings": len([v for v in vulnerabilities if v.get('severity') == 'critical']),
-                "high_findings": len([v for v in vulnerabilities if v.get('severity') == 'high']),
+                "vulnerabilities_found": len(state.findings),
+                "critical_findings": len([v for v in state.findings if v.get('severity') == 'critical']),
+                "high_findings": len([v for v in state.findings if v.get('severity') == 'high']),
                 "test_effectiveness": final_analysis.get("test_effectiveness", "good"),
                 "compliance_gaps": len([k for k, v in final_analysis.get("compliance_status", {}).items() if v != "compliant"])
             }

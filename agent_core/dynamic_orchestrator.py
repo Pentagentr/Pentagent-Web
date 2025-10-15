@@ -1421,6 +1421,15 @@ Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu haz�
         state = AgentState(target, user_task)
         state.success = success
         state.execution_time = (datetime.now() - datetime.now()).total_seconds()  # Placeholder
+        
+        # Bulguları state'e ekle
+        findings = self.get_findings()
+        if findings:
+            state.findings = findings
+            logger.info(f"📊 {len(findings)} bulgu final state'e eklendi")
+        
+        # Context bilgilerini de ekle
+        state.discovered_information = self.discovered_information.copy()
         return state
 
     async def _call_gemini(self, prompt: str, timeout_seconds: int = 60) -> str:
