@@ -987,7 +987,7 @@ class ReportGenerator:
     def get_structured_report_data(self, state: AgentState) -> Dict[str, Any]:
         """
         Frontend için yapılandırılmış rapor verilerini döndürür (JSON format).
-        Tüm 6 bölüm dahil: Executive Summary, Methodology, Risk Matrix, Findings Summary, Detailed Findings, Recommendations
+        Sadece teknik bulgular ve CVE'ler: Executive Summary, Methodology, Detailed Findings, CVE References
         """
         findings_summary = state.get_findings_summary()
         overall_risk = self._calculate_overall_risk_level(findings_summary)
@@ -1032,25 +1032,9 @@ class ReportGenerator:
             "aciklama": "Bu güvenlik değerlendirmesi, OWASP Testing Guide, PTES ve NIST SP 800-115 gibi endüstri standartlarına uygun, otomatize edilmiş bir metodoloji ile gerçekleştirilmiştir."
         }
         
-        # 3. RISK MATRIX
-        risk_matrix = {
-            "aciklama": "Risk seviyeleri CVSS v3.1 ve OWASP Risk Rating Metodolojisi'ne göre belirlenmiştir",
-            "seviyeler": {
-                "KRITIK": {"aralik": "9.0-10.0", "aciklama": "Acil müdahale gerektirir. Sistem tamamen ele geçirilebilir."},
-                "YÜKSEK": {"aralik": "7.0-8.9", "aciklama": "Öncelikli olarak giderilmelidir. Veri kaybı/ifşası riski yüksek."},
-                "ORTA": {"aralik": "4.0-6.9", "aciklama": "Makul sürede giderilmelidir. Sınırlı etki potansiyeli."},
-                "DÜŞÜK": {"aralik": "0.1-3.9", "aciklama": "Planlı olarak giderilmelidir. Minimal etki."}
-            }
-        }
+        # 3. TECHNICAL FINDINGS (Risk Matrix ve Findings Summary kaldırıldı)
         
-        # 4. FINDINGS SUMMARY
-        findings_summary_data = {
-            "toplam": len(state.findings),
-            "ciddiyete_gore": findings_summary.get("by_severity", {}),
-            "owasp_kategorileri": self._categorize_findings_by_owasp(state.findings)
-        }
-        
-        # 5. DETAILED FINDINGS
+        # 3. DETAILED FINDINGS
         detailed_findings = []
         for i, finding in enumerate(sorted_findings, 1):
             detailed_findings.append({
@@ -1068,7 +1052,7 @@ class ReportGenerator:
                 "teknoloji": finding.get("technology", "N/A")
             })
         
-        # 6. RECOMMENDATIONS & CONCLUSION
+        # 4. RECOMMENDATIONS & CONCLUSION
         recommendations = {
             "acil_aksiyonlar": [],
             "kisa_vade_aksiyonlar": [],
@@ -1138,8 +1122,6 @@ class ReportGenerator:
         return {
             "executive_summary": executive_summary,
             "methodology": methodology,
-            "risk_matrix": risk_matrix,
-            "findings_summary": findings_summary_data,
             "detailed_findings": detailed_findings,
             "recommendations": recommendations,
             "appendix": appendix

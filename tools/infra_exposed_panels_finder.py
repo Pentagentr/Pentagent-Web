@@ -218,12 +218,13 @@ class InfraReconScanner(MCPTool):
                 ai_summary="Hedef parametresi eksik.",
                 error="Hedef 'target' parametresi eksik."
             )
-        if not api_keys or (not api_keys.get("shodan") and not api_keys.get("censys_token")):
-            return self._create_final_output(
-                success=False,
-                ai_summary="API anahtarı eksik.",
-                error="Bu araç için 'shodan' veya 'censys_token' API anahtarı gereklidir."
-            )
+        # API anahtarları olmadan da çalışabilir - HTTP-based discovery
+        shodan_api = self._get_shodan_api(api_keys) if api_keys.get("shodan") else None
+        censys_auth = self._get_censys_auth(api_keys) if api_keys.get("censys_token") else None
+        
+        # API anahtarları yoksa HTTP-based discovery yap
+        if not shodan_api and not censys_auth:
+            return await self._run_http_based_discovery(target)
 
         ai_reasoning_log = []
         self._add_reasoning(ai_reasoning_log, "initialization", f"infra_recon_scanner aracı '{target}' hedefi için başlatıldı.")
@@ -500,6 +501,146 @@ class InfraReconScanner(MCPTool):
             })
         
         return recommendations
+    
+    async def _run_http_based_discovery(self, target: str) -> Dict[str, Any]:
+        """
+        API anahtarları olmadan HTTP-based discovery yapar.
+        Yaygın admin panel, management interface'leri tarar.
+        """
+        import aiohttp
+        import asyncio
+        
+        ai_reasoning_log = []
+        self._add_reasoning(ai_reasoning_log, "initialization", f"HTTP-based discovery '{target}' için başlatıldı (API anahtarı yok)")
+        
+        # Yaygın admin panel ve management interface'leri
+        common_panels = [
+            "/admin", "/admin/", "/administrator", "/admin.php", "/admin/login",
+            "/wp-admin", "/phpmyadmin", "/pma", "/phpmyadmin/", "/phpmyadmin/index.php",
+            "/cpanel", "/cpanel/", "/webmail", "/webmail/", "/mail/",
+            "/manager", "/manager/", "/tomcat/manager", "/jenkins", "/jenkins/",
+            "/grafana", "/grafana/", "/kibana", "/kibana/", "/elasticsearch",
+            "/swagger", "/swagger-ui", "/swagger-ui/", "/api/docs", "/docs",
+            "/redmine", "/redmine/", "/jira", "/jira/", "/confluence",
+            "/sonar", "/sonar/", "/nexus", "/nexus/", "/artifactory",
+            "/gitlab", "/gitlab/", "/gitea", "/gitea/", "/bitbucket",
+            "/drupal/admin", "/drupal/admin/", "/joomla/administrator",
+            "/magento/admin", "/prestashop/admin", "/opencart/admin"
+        ]
+        
+        findings = []
+        discovered_panels = []
+        
+        # HTTP ve HTTPS protokollerini dene
+        protocols = ["http", "https"]
+        
+        for protocol in protocols:
+            base_url = f"{protocol}://{target}"
+            
+            # Her panel için kontrol et
+            for panel_path in common_panels:
+                url = base_url + panel_path
+                
+                try:
+                    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
+                        async with session.get(url, allow_redirects=True) as response:
+                            if response.status == 200:
+                                content = await response.text()
+                                
+                                # Panel türünü tespit et
+                                panel_type = self._identify_panel_type(panel_path, content)
+                                
+                                finding = ExposedServiceFinding(
+                                    service_name=panel_type,
+                                    port=None,
+                                    url=url,
+                                    description=f"{panel_type} admin panel discovered",
+                                    severity="medium",
+                                    confidence="high",
+                                    source='http_discovery'
+                                )
+                                findings.append(finding)
+                                discovered_panels.append(url)
+                                
+                                self._add_reasoning(ai_reasoning_log, "panel_discovered", 
+                                                  f"{panel_type} panel bulundu: {url}")
+                
+                except Exception as e:
+                    # Timeout veya bağlantı hatası - sessizce devam et
+                    continue
+        
+        # Sonuçları hazırla
+        if discovered_panels:
+            ai_summary = f"{len(discovered_panels)} admin panel ve management interface keşfedildi (HTTP-based discovery)"
+            
+            recommendations = [
+                {
+                    "tool": "verify_xss",
+                    "reason": f"Keşfedilen panellere XSS testi uygula: {', '.join(discovered_panels[:3])}"
+                },
+                {
+                    "tool": "verify_sqli", 
+                    "reason": f"Admin panellerinde SQL injection testi yap"
+                },
+                {
+                    "tool": "vuln_http_header_analyzer",
+                    "reason": "Güvenlik header'larını kontrol et"
+                }
+            ]
+            
+            return self._create_final_output(
+                success=True,
+                data={
+                    "discovered_panels": discovered_panels,
+                    "panel_count": len(discovered_panels),
+                    "discovery_method": "http_based",
+                    "findings": [f.to_dict() for f in findings]
+                },
+                ai_summary=ai_summary,
+                ai_reasoning=ai_reasoning_log,
+                recommendations=recommendations
+            )
+        else:
+            return self._create_final_output(
+                success=True,
+                data={
+                    "discovered_panels": [],
+                    "panel_count": 0,
+                    "discovery_method": "http_based"
+                },
+                ai_summary="HTTP-based discovery tamamlandı, admin panel bulunamadı",
+                ai_reasoning=ai_reasoning_log,
+                recommendations=[
+                    {
+                        "tool": "enum_directory_bruteforce",
+                        "reason": "Gizli admin panelleri için directory bruteforce yap"
+                    }
+                ]
+            )
+    
+    def _identify_panel_type(self, path: str, content: str) -> str:
+        """Panel türünü path ve content'e göre tespit et"""
+        path_lower = path.lower()
+        content_lower = content.lower()
+        
+        if "wp-admin" in path_lower or "wordpress" in content_lower:
+            return "WordPress Admin"
+        elif "phpmyadmin" in path_lower or "phpmyadmin" in content_lower:
+            return "phpMyAdmin"
+        elif "cpanel" in path_lower or "cpanel" in content_lower:
+            return "cPanel"
+        elif "jenkins" in path_lower or "jenkins" in content_lower:
+            return "Jenkins"
+        elif "grafana" in path_lower or "grafana" in content_lower:
+            return "Grafana"
+        elif "swagger" in path_lower or "swagger" in content_lower:
+            return "Swagger UI"
+        elif "gitlab" in path_lower or "gitlab" in content_lower:
+            return "GitLab"
+        elif "admin" in path_lower:
+            return "Admin Panel"
+        else:
+            return "Management Interface"
 
 # --- Test Amaçlı Çalıştırma Bloğu ---
 if __name__ == "__main__":

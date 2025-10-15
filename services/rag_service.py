@@ -587,8 +587,8 @@ CVE Query:"""
     
     def _extract_security_findings(self, scan_results: Dict[str, Any]) -> str:
         """
-        Scan sonuçlarından SADECE GÜVENLİK BULGULARINI çıkar - CVE query için.
-        Generic data (ports, technologies) ATLANIR.
+        Scan sonuçlarından SPESİFİK GÜVENLİK BULGULARINI çıkar - CVE query için.
+        Endpoint, form, admin panel gibi spesifik bulgulara odaklanır.
         """
         security_findings = []
         
@@ -596,7 +596,7 @@ CVE Query:"""
         if "vulnerabilities" in scan_results:
             vulns = scan_results["vulnerabilities"]
             if isinstance(vulns, list):
-                for vuln in vulns[:5]:  # İlk 5 zafiyet
+                for vuln in vulns[:5]:
                     if isinstance(vuln, dict):
                         vuln_type = vuln.get("type", "")
                         severity = vuln.get("severity", "")
@@ -604,47 +604,101 @@ CVE Query:"""
                         if vuln_type:
                             security_findings.append(f"🚨 {vuln_type} ({severity}): {desc[:80]}")
         
-        # 2. Tool sonuçlarında zafiyet ara
-        vuln_keywords = ["xss", "sqli", "sql_injection", "lfi", "rfi", "csrf", "ssrf", 
-                        "xxe", "idor", "broken_auth", "sensitive_data", "xml"]
-        
+        # 2. Tool sonuçlarında SPESİFİK bulguları ara
         for tool_name, tool_result in scan_results.items():
             if not isinstance(tool_result, dict):
                 continue
             
-            # a) Tool adında zafiyet keyword'ü var mı?
-            if any(kw in tool_name.lower() for kw in vuln_keywords):
-                tool_findings = tool_result.get("vulnerabilities") or tool_result.get("findings", [])
-                if tool_findings:
-                    security_findings.append(f"🔴 {tool_name}: {len(tool_findings)} zafiyet tespit edildi")
+            # a) Web crawler - Form ve endpoint bulguları
+            if "web_crawler" in tool_name.lower():
+                forms = tool_result.get("forms", [])
+                endpoints = tool_result.get("endpoints", [])
+                parameters = tool_result.get("parameters", [])
+                
+                if forms:
+                    security_findings.append(f"📝 Login Forms: {len(forms)} adet tespit edildi")
+                if endpoints:
+                    login_endpoints = [ep for ep in endpoints if any(word in ep.lower() for word in ['login', 'auth', 'signin'])]
+                    if login_endpoints:
+                        security_findings.append(f"🔐 Login Endpoints: {', '.join(login_endpoints[:3])}")
+                if parameters:
+                    sensitive_params = [p for p in parameters if any(word in p.lower() for word in ['user', 'pass', 'id', 'token', 'key'])]
+                    if sensitive_params:
+                        security_findings.append(f"🔑 Sensitive Parameters: {', '.join(sensitive_params[:3])}")
             
-            # b) Missing security headers
-            if "header" in tool_name.lower():
+            # b) Admin panel discovery
+            elif "exposed_panels" in tool_name.lower() or "infra" in tool_name.lower():
+                panels = tool_result.get("discovered_panels", [])
+                if panels:
+                    panel_types = []
+                    for panel in panels[:3]:
+                        if "admin" in panel.lower():
+                            panel_types.append("Admin Panel")
+                        elif "phpmyadmin" in panel.lower():
+                            panel_types.append("phpMyAdmin")
+                        elif "cpanel" in panel.lower():
+                            panel_types.append("cPanel")
+                        elif "jenkins" in panel.lower():
+                            panel_types.append("Jenkins")
+                        else:
+                            panel_types.append("Management Interface")
+                    security_findings.append(f"🏗️ Exposed Panels: {', '.join(panel_types)}")
+            
+            # c) API endpoint discovery
+            elif "api" in tool_name.lower():
+                api_endpoints = tool_result.get("api_endpoints", [])
+                if api_endpoints:
+                    security_findings.append(f"🔌 API Endpoints: {len(api_endpoints)} adet tespit edildi")
+            
+            # d) Directory bruteforce - Sensitive directories
+            elif "directory" in tool_name.lower():
+                directories = tool_result.get("directories", [])
+                sensitive_dirs = []
+                for dir_path in directories:
+                    if any(word in dir_path.lower() for word in ['admin', 'backup', 'config', 'logs', 'test', 'dev']):
+                        sensitive_dirs.append(dir_path)
+                if sensitive_dirs:
+                    security_findings.append(f"📁 Sensitive Directories: {', '.join(sensitive_dirs[:3])}")
+            
+            # e) Missing security headers
+            elif "header" in tool_name.lower():
                 missing_headers = tool_result.get("missing_security_headers", [])
                 if missing_headers:
                     headers_str = ", ".join(missing_headers[:3])
                     security_findings.append(f"⚠️ Missing Headers: {headers_str}")
             
-            # c) Vulnerable components/dependencies
-            if "dependency" in tool_name.lower() or "component" in tool_name.lower():
+            # f) Vulnerable components/dependencies
+            elif "dependency" in tool_name.lower() or "component" in tool_name.lower():
                 vulnerable_deps = tool_result.get("vulnerable_dependencies", [])
                 if vulnerable_deps:
                     security_findings.append(f"📦 Vulnerable Dependencies: {len(vulnerable_deps)} adet")
+            
+            # g) Technology detection - Versiyon bilgisi varsa CVE için önemli
+            elif "tech" in tool_name.lower():
+                technologies = tool_result.get("technologies", []) or tool_result.get("detected_technologies", [])
+                if technologies and isinstance(technologies, list):
+                    tech_vulns = []
+                    for tech in technologies[:3]:
+                        if isinstance(tech, dict):
+                            tech_name = tech.get("name", "") or tech.get("technology", "")
+                            version = tech.get("version", "")
+                            if tech_name and version and version != "N/A":
+                                tech_vulns.append(f"{tech_name} {version}")
+                    if tech_vulns:
+                        security_findings.append(f"💻 Technologies: {', '.join(tech_vulns)}")
         
-        # 3. Tespit edilen teknolojiler (versiyon bilgisi varsa CVE için önemli)
-        tech_vulns = []
-        if "technologies" in scan_results:
-            technologies = scan_results["technologies"]
-            if isinstance(technologies, list):
-                for tech in technologies[:3]:
-                    if isinstance(tech, dict):
-                        tech_name = tech.get("name", "")
-                        version = tech.get("version", "")
-                        if version and version != "N/A":
-                            tech_vulns.append(f"{tech_name} {version}")
-        
-        if tech_vulns:
-            security_findings.append(f"💻 Teknolojiler: {', '.join(tech_vulns)}")
+        # 3. Context'ten spesifik bulguları çıkar
+        context = scan_results.get("context_summary", {})
+        if isinstance(context, dict):
+            # Forms bulundu mu?
+            forms = context.get("forms", [])
+            if forms:
+                security_findings.append(f"📝 Context Forms: {len(forms)} adet")
+            
+            # Parameters bulundu mu?
+            parameters = context.get("parameters", [])
+            if parameters:
+                security_findings.append(f"🔑 Context Parameters: {', '.join(parameters[:3])}")
         
         # Sonuç
         if security_findings:

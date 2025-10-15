@@ -1237,6 +1237,12 @@ Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu haz�
             state.execution_history = self.execution_history
             state.discovered_information = self.discovered_information
             
+            # Bulguları state'e ekle
+            findings = self.get_findings()
+            if findings:
+                logger.info(f"📊 {len(findings)} bulgu state'e ekleniyor")
+                state.findings = findings
+            
             # Profesyonel rapor oluştur
             report_data = await report_gen.generate_comprehensive_report(
                 state=state,
@@ -1265,7 +1271,7 @@ Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu haz�
             }
 
     def _update_context_with_results(self, tool_name: str, result: Dict[str, Any]):
-        """Tool sonuçlarını context'e ekle - JSON serializable hale getir"""
+        """Tool sonuçlarını context'e ekle ve GERÇEK BULGULAR oluştur"""
         if result.get("success", False):
             data = result.get("data", {})
             
@@ -1306,21 +1312,90 @@ Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu haz�
                 # Form'ları da kaydet
                 if "forms" in data:
                     self.discovered_information["forms"] = data["forms"]
-        
-            elif tool_name in ["vuln_xss_scanner", "vuln_sql_injection_scanner"]:
-                if "vulnerabilities" not in self.discovered_information:
-                    self.discovered_information["vulnerabilities"] = []
                 
-                # Data'yı JSON serializable hale getir
-                findings = self._make_json_serializable(data)
-                self.discovered_information["vulnerabilities"].append({
-                    "tool": tool_name,
-                    "findings": findings
-                })
+                # Web crawler bulgularını GERÇEK BULGU olarak ekle
+                if "parameters" in data or "forms" in data:
+                    finding = {
+                        "title": "Web Application Discovery",
+                        "severity": "medium",
+                        "description": f"Web uygulamasında {len(data.get('parameters', []))} parametre ve {len(data.get('forms', []))} form tespit edildi",
+                        "evidence": f"Parametreler: {data.get('parameters', [])[:5]}, Formlar: {data.get('forms', [])[:3]}",
+                        "target": self.current_target,
+                        "technology": "Web Application"
+                    }
+                    self._add_finding(finding)
+            
+            elif tool_name in ["verify_xss", "verify_sqli", "verify_lfi"]:
+                vulnerabilities = data.get("vulnerabilities", [])
+                if vulnerabilities:
+                    for vuln in vulnerabilities:
+                        finding = {
+                            "title": vuln.get("type", f"{tool_name} vulnerability"),
+                            "severity": vuln.get("severity", "medium"),
+                            "description": vuln.get("description", "Vulnerability detected"),
+                            "evidence": vuln.get("evidence", "Proof of concept available"),
+                            "target": self.current_target,
+                            "technology": "Web Application"
+                        }
+                        self._add_finding(finding)
+            
+            elif tool_name == "vuln_http_header_analyzer":
+                missing_headers = data.get("missing_security_headers", [])
+                if missing_headers:
+                    finding = {
+                        "title": "Missing Security Headers",
+                        "severity": "medium",
+                        "description": f"Eksik güvenlik header'ları: {', '.join(missing_headers)}",
+                        "evidence": f"Missing headers: {missing_headers}",
+                        "target": self.current_target,
+                        "technology": "HTTP"
+                    }
+                    self._add_finding(finding)
+            
+            elif tool_name == "infra_exposed_panels_finder":
+                panels = data.get("discovered_panels", [])
+                if panels:
+                    finding = {
+                        "title": "Exposed Admin Panels",
+                        "severity": "high",
+                        "description": f"{len(panels)} admin panel ve management interface keşfedildi",
+                        "evidence": f"Discovered panels: {panels[:3]}",
+                        "target": self.current_target,
+                        "technology": "Infrastructure"
+                    }
+                    self._add_finding(finding)
+            
+            elif tool_name == "enum_directory_bruteforce":
+                directories = data.get("directories", [])
+                if directories:
+                    finding = {
+                        "title": "Sensitive Directories",
+                        "severity": "medium",
+                        "description": f"{len(directories)} hassas dizin keşfedildi",
+                        "evidence": f"Directories: {directories[:5]}",
+                        "target": self.current_target,
+                        "technology": "Web Application"
+                    }
+                    self._add_finding(finding)
             
             # Genel bilgi toplama
             self.discovered_information["last_successful_tool"] = tool_name
             self.discovered_information["total_tools_executed"] = len(self.discovered_information.get("vulnerabilities", []))
+    
+    def _add_finding(self, finding: Dict[str, Any]):
+        """Yeni bulgu ekle"""
+        if not hasattr(self, '_findings'):
+            self._findings = []
+        
+        # Duplicate kontrolü
+        existing_titles = [f.get("title", "") for f in self._findings]
+        if finding.get("title", "") not in existing_titles:
+            self._findings.append(finding)
+            logger.info(f"🔍 Yeni bulgu eklendi: {finding.get('title')} ({finding.get('severity')})")
+    
+    def get_findings(self) -> List[Dict[str, Any]]:
+        """Tüm bulguları döndür"""
+        return getattr(self, '_findings', [])
 
     def _make_json_serializable(self, obj):
         """Objeyi JSON serializable hale getir"""
