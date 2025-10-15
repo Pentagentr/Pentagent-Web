@@ -1,6 +1,6 @@
-// Chat geçmişi sidebar - ChatGPT tarzı
+// Chat geçmişi sidebar - ChatGPT tarzı + Geçmiş Taramalar
 import React, { useState, useEffect } from 'react';
-import { Plus, MessageSquare, Trash2, Edit3, Check, X } from 'lucide-react';
+import { Plus, MessageSquare, Trash2, Edit3, Check, X, History, Target, Shield } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { 
   collection, 
@@ -15,13 +15,16 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
+import { scanHistoryService } from '../../../services/scanHistoryService';
 
-const ChatSidebar = ({ currentConversationId, onConversationSelect, onNewChat }) => {
+const ChatSidebar = ({ currentConversationId, onConversationSelect, onNewChat, onScanSelect }) => {
   const { currentUser } = useAuth();
   const [conversations, setConversations] = useState([]);
+  const [scanHistory, setScanHistory] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [editTitle, setEditTitle] = useState('');
   const [hoveredId, setHoveredId] = useState(null);
+  const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'scans'
 
   // Firestore'dan konuşmaları dinle
   useEffect(() => {
