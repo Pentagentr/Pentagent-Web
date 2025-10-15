@@ -443,7 +443,7 @@ class RAGService:
             logger.error(f"CVE getirme hatası ({cve_id}): {e}")
             return None
     
-    def analyze_scan_results(self, scan_results: Dict[str, Any]) -> List[CVEResult]:
+    def analyze_scan_results(self, scan_results: Dict[str, Any]) -> Dict[str, Any]:
         """
         Tarama sonuçlarını analiz edip ilgili CVE'leri bul.
         Gemini ile optimize query oluşturur.
@@ -452,7 +452,11 @@ class RAGService:
             scan_results: Tarama sonuçları (vulnerability bilgileri içeren)
             
         Returns:
-            En alakalı CVE'lerin listesi
+            Dict: {
+                'results': List[CVEResult],
+                'query': str,  # LLM'in ürettiği query
+                'summary': str  # Scan özeti
+            }
         """
         # Lazy initialization
         if self._engine is None and not self._available:
@@ -460,11 +464,12 @@ class RAGService:
             self._initialize()
         
         if not self.is_available():
-            return []
+            return {'results': [], 'query': '', 'summary': ''}
         
         try:
             # LLM ile optimize query oluştur
             query = self._generate_optimized_query_with_llm(scan_results)
+            summary = self._summarize_scan_results(scan_results)
             
             if not query:
                 # Fallback: basit query oluştur
@@ -473,16 +478,22 @@ class RAGService:
             
             if not query:
                 logger.warning("Scan sonuçlarından query oluşturulamadı")
-                return []
+                return {'results': [], 'query': '', 'summary': summary}
             
             logger.info(f"Scan analizi için oluşturulan query: '{query}'")
             
             # CVE araması yap
-            return self.search_cve(query, limit=5)
+            results = self.search_cve(query, limit=5)
+            
+            return {
+                'results': results,
+                'query': query,
+                'summary': summary
+            }
             
         except Exception as e:
             logger.error(f"Scan analizi hatası: {e}")
-            return []
+            return {'results': [], 'query': '', 'summary': ''}
     
     def _generate_optimized_query_with_llm(self, scan_results: Dict[str, Any]) -> str:
         """

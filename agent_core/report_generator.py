@@ -526,6 +526,92 @@ class ReportGenerator:
         parts.append("")
         return parts
 
+    def _generate_strategic_recommendations(self, state: AgentState) -> List[str]:
+        """Bulguların türüne ve ciddiyetine göre dinamik stratejik öneriler"""
+        parts = ["6.1. Stratejik ve Taktiksel Öneriler", ""]
+        findings = state.findings
+        findings_summary = state.get_findings_summary()
+        
+        if not findings:
+            parts.append("Kritik bir bulguya rastlanmadığı için, genel güvenlik sertleştirme adımlarına odaklanılması önerilir:")
+            parts.extend([
+                "  • **Proaktif İzleme:** Anomali tespiti için sistem loglarının ve ağ trafiğinin düzenli olarak izlenmesi.",
+                "  • **Güvenlik Farkındalığı:** Geliştirici ekiplerine yönelik düzenli olarak güvenli kodlama eğitimleri düzenlenmesi.",
+                "  • **Periyodik Testler:** Güvenlik duruşunun sürekli denetlenmesi için bu testlerin düzenli aralıklarla tekrarlanması."
+            ])
+            parts.append("")
+            return parts
+
+        # 1. Acil ve Kısa Vadeli Aksiyonlar
+        if findings_summary['by_severity']['critical'] > 0:
+            parts.append("🚨 ACİL AKSİYONLAR (0-48 Saat İçinde):")
+            for f in findings:
+                if f.get('severity') == 'critical':
+                    rec = self._get_remediation(f).split('\n')[0]
+                    parts.append(f"  • {f.get('title')}: {rec}")
+            parts.append("")
+        
+        if findings_summary['by_severity']['high'] > 0:
+            parts.append("⚠️ KISA VADELİ AKSİYONLAR (1-7 Gün İçinde):")
+            for f in findings:
+                if f.get('severity') == 'high':
+                    rec = self._get_remediation(f).split('\n')[0]
+                    parts.append(f"  • {f.get('title')}: {rec}")
+            parts.append("")
+        
+        # 2. Stratejik İyileştirmeler
+        parts.append("📈 STRATEJİK İYİLEŞTİRMELER (Orta ve Uzun Vade):")
+        categories = self._categorize_findings_by_owasp(findings)
+        
+        if "A05:2021 - Security Misconfiguration" in categories:
+            parts.append("  • **Konfigürasyon Yönetimini Güçlendirin:** Sunucu, veritabanı ve bulut hizmetleri için 'güvenli temel' (secure baseline) konfigürasyonları oluşturun ve düzenli olarak denetleyin. IaC (Infrastructure as Code) tarama araçlarını CI/CD süreçlerine entegre edin.")
+
+        if "A03:2021 - Injection" in categories:
+            parts.append("  • **Güvenli Kodlama Pratiklerini Benimseyin (SSDLC):** Tüm geliştiricilere yönelik zorunlu güvenli kodlama (OWASP Top 10) eğitimleri düzenleyin. Statik kod analizi (SAST) araçlarını geliştirme yaşam döngüsüne dahil edin.")
+
+        if "A06:2021 - Vulnerable and Outdated Components" in categories:
+            parts.append("  • **Yazılım Varlık ve Yama Yönetimi Programı Oluşturun:** Kullanılan tüm kütüphane ve framework'lerin envanterini çıkarın. Yazılım Kompozisyon Analizi (SCA) araçları (örn: Dependabot, Snyk) kullanarak bağımlılıkları sürekli tarayın ve kritik zafiyetler için acil yama politikası uygulayın.")
+
+        if "A01:2021 - Broken Access Control" in categories:
+             parts.append("  • **Erişim Kontrol Mekanizmalarını Gözden Geçirin:** Rol tabanlı erişim kontrolünü (RBAC) 'en az yetki' prensibine göre sıkılaştırın. Özellikle API endpoint'leri için yetkilendirme kontrollerini detaylı olarak test edin.")
+        
+        if not categories:
+             parts.append("  • **Genel Güvenlik Sertleştirmesi:** Tespit edilen orta ve düşük seviyeli bulguları planlı bir şekilde giderin ve Web Application Firewall (WAF) kurallarını güncelleyin.")
+
+        parts.append("")
+        return parts
+
+    def _generate_conclusion(self, state: AgentState) -> List[str]:
+        """Testin genel sonucunu, bulguların temasına göre dinamik olarak özetler"""
+        parts = ["6.2. Sonuç Değerlendirmesi", ""]
+        findings = state.findings
+        findings_summary = state.get_findings_summary()
+        overall_risk = self._calculate_overall_risk_level(findings_summary)
+
+        if not findings:
+            parts.append(f"{state.target} üzerinde gerçekleştirilen güvenlik değerlendirmesi sonucunda kritik bir güvenlik açığına rastlanmamıştır. Sistemin genel güvenlik duruşu temel seviyede yeterli görünmektedir. Ancak, proaktif güvenlik iyileştirmeleri için rapordaki genel önerilerin dikkate alınması tavsiye edilir.")
+            return parts
+
+        # Bulguların ana temasını belirle
+        categories = self._categorize_findings_by_owasp(findings)
+        top_category = max(categories, key=categories.get, default="").split(' - ')[-1] if categories else ""
+
+        conclusion_text = f"Bu güvenlik değerlendirmesi, {state.target} sisteminin genel güvenlik durumunu '{overall_risk}' olarak belirlemiştir. "
+        
+        if top_category:
+            conclusion_text += f"Test sırasında tespit edilen zafiyetlerin yoğunlaştığı ana tema **'{top_category}'** olarak öne çıkmaktadır. "
+
+        if findings_summary['by_severity']['critical'] > 0:
+            conclusion_text += "Tespit edilen kritik seviyedeki bulgular, sisteme yönelik ciddi tehditler oluşturmakta ve acil müdahale gerektirmektedir. "
+        elif findings_summary['by_severity']['high'] > 0:
+             conclusion_text += "Yüksek seviyeli bulgular, önemli veri sızıntısı veya hizmet kesintisi riskleri taşımaktadır ve öncelikli olarak ele alınmalıdır. "
+
+        conclusion_text += "Raporda detaylandırılan stratejik ve taktiksel önerilerin uygulanması, sistemin siber saldırılara karşı dayanıklılığını önemli ölçüde artıracaktır."
+
+        parts.append(conclusion_text)
+        parts.append("")
+        return parts
+
     # ==========================================================================
     # ANA RAPOR OLUŞTURMA METODU
     # ==========================================================================
@@ -533,6 +619,7 @@ class ReportGenerator:
     def _prepare_professional_report_text(self, state: AgentState) -> str:
         """
         Gerçek penetrasyon testi standartlarında profesyonel rapor metni hazırlar.
+        firstrapor.py'deki güzel formatı kullanır.
         """
         report_parts = []
         

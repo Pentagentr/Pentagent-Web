@@ -12,7 +12,10 @@ import {
   Settings,
   Database,
   ExternalLink,
-  Loader2
+  Loader2,
+  RefreshCw,
+  FileText,
+  Brain
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../../common/Button';
@@ -62,6 +65,9 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
     }
   }, [JSON.stringify(scanResults), activeTab, conversationId]); // JSON.stringify ile deep comparison
 
+  const [llmQuery, setLlmQuery] = useState('');
+  const [scanSummary, setScanSummary] = useState('');
+
   const fetchCVESuggestions = async () => {
     if (!scanResults) return;
 
@@ -71,6 +77,8 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
     try {
       const data = await pentagentAPI.analyzeScanResults(scanResults, 5);
       setCveResults(data.results || []);
+      setLlmQuery(data.llm_query || '');
+      setScanSummary(data.scan_summary || '');
       
       if (data.results.length === 0) {
         setCveError('İlgili CVE bulunamadı');
@@ -187,6 +195,30 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
               </div>
             ) : cveResults.length > 0 ? (
               <div className="space-y-2.5">
+                {/* LLM Query ve Scan Summary */}
+                {llmQuery && (
+                  <div className="bg-obsidian-900/30 border border-purple-500/10 rounded-lg p-3 mb-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Brain className="w-3 h-3 text-purple-400" />
+                      <span className="text-xs font-medium text-purple-400">LLM Query</span>
+                    </div>
+                    <p className="text-xs text-text-secondary font-mono bg-obsidian-950/50 p-2 rounded border border-purple-500/10">
+                      "{llmQuery}"
+                    </p>
+                    {scanSummary && (
+                      <div className="mt-2 pt-2 border-t border-purple-500/10">
+                        <div className="flex items-center gap-2 mb-1">
+                          <FileText className="w-3 h-3 text-platinum-400" />
+                          <span className="text-xs font-medium text-platinum-400">Scan Özeti</span>
+                        </div>
+                        <p className="text-xs text-text-tertiary line-clamp-2">
+                          {scanSummary}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="text-xs font-medium text-platinum">
                     İlgili CVE'ler ({cveResults.length})

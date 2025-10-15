@@ -518,13 +518,16 @@ async def analyze_scan_results(request: Dict[str, Any]):
             )
         
         # Scan sonuçlarını analiz et
-        results = rag_service.analyze_scan_results(scan_results)
+        analysis_result = rag_service.analyze_scan_results(scan_results)
+        results = analysis_result.get('results', [])
         results = results[:limit]  # Limit uygula
         
         return {
             "success": True,
             "total_results": len(results),
-            "results": [r.to_dict() for r in results]
+            "results": [r.to_dict() for r in results],
+            "llm_query": analysis_result.get('query', ''),
+            "scan_summary": analysis_result.get('summary', '')
         }
         
     except HTTPException:
