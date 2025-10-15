@@ -97,3 +97,8 @@ export HUGGINGFACE_TOKEN="hf_xxxxx"  # Yeni, geçerli token
 
 🔑 **Çözüm**: HF token güncellenmeli, sonra testler tekrar çalıştırılmalı.
 
+
+
+
+
+

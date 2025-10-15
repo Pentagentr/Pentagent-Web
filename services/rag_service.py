@@ -521,21 +521,21 @@ class RAGService:
             # Unified LLM (Groq default)
             model = UnifiedLLM()
             
-            # Scan sonuçlarını özetle - GÜVENLİK BULGULARINA ODAKLANARAK
-            summary = self._extract_security_findings(scan_results)
+            # JSON bulgularını hazırla - AI'ya ver
+            json_findings = self._prepare_json_findings_for_ai(scan_results)
             
-            if not summary or summary == "No security findings detected":
-                logger.warning("⚠️ Hiç güvenlik bulgusu yok, generic query kullanılıyor")
+            if not json_findings or json_findings == "No findings":
+                logger.warning("⚠️ Hiç bulgu yok, generic query kullanılıyor")
                 return "web application security vulnerability exploitation"
             
-            # LLM'ye prompt gönder - KRİTİK: SADECE GÜVENLİK BULGULARI
-            prompt = f"""Sen bir pentest uzmanısın. Tespit edilen GÜVENLİK BULGULARINI analiz et ve CVE database query oluştur.
+            # LLM'ye JSON bulgularını ver - KRİTİK: JSON FORMATINDA
+            prompt = f"""Sen bir pentest uzmanısın. Aşağıdaki JSON formatındaki GÜVENLİK BULGULARINI analiz et ve CVE database query oluştur.
 
-🚨 TESPİT EDİLEN GÜVENLİK BULGULARI:
-{summary[:600]}
+📊 JSON BULGULAR:
+{json_findings[:800]}
 
 Query kuralları:
-- SADECE güvenlik zafiyetlerine odaklan (XSS, SQLi, CSRF, missing headers, vulnerable components)
+- JSON'daki bulgulara odaklan (title, severity, description, technology)
 - Teknoloji versiyonu varsa ekle
 - Max 100 karakter, ÖZLÜ ve KRİTİK
 - SADECE query string döndür, açıklama YAPMA
@@ -584,6 +584,96 @@ CVE Query:"""
         except Exception as e:
             logger.error(f"LLM query oluşturma hatası: {e}")
             return ""
+    
+    def _prepare_json_findings_for_ai(self, scan_results: Dict[str, Any]) -> str:
+        """
+        JSON bulgularını AI'ya vermek için hazırla.
+        """
+        try:
+            import json
+            
+            # Tool sonuçlarından bulguları çıkar
+            findings = []
+            target = scan_results.get("target", "target")
+            
+            # Tool sonuçlarında bulguları ara
+            for tool_name, tool_result in scan_results.items():
+                if not isinstance(tool_result, dict):
+                    continue
+                
+                # Web crawler bulguları
+                if "web_crawler" in tool_name.lower():
+                    forms = tool_result.get("forms", [])
+                    endpoints = tool_result.get("endpoints", [])
+                    parameters = tool_result.get("parameters", [])
+                    
+                    if forms or endpoints or parameters:
+                        findings.append({
+                            "title": "Web Application Discovery",
+                            "severity": "medium",
+                            "description": f"Web uygulamasında {len(forms)} form, {len(endpoints)} endpoint, {len(parameters)} parametre tespit edildi",
+                            "technology": "Web Application",
+                            "target": target
+                        })
+                
+                # Admin panel bulguları
+                elif "exposed_panels" in tool_name.lower() or "infra" in tool_name.lower():
+                    panels = tool_result.get("discovered_panels", [])
+                    if panels:
+                        findings.append({
+                            "title": "Exposed Admin Panels",
+                            "severity": "high",
+                            "description": f"{len(panels)} admin panel ve management interface keşfedildi",
+                            "technology": "Infrastructure",
+                            "target": target
+                        })
+                
+                # Missing headers
+                elif "header" in tool_name.lower():
+                    missing_headers = tool_result.get("missing_security_headers", [])
+                    if missing_headers:
+                        findings.append({
+                            "title": "Missing Security Headers",
+                            "severity": "medium",
+                            "description": f"Eksik güvenlik header'ları: {', '.join(missing_headers)}",
+                            "technology": "HTTP",
+                            "target": target
+                        })
+                
+                # Technology detection
+                elif "tech" in tool_name.lower():
+                    technologies = tool_result.get("technologies", []) or tool_result.get("detected_technologies", [])
+                    if technologies:
+                        findings.append({
+                            "title": "Technology Detection",
+                            "severity": "low",
+                            "description": f"{len(technologies)} teknoloji tespit edildi",
+                            "technology": "Technology Stack",
+                            "target": target
+                        })
+                
+                # Vulnerability scanners
+                elif any(vuln_tool in tool_name.lower() for vuln_tool in ["verify_xss", "verify_sqli", "verify_lfi"]):
+                    vulnerabilities = tool_result.get("vulnerabilities", [])
+                    if vulnerabilities:
+                        for vuln in vulnerabilities:
+                            findings.append({
+                                "title": vuln.get("type", f"{tool_name} vulnerability"),
+                                "severity": vuln.get("severity", "medium"),
+                                "description": vuln.get("description", "Vulnerability detected"),
+                                "technology": "Web Application",
+                                "target": target
+                            })
+            
+            # JSON formatında döndür
+            if findings:
+                return json.dumps(findings, indent=2, ensure_ascii=False)
+            else:
+                return "No findings"
+                
+        except Exception as e:
+            logger.error(f"JSON bulguları hazırlama hatası: {e}")
+            return "No findings"
     
     def _extract_security_findings(self, scan_results: Dict[str, Any]) -> str:
         """

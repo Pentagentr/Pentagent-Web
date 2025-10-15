@@ -169,10 +169,11 @@ class ReportGenerator:
             if not self.rag_client:
                 return {"error": "RAG client not available"}
             
-            # RAG sorgusu oluştur
-            query = f"CVE vulnerabilities for {vulnerability_type}"
-            if technology:
-                query += f" in {technology}"
+            # Spesifik RAG sorgusu oluştur
+            if technology and technology != "N/A":
+                query = f"{technology} {vulnerability_type} CVE vulnerability"
+            else:
+                query = f"{vulnerability_type} CVE vulnerability"
             
             # RAG'dan CVE bilgilerini al
             rag_results = await self.rag_client.search(query)
@@ -192,7 +193,17 @@ class ReportGenerator:
                     "references": best_match.get("references", [])
                 }
             else:
-                return {"error": "No CVE information found in RAG database"}
+                # Fallback: generic CVE bilgisi
+                return {
+                    "cve_id": "N/A",
+                    "cvss_score": "N/A",
+                    "cvss_vector": "N/A",
+                    "description": f"{vulnerability_type} vulnerability detected",
+                    "published_date": "N/A",
+                    "severity": "unknown",
+                    "exploit_available": False,
+                    "references": []
+                }
                 
         except Exception as e:
             logger.error(f"RAG CVE search failed: {e}")
@@ -1219,85 +1230,85 @@ class ReportGenerator:
         return text
     
     def _create_simple_pdf_from_text(self, text_content: str, pdf_path: str):
-        """PROFESYONEL SIZMA TESTİ RAPORU - Kurumsal format, renkli CVE tablosu."""
+        """PROFESYONEL SIZMA TESTİ RAPORU - Kurumsal format, düzenli boşluklar."""
         doc = SimpleDocTemplate(
             pdf_path, 
             pagesize=A4, 
-            topMargin=60, 
-            bottomMargin=60, 
-            leftMargin=70, 
-            rightMargin=70
+            topMargin=50, 
+            bottomMargin=50, 
+            leftMargin=60, 
+            rightMargin=60
         )
         styles = getSampleStyleSheet()
         
-        # PROFESYONEL STİLLER
-        # Kapak başlığı (Çok büyük)
+        # PROFESYONEL STİLLER - DÜZENLİ BOŞLUKLAR
+        # Kapak başlığı (Normal boyut)
         cover_title = ParagraphStyle(
             'CoverTitle',
             parent=styles['Title'],
-            fontSize=28,
-            textColor=colors.HexColor('#1a202c'),
-            spaceAfter=30,
+            fontSize=20,
+            textColor=colors.black,
+            spaceAfter=20,
             alignment=1,  # Center
             fontName='Helvetica-Bold'
         )
         
-        # Ana başlıklar (Kalın, büyük)
+        # Ana başlıklar (Normal boyut, düzenli boşluklar)
         heading1_style = ParagraphStyle(
             'CustomHeading1',
             parent=styles['Heading1'],
-            fontSize=18,
+            fontSize=14,
             fontName='Helvetica-Bold',
-            textColor=colors.HexColor('#2d3748'),
-            spaceAfter=15,
-            spaceBefore=25,
+            textColor=colors.black,
+            spaceAfter=12,
+            spaceBefore=20,
             alignment=0  # Left align
         )
         
-        # Alt başlıklar
+        # Alt başlıklar (Küçük, düzenli)
         heading2_style = ParagraphStyle(
             'CustomHeading2',
             parent=styles['Heading2'],
-            fontSize=14,
+            fontSize=12,
             fontName='Helvetica-Bold',
-            textColor=colors.HexColor('#4a5568'),
-            spaceAfter=10,
-            spaceBefore=15
+            textColor=colors.black,
+            spaceAfter=8,
+            spaceBefore=12
         )
         
-        # Normal metin (Justified - 2 yana yaslı)
+        # Normal metin (Düzenli, okunabilir)
         normal_style = ParagraphStyle(
             'CustomNormal',
             parent=styles['Normal'],
-            fontSize=11,
-            leading=16,
-            spaceAfter=8,
-            alignment=4,  # Justify (2 yana yaslı)
-            textColor=colors.HexColor('#2d3748')
+            fontSize=10,
+            leading=14,
+            spaceAfter=6,
+            alignment=0,  # Left align (justify değil)
+            textColor=colors.black
         )
         
-        # Liste öğeleri
+        # Liste öğeleri (Düzenli boşluklar)
         bullet_style = ParagraphStyle(
             'CustomBullet',
             parent=styles['Bullet'],
-            fontSize=10,
-            leading=15,
-            leftIndent=25,
-            spaceAfter=6,
-            bulletIndent=10,
-            textColor=colors.HexColor('#4a5568')
+            fontSize=9,
+            leading=12,
+            leftIndent=20,
+            spaceAfter=4,
+            bulletIndent=8,
+            textColor=colors.black
         )
         
-        # Kod/URL satırları
+        # Kod/URL satırları (Küçük, düzenli)
         code_style = ParagraphStyle(
             'CustomCode',
             parent=styles['Normal'],
             fontName='Courier',
-            fontSize=9,
-            leading=13,
-            leftIndent=20,
-            backgroundColor=colors.HexColor('#f7fafc'),
-            textColor=colors.HexColor('#2d3748')
+            fontSize=8,
+            leading=10,
+            leftIndent=15,
+            backgroundColor=colors.lightgrey,
+            textColor=colors.black
         )
         
         # Metni temizle
@@ -1445,60 +1456,111 @@ class ReportGenerator:
                 state.findings = []
                 logger.warning("⚠️ State'de bulgu yok, execution_results'tan oluşturuluyor")
                 
-                # Execution results'tan findings oluştur
-                for tool_name, tool_result in execution_results.items():
-                    if isinstance(tool_result, dict) and tool_result.get("success", False):
-                        data = tool_result.get("data", {})
-                        
-                        # Tool'a göre finding oluştur
-                        if "vulnerabilities" in data:
-                            for vuln in data["vulnerabilities"]:
-                                finding = {
-                                    'title': vuln.get('type', f'{tool_name} vulnerability'),
-                                    'severity': vuln.get('severity', 'medium'),
-                                    'description': vuln.get('description', 'Vulnerability detected'),
-                                    'evidence': vuln.get('evidence', 'Proof of concept available'),
-                                    'target': state.target,
-                                    'technology': 'Web Application'
-                                }
-                                state.findings.append(finding)
-                        
-                        # Admin panel bulguları
-                        elif "discovered_panels" in data:
-                            panels = data["discovered_panels"]
-                            if panels:
-                                finding = {
-                                    'title': 'Exposed Admin Panels',
-                                    'severity': 'high',
-                                    'description': f'{len(panels)} admin panel ve management interface keşfedildi',
-                                    'evidence': f'Discovered panels: {panels[:3]}',
-                                    'target': state.target,
-                                    'technology': 'Infrastructure'
-                                }
-                                state.findings.append(finding)
-                        
-                        # Missing headers
-                        elif "missing_security_headers" in data:
-                            headers = data["missing_security_headers"]
-                            if headers:
-                                finding = {
-                                    'title': 'Missing Security Headers',
-                                    'severity': 'medium',
-                                    'description': f'Eksik güvenlik header\'ları: {", ".join(headers)}',
-                                    'evidence': f'Missing headers: {headers}',
-                                    'target': state.target,
-                                    'technology': 'HTTP'
-                                }
-                                state.findings.append(finding)
+                # Execution history'den findings oluştur (execution_results execution_history formatında)
+                if isinstance(execution_results, list):
+                    for step in execution_results:
+                        if isinstance(step, dict):
+                            tool_name = step.get("tool", "")
+                            result = step.get("result", {})
+                            
+                            if result.get("success", False):
+                                data = result.get("data", {})
+                                
+                                # Tool'a göre finding oluştur
+                                if "vulnerabilities" in data:
+                                    for vuln in data["vulnerabilities"]:
+                                        finding = {
+                                            'title': vuln.get('type', f'{tool_name} vulnerability'),
+                                            'severity': vuln.get('severity', 'medium'),
+                                            'description': vuln.get('description', 'Vulnerability detected'),
+                                            'evidence': vuln.get('evidence', 'Proof of concept available'),
+                                            'target': state.target,
+                                            'technology': 'Web Application'
+                                        }
+                                        state.findings.append(finding)
+                                
+                                # Admin panel bulguları
+                                elif "discovered_panels" in data:
+                                    panels = data["discovered_panels"]
+                                    if panels:
+                                        finding = {
+                                            'title': 'Exposed Admin Panels',
+                                            'severity': 'high',
+                                            'description': f'{len(panels)} admin panel ve management interface keşfedildi',
+                                            'evidence': f'Discovered panels: {panels[:3]}',
+                                            'target': state.target,
+                                            'technology': 'Infrastructure'
+                                        }
+                                        state.findings.append(finding)
+                                
+                                # Missing headers
+                                elif "missing_security_headers" in data:
+                                    headers = data["missing_security_headers"]
+                                    if headers:
+                                        finding = {
+                                            'title': 'Missing Security Headers',
+                                            'severity': 'medium',
+                                            'description': f'Eksik güvenlik header\'ları: {", ".join(headers)}',
+                                            'evidence': f'Missing headers: {headers}',
+                                            'target': state.target,
+                                            'technology': 'HTTP'
+                                        }
+                                        state.findings.append(finding)
+                                
+                                # Web crawler bulguları
+                                elif "forms" in data or "parameters" in data:
+                                    forms = data.get("forms", [])
+                                    parameters = data.get("parameters", [])
+                                    if forms or parameters:
+                                        finding = {
+                                            'title': 'Web Application Discovery',
+                                            'severity': 'medium',
+                                            'description': f'Web uygulamasında {len(forms)} form ve {len(parameters)} parametre tespit edildi',
+                                            'evidence': f'Forms: {forms[:3]}, Parameters: {parameters[:5]}',
+                                            'target': state.target,
+                                            'technology': 'Web Application'
+                                        }
+                                        state.findings.append(finding)
+                                
+                                # Technology detection
+                                elif "technologies" in data:
+                                    technologies = data["technologies"]
+                                    if technologies:
+                                        finding = {
+                                            'title': 'Technology Detection',
+                                            'severity': 'low',
+                                            'description': f'{len(technologies)} teknoloji tespit edildi',
+                                            'evidence': f'Technologies: {technologies[:5]}',
+                                            'target': state.target,
+                                            'technology': 'Technology Stack'
+                                        }
+                                        state.findings.append(finding)
+                                
+                                # Open ports
+                                elif "open_ports" in data:
+                                    ports = data["open_ports"]
+                                    if ports:
+                                        finding = {
+                                            'title': 'Open Ports Discovery',
+                                            'severity': 'medium',
+                                            'description': f'{len(ports)} açık port tespit edildi',
+                                            'evidence': f'Open ports: {ports[:10]}',
+                                            'target': state.target,
+                                            'technology': 'Network'
+                                        }
+                                        state.findings.append(finding)
             
-            # Bulguları RAG ile zenginleştir
+            # Bulguları RAG ile zenginleştir - CVE'leri ekle
             enhanced_findings = []
             for finding in state.findings:
-                # RAG ile bulguyu zenginleştir
+                # RAG ile bulguyu zenginleştir - CVE'leri dahil et
                 enhanced_finding = await self._rag_enhance_finding(finding)
                 enhanced_findings.append(enhanced_finding)
             
-            # RAG'a tarama sonuçlarını kaydet
+            # State'e enhanced findings'leri geri ekle
+            state.findings = enhanced_findings
+            
+            # RAG'a tarama sonuçlarını kaydet - CVE'leri dahil et
             await self._rag_store_scan_results(state.target, enhanced_findings, execution_results)
             
             # Dinamik rapor metnini oluştur

@@ -107,3 +107,8 @@ class ScanHistoryService {
 
 export const scanHistoryService = new ScanHistoryService();
 
+
+
+
+
+
