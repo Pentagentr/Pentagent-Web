@@ -1451,12 +1451,19 @@ class ReportGenerator:
     async def generate_comprehensive_report(self, state: AgentState, final_analysis: Dict[str, Any], execution_results: Dict[str, Any]) -> Dict[str, Any]:
         """Dynamic orchestrator için kapsamlı ve dinamik rapor oluşturur - RAG entegrasyonu ile"""
         try:
-            # State'den findings al - final_analysis'den değil!
-            if not hasattr(state, 'findings') or not state.findings:
+            # State'den findings al - MEVCUT BULGULARI KORU!
+            if not hasattr(state, 'findings'):
                 state.findings = []
+            
+            existing_findings_count = len(state.findings)
+            logger.info(f"📊 Mevcut bulgu sayısı: {existing_findings_count}")
+            
+            # Eğer hiç bulgu yoksa execution_results'tan ek bulgular oluştur
+            if not state.findings:
                 logger.warning("⚠️ State'de bulgu yok, execution_results'tan oluşturuluyor")
                 
-                # Execution history'den findings oluştur (execution_results execution_history formatında)
+                # Execution history'den ek findings oluştur (mevcut bulguları koru)
+                additional_findings = []
                 if isinstance(execution_results, list):
                     for step in execution_results:
                         if isinstance(step, dict):
@@ -1477,7 +1484,7 @@ class ReportGenerator:
                                             'target': state.target,
                                             'technology': 'Web Application'
                                         }
-                                        state.findings.append(finding)
+                                        additional_findings.append(finding)
                                 
                                 # Admin panel bulguları
                                 elif "discovered_panels" in data:
@@ -1491,7 +1498,7 @@ class ReportGenerator:
                                             'target': state.target,
                                             'technology': 'Infrastructure'
                                         }
-                                        state.findings.append(finding)
+                                        additional_findings.append(finding)
                                 
                                 # Missing headers
                                 elif "missing_security_headers" in data:
@@ -1505,7 +1512,7 @@ class ReportGenerator:
                                             'target': state.target,
                                             'technology': 'HTTP'
                                         }
-                                        state.findings.append(finding)
+                                        additional_findings.append(finding)
                                 
                                 # Web crawler bulguları
                                 elif "forms" in data or "parameters" in data:
@@ -1520,7 +1527,7 @@ class ReportGenerator:
                                             'target': state.target,
                                             'technology': 'Web Application'
                                         }
-                                        state.findings.append(finding)
+                                        additional_findings.append(finding)
                                 
                                 # Technology detection
                                 elif "technologies" in data:
@@ -1534,7 +1541,7 @@ class ReportGenerator:
                                             'target': state.target,
                                             'technology': 'Technology Stack'
                                         }
-                                        state.findings.append(finding)
+                                        additional_findings.append(finding)
                                 
                                 # Open ports
                                 elif "open_ports" in data:
@@ -1548,7 +1555,12 @@ class ReportGenerator:
                                             'target': state.target,
                                             'technology': 'Network'
                                         }
-                                        state.findings.append(finding)
+                                        additional_findings.append(finding)
+                
+                # Ek bulguları state'e ekle
+                if additional_findings:
+                    state.findings.extend(additional_findings)
+                    logger.info(f"✅ Execution results'tan {len(additional_findings)} ek bulgu eklendi")
             
             # Bulguları RAG ile zenginleştir - CVE'leri ekle
             enhanced_findings = []

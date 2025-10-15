@@ -736,8 +736,61 @@ async def generate_security_report(request: Dict[str, Any]):
         
         logger.info(f"Tool bulguları: {len(tool_findings)}, CVE bulguları: {len(cve_findings)}")
         
-        # State'e sadece tool bulgularını koy (Detaylı bulgular sadece tool sonuçları olacak)
-        all_findings = state.findings.copy()  # Tüm bulguları sakla
+        # RAG ENTEGRASYONU - Tool bulgularını RAG'a gönder
+        if tool_findings:
+            try:
+                logger.info(f"🔍 {len(tool_findings)} tool bulgusu RAG'a gönderiliyor...")
+                
+                # RAG servisini al
+                rag_service = await get_rag_service()
+                
+                # Scan results formatında hazırla
+                scan_results_for_rag = {
+                    "target": target,
+                    "findings": tool_findings
+                }
+                
+                # Tool sonuçlarını da ekle
+                for key, value in scan_results.items():
+                    if key not in {'target', 'user_task', 'start_time', 'end_time', 'execution_time', 'status', 'conversation_id'}:
+                        scan_results_for_rag[f"tool_{key}"] = value
+                
+                # RAG'dan optimize query oluştur
+                optimized_query = await rag_service.generate_optimized_query(scan_results_for_rag)
+                
+                if optimized_query and optimized_query != "web application security vulnerability exploitation":
+                    logger.info(f"✅ RAG query oluşturuldu: {optimized_query}")
+                    
+                    # RAG'dan CVE'leri ara
+                    rag_results = await rag_service.search(optimized_query)
+                    
+                    if rag_results:
+                        logger.info(f"🎯 RAG'dan {len(rag_results)} CVE bulundu")
+                        # CVE'leri findings'e ekle
+                        for i, cve in enumerate(rag_results[:3], 1):
+                            finding = {
+                                'title': f"RAG CVE: {cve.get('cve_id', f'CVE-{i}')}",
+                                'severity': _map_cvss_to_severity(cve.get('cvss_score', 5.0)),
+                                'description': cve.get('description', 'Açıklama mevcut değil')[:500],
+                                'cvss_score': cve.get('cvss_score', 'N/A'),
+                                'cve_id': cve.get('cve_id', 'N/A'),
+                                'evidence': f"RAG Query: {optimized_query}\n\n{cve.get('description', 'Açıklama yok')}",
+                                'recommendation_summary': f"Bu CVE ile ilişkili zafiyetleri kontrol edin. CVSS: {cve.get('cvss_score', 'N/A')}",
+                                'business_impact': f"RAG ile tespit edilen bilinen güvenlik açığı. CVSS: {cve.get('cvss_score', 'N/A')}",
+                                'exploitability': 'Known CVE',
+                                'target': target,
+                                'technology': cve.get('affected_product') or cve.get('product') or 'Unknown'
+                            }
+                            tool_findings.append(finding)
+                    else:
+                        logger.warning("⚠️ RAG'dan CVE bulunamadı")
+                else:
+                    logger.warning("⚠️ RAG query oluşturulamadı veya generic query döndü")
+                    
+            except Exception as e:
+                logger.error(f"❌ RAG entegrasyonu hatası: {e}")
+        
+        # State'e tüm bulguları koy (tool + RAG CVE'ler)
         state.findings = tool_findings
         
         # Execution time
