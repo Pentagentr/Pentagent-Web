@@ -3,7 +3,7 @@ import {
   X, 
   Download, 
   Share2, 
-  Print,
+  Printer,
   ChevronLeft,
   ChevronRight,
   ZoomIn,
@@ -304,7 +304,7 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
                 Share
               </Button>
               <Button variant="secondary" size="sm">
-                <Print className="w-4 h-4 mr-2" />
+                <Printer className="w-4 h-4 mr-2" />
                 Print
               </Button>
             </div>
