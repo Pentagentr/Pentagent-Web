@@ -674,6 +674,36 @@ async def generate_security_report(request: Dict[str, Any]):
         
         logger.info(f"Tarama sonuçlarından {findings_added} bulgu eklendi")
         
+        # EĞER HİÇ BULGU YOKSA - scan_results'ı direkt parse et
+        if findings_added == 0:
+            logger.warning("⚠️ Hiç bulgu bulunamadı, scan_results direkt parse ediliyor")
+            logger.info(f"📊 scan_results FULL: {scan_results}")
+            
+            # Basit format: {"tool_name": "result_string"} veya nested
+            for key, value in scan_results.items():
+                if key == "target":
+                    continue
+                    
+                # String sonuç mu?
+                if isinstance(value, str) and len(value) > 10:
+                    finding = {
+                        'title': f"{key} Sonucu",
+                        'severity': 'medium',
+                        'description': value[:500],
+                        'cvss_score': 'N/A',
+                        'cve_id': None,
+                        'evidence': value,
+                        'recommendation_summary': f"{key} sonuçları incelenmeli",
+                        'business_impact': 'Tespit edilen bulgular güvenlik riski oluşturabilir',
+                        'exploitability': 'Unknown',
+                        'target': target,
+                        'technology': key
+                    }
+                    state.findings.append(finding)
+                    findings_added += 1
+        
+        logger.info(f"✅ TOPLAM BULGU: {len(state.findings)}")
+        
         # SONRA: RAG CVE sonuçlarını referans olarak ekle (sadece ilişkili CVE'ler)
         for i, cve in enumerate(cve_results[:3], 1):  # En yakın 3 CVE
             # CVSS skorunu doğru çek
