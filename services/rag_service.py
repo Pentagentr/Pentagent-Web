@@ -203,31 +203,36 @@ class RAGService:
         if not results or len(results) == 0:
             return results
         
-        # HuggingFace token kontrolü - yoksa fallback
+        # HuggingFace token kontrolü - ZORUNLU
         if not config.HUGGINGFACE_TOKEN:
-            logger.warning("HuggingFace token yok, fallback reranking kullanılıyor")
-            return self._fallback_rerank(query, results)
+            logger.error("❌ HuggingFace token YOK! Reranker kullanılamıyor.")
+            logger.warning("⚠️ Reranker olmadan orijinal sıralama kullanılıyor")
+            return results
         
         try:
             logger.info(f"🔄 Reranker başlatılıyor: {len(results)} sonuç sıralanacak")
             
-            # HuggingFace Inference API (Serverless) kullan - Inference Providers yerine
+            # Query ve documents hazırla
+            documents = [f"{r.cve_id}: {r.description[:500]}" for r in results]
+            
+            # SENTENCE-TRANSFORMERS RERANKER kullan (cross-encoder)
+            # BAAI/bge-reranker-base yerine daha stabil bir model: cross-encoder/ms-marco-MiniLM-L-6-v2
+            reranker_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+            inference_url = f"https://api-inference.huggingface.co/models/{reranker_model}"
+            
             headers = {
                 "Authorization": f"Bearer {config.HUGGINGFACE_TOKEN}",
                 "Content-Type": "application/json"
             }
             
-            # Query ve documents hazırla
-            # BAAI/bge-reranker formatı: source_sentence + sentences listesi
-            documents = [f"{r.cve_id}: {r.description[:500]}" for r in results]
-            
-            # INFERENCE API (Serverless Endpoint)
-            inference_url = "https://api-inference.huggingface.co/models/BAAI/bge-reranker-base"
+            # Cross-encoder formatı: {"inputs": [["query", "doc1"], ["query", "doc2"], ...]}
+            # Her query-document çifti için skor döndürür
+            pairs = [[query, doc] for doc in documents]
             
             payload = {
-                "inputs": {
-                    "source_sentence": query,
-                    "sentences": documents
+                "inputs": pairs,
+                "options": {
+                    "wait_for_model": True
                 }
             }
             
@@ -241,105 +246,65 @@ class RAGService:
                 ) as response:
                     if response.status == 403:
                         error_text = await response.text()
-                        logger.warning(f"⚠️ Reranker API 403 (Yetki hatası): {error_text[:200]}")
-                        logger.info("🔄 Fallback reranking kullanılıyor...")
-                        return self._fallback_rerank(query, results)
+                        logger.error(f"❌ RERANKER API 403 (YETKİ HATASI): {error_text[:300]}")
+                        logger.error("💡 Çözüm: HuggingFace token'ınızın 'Inference API' yetkisi olmalı")
+                        raise Exception(f"Reranker API yetki hatası (403): {error_text[:100]}")
                     
                     if response.status != 200:
                         error_text = await response.text()
-                        logger.warning(f"Reranker API hatası: {response.status}")
-                        logger.warning(f"API yanıtı: {error_text[:200]}")
-                        return self._fallback_rerank(query, results)
+                        logger.error(f"❌ Reranker API hatası: {response.status}")
+                        logger.error(f"API yanıtı: {error_text[:300]}")
+                        raise Exception(f"Reranker API başarısız ({response.status}): {error_text[:100]}")
                     
                     rerank_scores = await response.json()
-                    logger.info(f"Reranker yanıtı alındı: {type(rerank_scores)}")
+                    logger.info(f"✅ Reranker yanıtı alındı: {type(rerank_scores)}")
                     
-                    # Rerank skorlarını işle
-                    if isinstance(rerank_scores, list):
+                    # Cross-encoder array of floats döndürür: [0.85, 0.72, 0.91, ...]
+                    if isinstance(rerank_scores, list) and len(rerank_scores) == len(results):
                         # Sonuçları rerank skoruna göre sırala
                         reranked = []
                         for idx, score in enumerate(rerank_scores):
-                            if idx < len(results):
-                                # Orijinal CVE'yi kopyala ve rerank skorunu ekle
-                                cve = results[idx]
-                                # Score'u güncelle (rerank score daha önemli)
-                                original_score = cve.score
-                                rerank_score = score if isinstance(score, (int, float)) else score.get('score', 0)
-                                
-                                # Rerank score ile birleştir (ağırlıklı ortalama)
-                                combined_score = (original_score * 0.3) + (rerank_score * 0.7)
-                                
-                                reranked.append({
-                                    "cve": cve,
-                                    "original_score": original_score,
-                                    "rerank_score": rerank_score,
-                                    "combined_score": combined_score
-                                })
+                            cve = results[idx]
+                            original_score = cve.score
+                            
+                            # Rerank score normalize et (0-1 arası)
+                            rerank_score = float(score) if isinstance(score, (int, float)) else 0.5
+                            
+                            # Rerank score DOMİNANT olmalı (sen fallback istemiyorsun!)
+                            # %80 rerank, %20 orijinal skor
+                            combined_score = (original_score * 0.2) + (rerank_score * 0.8)
+                            
+                            reranked.append({
+                                "cve": cve,
+                                "original_score": original_score,
+                                "rerank_score": rerank_score,
+                                "combined_score": combined_score
+                            })
                         
-                        # Combined score'a göre sırala
+                        # Combined score'a göre sırala (EN YÜKSEK ÖNCE)
                         reranked.sort(key=lambda x: x['combined_score'], reverse=True)
                         
                         # Sadece CVE'leri döndür
                         reranked_cves = [item['cve'] for item in reranked]
                         
-                        logger.info(f"✅ Reranking tamamlandı: {len(reranked_cves)} sonuç yeniden sıralandı")
+                        logger.info(f"✅ RERANKING TAMAMLANDI: {len(reranked_cves)} sonuç")
                         
-                        # Sıralama değişikliğini logla
+                        # Top 3'ü logla
                         for i, item in enumerate(reranked[:3], 1):
-                            logger.info(f"  #{i}: {item['cve'].cve_id} (orijinal: {item['original_score']:.3f}, rerank: {item['rerank_score']:.3f}, combined: {item['combined_score']:.3f})")
+                            logger.info(f"  🏆 #{i}: {item['cve'].cve_id} | Rerank: {item['rerank_score']:.3f} | Combined: {item['combined_score']:.3f}")
                         
                         return reranked_cves
                     else:
-                        logger.warning(f"Beklenmeyen reranker yanıtı: {type(rerank_scores)}")
-                        return results
+                        logger.error(f"❌ Beklenmeyen reranker yanıtı: {type(rerank_scores)}, len: {len(rerank_scores) if isinstance(rerank_scores, list) else 'N/A'}")
+                        raise Exception("Reranker yanıtı işlenemedi")
                         
         except asyncio.TimeoutError:
-            logger.warning("Reranker timeout, orijinal sıralama kullanılıyor")
+            logger.error("❌ Reranker TIMEOUT (30s)")
+            logger.warning("⚠️ Orijinal sıralama kullanılıyor")
             return results
         except Exception as e:
-            logger.error(f"Reranker hatası: {e}")
-            logger.info("Reranker başarısız, fallback reranking kullanılıyor")
-            return self._fallback_rerank(query, results)
-    
-    def _fallback_rerank(self, query: str, results: List[CVEResult]) -> List[CVEResult]:
-        """
-        Fallback reranking: Basit metin benzerliği ile sıralama.
-        HuggingFace API çalışmazsa bu kullanılır.
-        """
-        try:
-            logger.info(f"📊 Fallback reranking başlatılıyor ({len(results)} sonuç)")
-            
-            # Basit token overlap skoru hesapla
-            query_tokens = set(query.lower().split())
-            
-            scored_results = []
-            for cve in results:
-                # CVE açıklamasındaki token'ları al
-                desc_tokens = set(cve.description.lower().split())
-                
-                # Token overlap skoru
-                overlap = len(query_tokens.intersection(desc_tokens))
-                total = len(query_tokens.union(desc_tokens))
-                overlap_score = overlap / total if total > 0 else 0
-                
-                # Orijinal skor ile birleştir (ağırlıklı ortalama)
-                combined_score = (cve.score * 0.5) + (overlap_score * 0.5)
-                
-                scored_results.append({
-                    "cve": cve,
-                    "combined_score": combined_score
-                })
-            
-            # Combined score'a göre sırala
-            scored_results.sort(key=lambda x: x['combined_score'], reverse=True)
-            
-            reranked = [item['cve'] for item in scored_results]
-            logger.info(f"✅ Fallback reranking tamamlandı")
-            
-            return reranked
-            
-        except Exception as e:
-            logger.error(f"Fallback reranking hatası: {e}")
+            logger.error(f"❌ RERANKER BAŞARISIZ: {e}")
+            logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
             return results
     
     def search_cve(
