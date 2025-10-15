@@ -600,7 +600,8 @@ Hangi hedefi taramak istersin?"""
                 ]
                 
                 if tool_param_key in recent_tool_params:
-                    await status_callback(f"⚠️ {tool_name} aynı parametrelerle tekrar edildi (döngü tespit edildi), atlanıyor", "warning")
+                    # Sessizce alternatif strateji dene (kullanıcıya log gösterme)
+                    logger.warning(f"{tool_name} tekrar edildi, alternatif strateji deneniyor")
                     next_tool_decision = await self._ai_force_alternative_strategy(tool_name, current_step)
                     if next_tool_decision.get("action") == "stop":
                         break

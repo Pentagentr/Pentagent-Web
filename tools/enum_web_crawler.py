@@ -124,8 +124,15 @@ class EnumWebCrawlerTool(MCPTool):
         driver = None
         try:
             logger.info("ChromeDriver otomatik olarak ayarlanıyor...")
-            service = ChromeService(ChromeDriverManager().install())
-            driver = webdriver.Chrome(service=service, options=options)
+            try:
+                service = ChromeService(ChromeDriverManager().install())
+                driver = webdriver.Chrome(service=service, options=options)
+            except Exception as chrome_error:
+                logger.warning(f"Chrome başlatılamadı: {chrome_error}")
+                # Fallback: HTTP-based crawling kullan
+                logger.info("Fallback: HTTP-based crawling kullanılıyor...")
+                return self._http_based_crawl(context)
+            
             driver.set_page_load_timeout(60) # Sayfa yükleme için zaman aşımı
             
             # Stealth script çalıştır
@@ -179,6 +186,58 @@ class EnumWebCrawlerTool(MCPTool):
                 driver.quit()
                 logger.info("ChromeDriver kapatıldı.")
 
+    def _http_based_crawl(self, context: CrawlContext) -> CrawlContext:
+        """
+        HTTP-based fallback crawling (Selenium mevcut değilse).
+        Basit requests + BeautifulSoup kullanır.
+        """
+        import requests
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry
+        
+        logger.info("HTTP-based crawling başlatılıyor...")
+        self._add_reasoning(context.ai_reasoning_log, "fallback", "Selenium kullanılamadı, HTTP-based crawling kullanılıyor")
+        
+        # Session oluştur
+        session = requests.Session()
+        retry = Retry(total=3, backoff_factor=0.3)
+        adapter = HTTPAdapter(max_retries=retry)
+        session.mount('http://', adapter)
+        session.mount('https://', adapter)
+        session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        })
+        
+        queue = collections.deque([(context.base_url, 0)])
+        crawled_urls = set()
+        
+        while queue and len(crawled_urls) < min(context.max_pages, 50):  # HTTP crawling için limit daha düşük
+            current_url, depth = queue.popleft()
+            
+            if current_url in crawled_urls or depth > context.max_depth:
+                continue
+            
+            try:
+                response = session.get(current_url, timeout=10)
+                if response.status_code == 200:
+                    crawled_urls.add(current_url)
+                    context.discovered_paths.add(urlparse(current_url).path or '/')
+                    
+                    # Linkleri ve formları çıkar
+                    new_links = self._extract_links_and_forms(response.text, current_url, context)
+                    
+                    # Yeni linkleri kuyruğa ekle
+                    for link in new_links:
+                        if link not in crawled_urls:
+                            queue.append((link, depth + 1))
+            except Exception as e:
+                logger.warning(f"HTTP crawl hatası {current_url}: {e}")
+                continue
+        
+        context.crawled_page_count = len(crawled_urls)
+        self._add_reasoning(context.ai_reasoning_log, "http_complete", f"{len(crawled_urls)} sayfa HTTP ile tarandı")
+        return context
+    
     def _build_final_json(self, context: CrawlContext, error: Exception = None) -> Dict[str, Any]:
         if error:
             error_message = f"{type(error).__name__}: {str(error)}"
