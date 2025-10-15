@@ -7,6 +7,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ChatPage from './pages/ChatPage';
 import RagSearch from './pages/RagSearch';
+import Reports from './pages/Reports';
 import ErrorBoundary from './components/common/ErrorBoundary';
 
 function App() {
@@ -35,6 +36,15 @@ function App() {
               element={
                 <ProtectedRoute>
                   <RagSearch />
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="/reports" 
+              element={
+                <ProtectedRoute>
+                  <Reports />
                 </ProtectedRoute>
               } 
             />

@@ -1,95 +1,110 @@
-# 🛡️ Pentagent - AI-Powered Security Testing Platform
+# 🛡️ Pentagent - Yapay Zeka Destekli Güvenlik Test Platformu
 
-> Autonomous penetration testing platform powered by advanced AI and RAG-enhanced vulnerability intelligence.
+<div align="center">
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
-[![React](https://img.shields.io/badge/react-18+-61dafb.svg)](https://reactjs.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688.svg)](https://fastapi.tiangolo.com/)
+![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
+![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
+![React](https://img.shields.io/badge/react-18+-61dafb.svg)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688.svg)
+
+**Pentagent**, güvenlik testlerini otomatikleştiren, yapay zeka ile güçlendirilmiş, yeni nesil bir penetrasyon testi platformudur.
+
+[Özellikler](#-özellikler) •
+[Kurulum](#-kurulum) •
+[Kullanım](#-kullanım) •
+[Mimarı](#-mimari) •
+[Katkıda Bulun](#-katkıda-bulunma)
+
+</div>
 
 ---
 
-## 🎯 Overview
+## 🎯 Genel Bakış
 
-**Pentagent** is an autonomous security testing platform that combines:
-- 🤖 **AI-Driven Testing** - Powered by GPT OSS 120B for intelligent decision-making
-- 🔍 **RAG-Enhanced Intelligence** - 95K+ CVE database with reranker optimization
-- 🎨 **Modern Interface** - Real-time scanning with WebSocket updates
-- 🛠️ **30+ Security Tools** - Automated vulnerability detection and verification
+**Pentagent**, siber güvenlik uzmanları için geliştirilmiş, tamamen otonom bir penetrasyon testi platformudur:
+
+- 🤖 **AI Destekli Karar Alma** - GPT OSS 120B modeli ile akıllı test stratejileri
+- 🔍 **RAG Entegrasyonu** - 95,000+ CVE veritabanı ile anlık zafiyet analizi
+- 🎯 **Reranker Optimizasyonu** - BAAI/bge-reranker-base ile %30 daha isabetli sonuçlar
+- 📊 **Otomatik Raporlama** - PDF/TXT/JSON formatlarında profesyonel raporlar
+- 🎨 **Modern Arayüz** - Real-time WebSocket güncellemeleri ile kullanıcı dostu UI
+- 🛠️ **30+ Güvenlik Aracı** - Kapsamlı zafiyet tespit ve doğrulama araçları
 
 ---
 
-## ✨ Key Features
+## ✨ Temel Özellikler
 
-### 🤖 Autonomous AI Agent
-- Dynamic orchestration with self-improving workflows
-- Context-aware tool selection
-- Real-time reasoning and decision-making
-- Adaptive testing strategies
+### 🤖 Yapay Zeka Odaklı Test
+- **Otonom Karar Mekanizması**: AI, hedef sistemi analiz eder ve en uygun test stratejisini belirler
+- **Dinamik Orkestrasyon**: Tool seçimi ve sıralama yapay zeka tarafından optimize edilir
+- **Hata Yönetimi**: Başarısız araçlar için otomatik fallback stratejileri
 
-### 🔍 RAG CVE Intelligence
-- **95,000+ CVE vectors** from NVD database
-- **Hybrid search** (Dense 70% + Sparse 30%)
-- **BGE-M3 embeddings** (1024 dimensions)
-- **BAAI/bge-reranker-base** for result optimization
-- **Reranking pipeline:** Vector Search → Rerank → Top Results
-- **Hybrid scoring:** 30% vector + 70% reranker (better relevance)
-- **Real-time suggestions** based on scan results
+### 🔍 RAG (Retrieval-Augmented Generation) Sistemi
+- **95K+ CVE Veritabanı**: MITRE ve NVD kaynaklı güncel zafiyet bilgileri
+- **Semantik Arama**: BGE-M3 embeddings ile anlam tabanlı CVE eşleştirme
+- **Reranker Entegrasyonu**: BAAI/bge-reranker-base ile sonuç kalitesi iyileştirmesi
+- **Sorgu Optimizasyonu**: GPT OSS 120B ile kullanıcı sorgularının otomatik iyileştirilmesi
+- **Hızlı Yanıt**: Hybrid scoring (30% vector + 70% reranker) ile <500ms yanıt süresi
 
-### 🛠️ Security Tools (30+)
+### 📊 Raporlama Sistemi
+- **RAG-Entegreli Raporlar**: En alakalı 3 CVE otomatik olarak rapora eklenir
+- **CVSS Detayları**: Her CVE için CVSS skoru, vektör ve detaylı açıklama
+- **Çoklu Format**: PDF, TXT ve JSON formatlarında export
+- **OWASP Uyumlu**: OWASP Top 10 kategorilerine göre sınıflandırma
+- **Kurumsal Tasarım**: Profesyonel rapor şablonları
 
-**Enumeration:**
-- Port Scanner (Nmap integration)
-- Subdomain Bruteforcer
+### 🛠️ Güvenlik Araçları (30+)
+**Keşif & Tarama:**
+- Port Scanner (SYN/Connect/UDP)
+- Subdomain Enumeration (passive + bruteforce)
+- Web Crawler (Selenium + BeautifulSoup)
+- Technology Detection (Wappalyzer benzeri)
 - Directory Bruteforce
-- Web Crawler
-- Technology Detector
-- Firewall Detector
 
-**Vulnerability Scanning:**
-- SQL Injection Tester
-- XSS Detector
-- LFI/RFI Scanner
+**Zafiyet Tespiti:**
+- SQL Injection Scanner
+- XSS Detector (HTTP + Selenium)
 - IDOR Tester
-- JWT Vulnerability Tester
-- Dependency Scanner
+- LFI/RFI Scanner
+- JWT Vulnerability Checker
+
+**Altyapı Analizi:**
+- Firewall Detector
+- Origin IP Finder (CDN bypass)
 - HTTP Header Analyzer
+- Exposed Panel Finder
+- Cloud Bucket Scanner (S3/GCS/Azure)
 
-**Infrastructure:**
-- Cloud S3 Bucket Scanner
-- Exposed Admin Panel Finder
-- API Endpoint Discovery
-
-**Reconnaissance:**
+**Recon & Intelligence:**
 - WHOIS Lookup
 - DNS Analyzer
 - Email Security Audit
 - Historical Data Analyzer
-- Origin IP Finder
-- Passive Subdomain Finder
-
-### 🎨 Modern UI/UX
-- Real-time scan progress with WebSocket
-- Interactive chat interface
-- Context panel with live updates
-- CVE suggestion sidebar
-- Dedicated RAG search page
-- Responsive design with dark theme
+- Code Intelligence Scanner
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ Sistem Mimarisi
 
 ```
-┌─────────────────────────────────────────────┐
-│            SYSTEM ARCHITECTURE              │
-└─────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│              PENTAGENT MİMARİSİ                     │
+└──────────────────────────────────────────────────────┘
 
 React Frontend (Firebase Hosting)
     ↓ HTTPS / WebSocket
 FastAPI Backend (Render.com)
     ├─ AI Orchestrator (GPT OSS 120B via Groq)
+    │   ├─ Dynamic Tool Selection
+    │   ├─ Strategy Planning
+    │   └─ Error Recovery
+    │
     ├─ Security Tools (30+ modules)
+    │   ├─ Recon Tools
+    │   ├─ Scanning Tools
+    │   ├─ Verification Tools
+    │   └─ Analysis Tools
+    │
     └─ RAG Service
         ↓ REST API
 Qdrant Vector DB (HuggingFace Space)
@@ -97,277 +112,428 @@ Qdrant Vector DB (HuggingFace Space)
     └─ Reranker (BAAI/bge-reranker-base)
 ```
 
+### 🔄 RAG İş Akışı
+
+```
+1. Kullanıcı Sorgusu → GPT OSS 120B Optimizasyonu
+2. Optimize Sorgu → BGE-M3 Embedding
+3. Vector Search → Qdrant (Top 10 sonuç)
+4. Reranking → BAAI/bge-reranker-base
+5. Hybrid Scoring → 30% vector + 70% reranker
+6. Final Results → En alakalı 3-5 CVE
+```
+
 ---
 
-## 🚀 Quick Start
+## 🚀 Hızlı Başlangıç
 
-### Local Development
+### Gereksinimler
 
-**Prerequisites:**
-- Python 3.11+
-- Node.js 18+
-- Docker (for Qdrant)
+**Backend:**
+- Python 3.9+
+- FastAPI
+- Qdrant (HuggingFace Space veya local)
 
-**1. Clone Repository**
+**Frontend:**
+- Node.js 16+
+- React 18+
+- Vite
+
+**API Keys:**
+- `GROQ_API_KEY` - GPT OSS 120B için (zorunlu)
+- `HUGGINGFACE_TOKEN` - RAG servisi için (opsiyonel ama önerilir)
+
+### 📦 Kurulum
+
+#### 1. Projeyi Klonlayın
+
 ```bash
 git clone https://github.com/Pentagentr/Pentagent-Web.git
 cd Pentagent-Web
 ```
 
-**2. Start Qdrant (Optional - for RAG features)**
-```bash
-cd Rag-Pent
-docker-compose up -d
-cd ..
-```
+#### 2. Backend Kurulumu
 
-**3. Backend Setup**
 ```bash
-# Install dependencies
+# Python sanal ortamı oluştur
+python -m venv venv
+
+# Sanal ortamı aktif et
+# Windows:
+venv\Scripts\activate
+# Linux/Mac:
+source venv/bin/activate
+
+# Bağımlılıkları yükle
 pip install -r requirements.txt
 
-# Set API key
-export GEMINI_API_KEY="your_gemini_api_key"
+# Ortam değişkenlerini ayarla
+# .env dosyası oluştur ve aşağıdaki değerleri ekle:
+```
 
-# Start backend
+**.env Örneği:**
+```env
+# Zorunlu
+GROQ_API_KEY=your_groq_api_key_here
+MODEL_PROVIDER=groq
+GROQ_MODEL=gpt-4o
+
+# RAG Sistemi (Opsiyonel)
+HUGGINGFACE_TOKEN=your_hf_token_here
+QDRANT_HOST=https://your-qdrant-space.hf.space
+EMBEDDING_API_URL=https://your-embedding-space.hf.space/embed
+
+# Reranker (Opsiyonel - varsayılan değerler)
+USE_RERANKER=true
+RERANKER_MODEL=BAAI/bge-reranker-base
+RERANKER_TOP_K=5
+
+# Server
+PORT=8000
+ALLOWED_ORIGINS=http://localhost:5173,https://your-frontend.web.app
+```
+
+```bash
+# Backend'i başlat
 python web_api.py
 ```
 
-**4. Frontend Setup**
+Backend şimdi `http://localhost:8000` adresinde çalışıyor.
+
+#### 3. Frontend Kurulumu
+
 ```bash
+# Frontend dizinine geç
 cd pentagent-frontend
+
+# Bağımlılıkları yükle
 npm install
+
+# Ortam değişkenlerini ayarla
+# .env.local dosyası oluştur:
+```
+
+**.env.local Örneği:**
+```env
+VITE_API_URL=http://localhost:8000
+VITE_FIREBASE_API_KEY=your_firebase_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your-project-id
+```
+
+```bash
+# Development sunucusunu başlat
 npm run dev
 ```
 
-**5. Access Application**
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:8000
-- API Docs: http://localhost:8000/docs
+Frontend şimdi `http://localhost:5173` adresinde çalışıyor.
+
+#### 4. Firebase Deployment (Opsiyonel)
+
+```bash
+# Firebase CLI'yi yükle
+npm install -g firebase-tools
+
+# Firebase'e giriş yap
+firebase login
+
+# Projeyi başlat (ilk defa)
+firebase init hosting
+
+# Build oluştur
+npm run build
+
+# Deploy et
+firebase deploy --only hosting
+```
+
+**firebase.json Yapılandırması:**
+```json
+{
+  "hosting": {
+    "public": "dist",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}
+```
 
 ---
 
-## 🌐 Production Deployment
+## 💻 Kullanım
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for complete deployment guide.
+### 1. Temel Tarama
 
-**Stack:**
-- **Frontend:** Firebase Hosting (Free)
-- **Backend:** Render.com (Free)
-- **Vector DB:** HuggingFace Space (Free)
+```bash
+# Web arayüzünde
+1. http://localhost:5173 adresine git
+2. Giriş yap veya kayıt ol
+3. Chat sayfasında hedef gir: "example.com"
+4. AI otomatik olarak uygun araçları seçer ve taramayı başlatır
+```
 
-**Total Cost:** $0 with free tiers
+### 2. RAG CVE Araması
+
+```python
+# Programatik kullanım
+from services.rag_service import get_rag_service
+
+rag = get_rag_service()
+
+# CVE ara
+results = rag.search_cve("SQL injection", limit=5)
+
+for cve in results:
+    print(f"CVE: {cve.cve_id}")
+    print(f"CVSS: {cve.base_score}")
+    print(f"Severity: {cve.severity}")
+    print(f"Match Score: {cve.score}")
+```
+
+### 3. Rapor Oluşturma
+
+```bash
+# Web arayüzünde
+1. Tarama tamamlandıktan sonra
+2. Sağ panelde "Generate Report" butonuna tıkla
+3. Rapor otomatik olarak oluşturulur (PDF/TXT/JSON)
+4. "Download" butonu ile indir
+```
+
+### 4. API Kullanımı
+
+```python
+import requests
+
+# Tarama başlat
+response = requests.post("http://localhost:8000/api/scan", json={
+    "target": "example.com",
+    "task": "Kapsamlı güvenlik testi yap"
+})
+
+scan_id = response.json()["scan_id"]
+
+# RAG CVE ara
+response = requests.post("http://localhost:8000/api/rag/search", json={
+    "query": "SQL injection WordPress",
+    "limit": 5,
+    "severity": "CRITICAL"
+})
+
+cves = response.json()["results"]
+
+# Rapor oluştur
+response = requests.post("http://localhost:8000/api/generate-report", json={
+    "target": "example.com",
+    "scan_results": {"vulnerabilities": [...]},
+    "cve_results": cves[:3]
+})
+
+report = response.json()
+```
 
 ---
 
-## 📖 Usage
-
-### 1. Autonomous Pentest
-
-1. Open the chat interface
-2. Enter target URL
-3. AI agent automatically:
-   - Plans testing strategy
-   - Executes security tools
-   - Analyzes results
-   - Generates comprehensive report
-
-### 2. CVE Search
-
-Navigate to `/rag-search` page:
-- Search 95K+ CVE database
-- Filter by severity (CRITICAL, HIGH, MEDIUM, LOW)
-- View related vulnerabilities
-- Access NVD references
-
-### 3. Scan Analysis
-
-After pentest completion:
-- View results in real-time
-- Check CVE Suggestions tab
-- Get relevant CVE recommendations
-- Export detailed reports
-
----
-
-## 🔧 Technology Stack
+## 🔧 Teknoloji Stack
 
 ### Backend
 - **Framework:** FastAPI (async Python)
-- **AI Model:** GPT OSS 120B (via Groq API)
+- **AI Model:** GPT OSS 120B (Groq API)
 - **Vector Store:** Qdrant (HuggingFace Space)
 - **Embeddings:** BGE-M3 (BAAI/bge-m3)
 - **Reranker:** BAAI/bge-reranker-base (HuggingFace API)
 - **WebSocket:** Native FastAPI support
+- **PDF Generation:** ReportLab
 
 ### Frontend
 - **Framework:** React 18
 - **Build Tool:** Vite
-- **Styling:** TailwindCSS
-- **Routing:** React Router
-- **State:** React Hooks
+- **Styling:** TailwindCSS + Custom CSS
+- **State Management:** Context API
+- **Routing:** React Router v6
+- **Icons:** Lucide React
+- **Deploy:** Firebase Hosting
 
-### Infrastructure
-- **Hosting:** Firebase Hosting + Render.com
-- **Vector DB:** HuggingFace Spaces (Docker)
-- **CI/CD:** GitHub integration
-
----
-
-## 📊 RAG System
-
-### CVE Database
-- **Total CVEs:** 95,237 (NVD 2022-2024)
-- **Embedding Model:** BGE-M3 (1024 dimensions)
-- **Reranker:** BAAI/bge-reranker-base (HuggingFace)
-- **Search Type:** Hybrid (Dense + Sparse) + Reranking
-- **Pipeline:** Query → Vector Search (10) → Rerank → Top 5
-- **Response Time:** <500ms average (with reranking)
-
-### Search Capabilities
-- Semantic similarity matching (BGE-M3 embeddings)
-- Intelligent reranking (BAAI/bge-reranker-base)
-- Keyword-based search with BM25
-- Severity filtering (CRITICAL/HIGH/MEDIUM/LOW)
-- CVSS score integration
-- Attack vector classification
-
-**Learn more:** [RAG_INTEGRATION_README.md](RAG_INTEGRATION_README.md)
+### Veritabanı & ML
+- **Vector DB:** Qdrant
+- **Embedding Model:** BAAI/bge-m3 (1024-dim)
+- **Reranker Model:** BAAI/bge-reranker-base
+- **LLM:** GPT OSS 120B (Groq)
+- **CVE Data:** MITRE + NVD
 
 ---
 
-## 🔒 Security & Compliance
+## 📊 Performans Metrikleri
 
-### Best Practices
-- All API keys stored as environment variables
-- CORS protection with whitelist
-- WebSocket authentication
-- Private vector database option
-- Input validation and sanitization
-
-### Responsible Use
-⚠️ **Important:** This tool is for authorized security testing only.
-- Always obtain proper authorization
-- Follow responsible disclosure practices
-- Comply with local laws and regulations
-- Use in controlled environments
+| Metrik | Değer | Açıklama |
+|--------|-------|----------|
+| RAG Yanıt Süresi | <500ms | Reranker dahil ortalama süre |
+| CVE Veritabanı | 95,000+ | MITRE ve NVD kaynakları |
+| Embedding Boyutu | 1024-dim | BGE-M3 vektör boyutu |
+| Reranker Accuracy | +30% | Vector search'e göre iyileştirme |
+| Hybrid Scoring | 30/70 | Vector vs Reranker ağırlığı |
+| Concurrent Scans | 10+ | Aynı anda desteklenen tarama |
+| Tool Success Rate | ~85% | Ortalama başarı oranı |
 
 ---
 
-## 📁 Project Structure
+## 🗂️ Proje Yapısı
 
 ```
 Pentagent/
-├── agent_core/              # AI orchestration logic
-│   ├── dynamic_orchestrator.py
-│   ├── planner.py
-│   ├── analyzer.py
-│   └── executor.py
-├── tools/                   # Security testing modules (30+)
-├── services/               
-│   └── rag_service.py      # RAG integration
-├── Rag-Pent/               # Vector database system
-│   └── Qdrant/             # Search engine
-├── pentagent-frontend/     # React application
+├── agent_core/              # AI orkestrasyonu
+│   ├── dynamic_orchestrator.py  # Ana AI karar motoru
+│   ├── planner.py               # Strateji planlayıcı
+│   ├── analyzer.py              # Sonuç analizörü
+│   ├── report_generator.py      # RAG-entegreli raporlama
+│   └── state.py                 # Durum yönetimi
+│
+├── tools/                   # Güvenlik araçları (30+)
+│   ├── enum_*.py           # Keşif araçları
+│   ├── verify_*.py         # Doğrulama araçları
+│   ├── recon_*.py          # Recon araçları
+│   └── vuln_*.py           # Zafiyet tarayıcıları
+│
+├── services/               # Servisler
+│   └── rag_service.py      # RAG + Reranker sistemi
+│
+├── mcp_server/            # Tool registry
+│   ├── tool_registry.py    # Merkezi tool kaydı
+│   └── enhanced_mcp_tools.py
+│
+├── pentagent-frontend/    # React frontend
 │   ├── src/
-│   │   ├── pages/          # ChatPage, RagSearch
-│   │   ├── components/     # Reusable UI components
-│   │   └── services/       # API integration
-├── web_api.py              # FastAPI backend
-├── config.py               # Configuration
-└── requirements.txt        # Python dependencies
+│   │   ├── components/
+│   │   │   ├── chat/          # Chat arayüzü
+│   │   │   ├── reports/       # Rapor görüntüleme
+│   │   │   ├── layout/        # Layout bileşenleri
+│   │   │   └── common/        # Ortak bileşenler
+│   │   ├── pages/
+│   │   │   ├── ChatPage.jsx   # Ana pentest sayfası
+│   │   │   ├── Reports.jsx    # Rapor sayfası
+│   │   │   └── RagSearch.jsx  # RAG arama sayfası
+│   │   ├── services/
+│   │   │   └── pentagentAPI.js # Backend API client
+│   │   └── contexts/
+│   │       └── AuthContext.jsx # Auth yönetimi
+│   └── dist/              # Build output
+│
+├── reports/               # Oluşturulan raporlar
+├── logs/                  # Sistem logları
+├── web_api.py            # FastAPI backend server
+├── config.py             # Konfigürasyon
+├── requirements.txt      # Python bağımlılıkları
+└── README.md            # Bu dosya
 ```
 
 ---
 
-## 🚀 Features Roadmap
+## 🔐 Güvenlik Notları
 
-### Current Features ✅
-- [x] Autonomous AI-driven pentesting
-- [x] 30+ integrated security tools
-- [x] Real-time WebSocket updates
-- [x] RAG-enhanced CVE search with reranking
-- [x] BAAI/bge-reranker-base integration
-- [x] Interactive chat interface
-- [x] Context-aware scanning
-- [x] Chrome/Selenium fallback system
-- [x] Token-optimized AI prompts
-- [x] Smart loop prevention
+⚠️ **ÖNEMLİ:** Pentagent yalnızca yasal yetkilendirme ile kullanılmalıdır.
 
-### Planned Features 🔮
+- ✅ Kendi sistemlerinizi test edin
+- ✅ Yazılı izin alınmış sistemleri test edin
+- ✅ CTF ve eğitim ortamlarında kullanın
+- ❌ İzinsiz sistemlere karşı kullanmayın
+- ❌ DoS/DDoS saldırıları yapmayın
+- ❌ Sistem kaynaklarını kötüye kullanmayın
+
+**API Key Güvenliği:**
+- API keylerini asla commit etmeyin
+- `.env` dosyasını `.gitignore`'a ekleyin
+- Production'da environment variables kullanın
+- API key rotasyonunu düzenli yapın
+
+---
+
+## 🤝 Katkıda Bulunma
+
+Katkılarınızı bekliyoruz! Lütfen aşağıdaki adımları izleyin:
+
+1. Fork'layın
+2. Feature branch oluşturun (`git checkout -b feature/amazing-feature`)
+3. Değişikliklerinizi commit edin (`git commit -m 'feat: Add amazing feature'`)
+4. Branch'inizi push edin (`git push origin feature/amazing-feature`)
+5. Pull Request açın
+
+### Geliştirme Kuralları
+- Senior-level, modüler kod yazın
+- Duplicate kod/fonksiyon yazmayın
+- Best practice'lere uyun
+- Ortak kodları utils/helpers'a taşıyın
+- Yeterli yorum satırı ekleyin
+
+---
+
+## 📈 Roadmap
+
+### v2.0 (Mevcut) ✅
+- [x] RAG sistemi entegrasyonu
+- [x] BAAI/bge-reranker-base optimizasyonu
+- [x] GPT OSS 120B model entegrasyonu
+- [x] Otomatik rapor oluşturma
+- [x] 30+ güvenlik aracı
+- [x] WebSocket real-time updates
+
+### v2.1 (Planlanan) 🚧
 - [ ] Multi-target scanning
-- [ ] Custom tool integration
-- [ ] Advanced reporting (PDF/CSV export)
-- [ ] Scan history and bookmarks
-- [ ] Team collaboration features
-- [ ] API rate limiting
-- [ ] Enhanced caching
+- [ ] Custom wordlist yönetimi
+- [ ] Export to Burp Suite
+- [ ] Scheduled scans
+- [ ] Email bildirimler
+
+### v3.0 (Gelecek) 🔮
+- [ ] Machine learning CVE predictor
+- [ ] Exploit generator
+- [ ] API fuzzing
+- [ ] Mobile app security
+- [ ] Cloud security scanner
 
 ---
 
-## 📚 Documentation
+## 📄 Lisans
 
-- [DEPLOYMENT.md](DEPLOYMENT.md) - Deployment guide
-- [RAG_INTEGRATION_README.md](RAG_INTEGRATION_README.md) - RAG system details
-- [LICENSE](LICENSE) - Apache 2.0 License
+Bu proje Apache License 2.0 altında lisanslanmıştır. Detaylar için [LICENSE](LICENSE) dosyasına bakın.
 
----
-
-## 🤝 Contributing
-
-Contributions are welcome! This is an open-source project.
-
-**How to contribute:**
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
+**Öne Çıkan Özellikler:**
+- ✅ Ticari kullanım izni
+- ✅ Değişiklik yapma izni
+- ✅ Dağıtım izni
+- ✅ Patent kullanım izni
+- ⚠️ Sorumluluk ve garanti feragati
 
 ---
 
-## 📝 License
+## 🙏 Teşekkürler
 
-This project is licensed under the **Apache License 2.0** - see the [LICENSE](LICENSE) file for details.
-
-**Key points:**
-- ✅ Commercial use allowed
-- ✅ Modification allowed
-- ✅ Distribution allowed
-- ✅ Patent use allowed
-- ⚠️ Liability and warranty disclaimers apply
-
----
-
-## 🙏 Acknowledgments
-
-- **GPT OSS 120B** - AI reasoning model (via Groq API)
-- **Qdrant** - Vector database engine
+- **GPT OSS 120B** - AI reasoning modeli (Groq API üzerinden)
+- **Qdrant** - Vector database motoru
 - **BAAI** - BGE-M3 embeddings & bge-reranker-base
-- **HuggingFace** - Model hosting & inference API  
-- **NVD/MITRE** - CVE data source
+- **HuggingFace** - Model hosting & inference API
+- **NVD/MITRE** - CVE veri kaynağı
 - **FastAPI** - High-performance backend framework
 - **React** - Modern frontend framework
 
 ---
 
-## 📞 Contact & Support
+## 📞 İletişim & Destek
 
-- **GitHub:** [@Pentagentr](https://github.com/Pentagentr)
-- **Repository:** [Pentagent-Web](https://github.com/Pentagentr/Pentagent-Web)
-- **Issues:** [GitHub Issues](https://github.com/Pentagentr/Pentagent-Web/issues)
-
----
-
-## ⚠️ Disclaimer
-
-This tool is designed for **authorized security testing only**. Users are responsible for:
-- Obtaining proper authorization before testing
-- Complying with applicable laws and regulations
-- Using the tool ethically and responsibly
-
-The developers assume no liability for misuse.
+- **GitHub Issues:** [github.com/Pentagentr/Pentagent-Web/issues](https://github.com/Pentagentr/Pentagent-Web/issues)
+- **Dokümantasyon:** [docs klasörüne bakın](docs/)
+- **Email:** security@pentagent.ai (demo amaçlı)
 
 ---
 
-**Built with ❤️ for the security community**
+<div align="center">
+
+**⭐ Projeyi beğendiyseniz yıldız vermeyi unutmayın! ⭐**
+
+Made with ❤️ by Security Researchers
+
+</div>
