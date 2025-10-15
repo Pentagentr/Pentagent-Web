@@ -876,6 +876,167 @@ class ReportGenerator:
     # MEVCUT DİĞER FONKSİYONLAR
     # ==========================================================================
     
+    def get_structured_report_data(self, state: AgentState) -> Dict[str, Any]:
+        """
+        Frontend için yapılandırılmış rapor verilerini döndürür (JSON format).
+        Tüm 6 bölüm dahil: Executive Summary, Methodology, Risk Matrix, Findings Summary, Detailed Findings, Recommendations
+        """
+        findings_summary = state.get_findings_summary()
+        overall_risk = self._calculate_overall_risk_level(findings_summary)
+        risk_score = self._calculate_risk_score(state.findings)
+        
+        # Bulguları severity'ye göre sırala
+        sorted_findings = sorted(
+            state.findings, 
+            key=lambda x: {"critical": 4, "high": 3, "medium": 2, "low": 1}.get(x.get("severity", "low"), 0), 
+            reverse=True
+        )
+        
+        # 1. EXECUTIVE SUMMARY
+        top_findings = sorted_findings[:3]
+        executive_summary = {
+            "genel_degerlendirme": f"Bu rapor, {state.target} sistemine yönelik gerçekleştirilen penetrasyon testinin sonuçlarını özetlemektedir. Testler, sistemin genel güvenlik duruşunu ve potansiyel risklerini değerlendirmek amacıyla yapılmıştır. Değerlendirme sonucunda, sistemin güvenlik seviyesi '{overall_risk}' olarak belirlenmiştir.",
+            "risk_skoru": risk_score,
+            "risk_seviyesi": overall_risk,
+            "kritik_bulgular": [
+                {
+                    "baslik": f.get("title", "N/A"),
+                    "is_etkisi": self._generate_business_impact(f),
+                    "severity": f.get("severity", "unknown")
+                }
+                for f in top_findings
+            ] if top_findings else [],
+            "oncelikli_aksiyonlar": [
+                {
+                    "bulgu": f.get("title", "N/A"),
+                    "oneri": self._get_remediation(f).split('\n')[0]
+                }
+                for f in top_findings
+            ] if top_findings else []
+        }
+        
+        # 2. METHODOLOGY
+        methodology = {
+            "standartlar": "OWASP Testing Guide, PTES ve NIST SP 800-115",
+            "kapsam": state.target,
+            "test_baslangic": state.start_time.strftime('%d.%m.%Y %H:%M') if state.start_time else "N/A",
+            "kapsam_disi": "Sosyal mühendislik, fiziksel güvenlik ve DoS/DDoS saldırıları bu testin kapsamı dışındadır.",
+            "aciklama": "Bu güvenlik değerlendirmesi, OWASP Testing Guide, PTES ve NIST SP 800-115 gibi endüstri standartlarına uygun, otomatize edilmiş bir metodoloji ile gerçekleştirilmiştir."
+        }
+        
+        # 3. RISK MATRIX
+        risk_matrix = {
+            "aciklama": "Risk seviyeleri CVSS v3.1 ve OWASP Risk Rating Metodolojisi'ne göre belirlenmiştir",
+            "seviyeler": {
+                "KRITIK": {"aralik": "9.0-10.0", "aciklama": "Acil müdahale gerektirir. Sistem tamamen ele geçirilebilir."},
+                "YÜKSEK": {"aralik": "7.0-8.9", "aciklama": "Öncelikli olarak giderilmelidir. Veri kaybı/ifşası riski yüksek."},
+                "ORTA": {"aralik": "4.0-6.9", "aciklama": "Makul sürede giderilmelidir. Sınırlı etki potansiyeli."},
+                "DÜŞÜK": {"aralik": "0.1-3.9", "aciklama": "Planlı olarak giderilmelidir. Minimal etki."}
+            }
+        }
+        
+        # 4. FINDINGS SUMMARY
+        findings_summary_data = {
+            "toplam": len(state.findings),
+            "ciddiyete_gore": findings_summary.get("by_severity", {}),
+            "owasp_kategorileri": self._categorize_findings_by_owasp(state.findings)
+        }
+        
+        # 5. DETAILED FINDINGS
+        detailed_findings = []
+        for i, finding in enumerate(sorted_findings, 1):
+            detailed_findings.append({
+                "id": i,
+                "baslik": finding.get("title", "N/A"),
+                "severity": finding.get("severity", "low"),
+                "cvss_skoru": finding.get("cvss_score", "N/A"),
+                "cve_id": finding.get("cve_id", "N/A"),
+                "aciklama": finding.get("description", "Açıklama bulunamadı"),
+                "kanit": finding.get("evidence", "Kanıt bulunamadı"),
+                "is_etkisi": finding.get("business_impact") or self._generate_business_impact(finding),
+                "cozum": finding.get("recommendation_summary") or self._get_remediation(finding),
+                "owasp_referans": self._get_owasp_reference(finding),
+                "hedef": finding.get("target", state.target),
+                "teknoloji": finding.get("technology", "N/A")
+            })
+        
+        # 6. RECOMMENDATIONS & CONCLUSION
+        recommendations = {
+            "acil_aksiyonlar": [],
+            "kisa_vade_aksiyonlar": [],
+            "stratejik_iyilestirmeler": [],
+            "sonuc": ""
+        }
+        
+        # Acil aksiyonlar
+        for f in sorted_findings:
+            if f.get('severity') == 'critical':
+                recommendations["acil_aksiyonlar"].append({
+                    "baslik": f.get('title'),
+                    "oneri": self._get_remediation(f).split('\n')[0]
+                })
+        
+        # Kısa vade aksiyonlar
+        for f in sorted_findings:
+            if f.get('severity') == 'high':
+                recommendations["kisa_vade_aksiyonlar"].append({
+                    "baslik": f.get('title'),
+                    "oneri": self._get_remediation(f).split('\n')[0]
+                })
+        
+        # Stratejik iyileştirmeler
+        categories = self._categorize_findings_by_owasp(state.findings)
+        if "A05:2021 - Security Misconfiguration" in categories:
+            recommendations["stratejik_iyilestirmeler"].append({
+                "alan": "Konfigürasyon Yönetimi",
+                "oneri": "Sunucu, veritabanı ve bulut hizmetleri için 'güvenli temel' konfigürasyonları oluşturun ve düzenli olarak denetleyin."
+            })
+        if "A03:2021 - Injection" in categories:
+            recommendations["stratejik_iyilestirmeler"].append({
+                "alan": "Injection Koruması",
+                "oneri": "Tüm veri girişlerinde parameterized queries kullanın ve input validation uygulayın."
+            })
+        if "A01:2021 - Broken Access Control" in categories:
+            recommendations["stratejik_iyilestirmeler"].append({
+                "alan": "Erişim Kontrolü",
+                "oneri": "Zero Trust model ve rol-bazlı erişim kontrolü (RBAC) uygulayın."
+            })
+        
+        # Sonuç
+        top_category = max(categories, key=categories.get, default="").split(' - ')[-1] if categories else ""
+        conclusion = f"Bu güvenlik değerlendirmesi, {state.target} sisteminin genel güvenlik durumunu '{overall_risk}' olarak belirlemiştir. "
+        if top_category:
+            conclusion += f"Test sırasında tespit edilen zafiyetlerin yoğunlaştığı ana tema '{top_category}' olarak öne çıkmaktadır. "
+        if findings_summary['by_severity']['critical'] > 0:
+            conclusion += "Tespit edilen kritik seviyedeki bulgular, sisteme yönelik ciddi tehditler oluşturmakta ve acil müdahale gerektirmektedir. "
+        elif findings_summary['by_severity']['high'] > 0:
+            conclusion += "Yüksek seviyeli bulgular, önemli veri sızıntısı veya hizmet kesintisi riskleri taşımaktadır ve öncelikli olarak ele alınmalıdır. "
+        conclusion += "Raporda detaylandırılan stratejik ve taktiksel önerilerin uygulanması, sistemin siber saldırılara karşı dayanıklılığını önemli ölçüde artıracaktır."
+        recommendations["sonuc"] = conclusion
+        
+        # APPENDIX
+        appendix = {
+            "test_kapsami": [state.target],
+            "subdomainler": state.context_summary.get("subdomains", [])[:10] if state.context_summary else [],
+            "acik_portlar": state.context_summary.get("open_ports", [])[:15] if state.context_summary else [],
+            "standartlar": [
+                "OWASP Top 10 2021",
+                "PTES (Penetration Testing Execution Standard)",
+                "NIST SP 800-115",
+                "CVSS v3.1"
+            ]
+        }
+        
+        return {
+            "executive_summary": executive_summary,
+            "methodology": methodology,
+            "risk_matrix": risk_matrix,
+            "findings_summary": findings_summary_data,
+            "detailed_findings": detailed_findings,
+            "recommendations": recommendations,
+            "appendix": appendix
+        }
+
     async def generate_report(self, state: AgentState, output_path: str) -> bool:
         """
         Profesyonel penetrasyon testi raporunu oluşturur ve kaydeder.
@@ -935,7 +1096,7 @@ class ReportGenerator:
             else:
                  story.append(Paragraph(line, styles['Normal']))
         
-            doc.build(story)
+        doc.build(story)
             
     def _create_json_report(self, state: AgentState, json_path: str):
         """Sektör standardında JSON raporu oluşturur."""

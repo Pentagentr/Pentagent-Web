@@ -549,6 +549,46 @@ async def get_rag_stats():
         logger.error(f"Stats hatası: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/reports/{report_id}/download")
+async def download_report(report_id: str, format: str = "pdf"):
+    """
+    Raporu belirtilen formatta indir.
+    
+    Params:
+        - report_id: Rapor ID'si
+        - format: İndirme formatı (pdf, txt, json)
+    """
+    try:
+        import os
+        from fastapi.responses import FileResponse
+        
+        # Dosya yolunu oluştur
+        report_path = f"reports/{report_id}.{format}"
+        
+        if not os.path.exists(report_path):
+            raise HTTPException(status_code=404, detail="Rapor dosyası bulunamadı")
+        
+        # Dosya tipine göre media type belirle
+        media_types = {
+            "pdf": "application/pdf",
+            "txt": "text/plain",
+            "json": "application/json"
+        }
+        
+        media_type = media_types.get(format, "application/octet-stream")
+        
+        return FileResponse(
+            path=report_path,
+            media_type=media_type,
+            filename=f"{report_id}.{format}"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Rapor indirme hatası: {e}")
+        raise HTTPException(status_code=500, detail=f"Rapor indirilemedi: {str(e)}")
+
 @app.post("/api/generate-report")
 async def generate_security_report(request: Dict[str, Any]):
     """
@@ -656,6 +696,9 @@ async def generate_security_report(request: Dict[str, Any]):
             "low": len([f for f in state.findings if f.get('severity') == 'low']),
         }
         
+        # Yapılandırılmış rapor verisini al
+        structured_report = report_gen.get_structured_report_data(state)
+        
         logger.info(f"✅ Rapor başarıyla oluşturuldu: {report_id}")
         
         return {
@@ -665,6 +708,7 @@ async def generate_security_report(request: Dict[str, Any]):
             "risk_score": risk_score,
             "vulnerabilities": vulnerabilities,
             "pages": len(report_content.split('\n')) // 50,  # Tahmini sayfa sayısı
+            "createdAt": datetime.now().isoformat(),
             "download_url": f"/api/reports/{report_id}/download",
             "report_content": report_content[:5000],  # İlk 5000 karakter
             "formats_available": ["txt", "pdf", "json"],
@@ -672,7 +716,9 @@ async def generate_security_report(request: Dict[str, Any]):
                 "txt": f"{txt_path}",
                 "pdf": f"{report_path}.pdf",
                 "json": f"{report_path}.json"
-            }
+            },
+            # Tüm rapor bölümleri
+            "structured_data": structured_report
         }
         
     except HTTPException:

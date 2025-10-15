@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { MessageSquare, Database, Shield, User, LogOut, ChevronDown } from 'lucide-react';
+import { MessageSquare, Database, Shield, User, LogOut, ChevronDown, FileText } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 
 const AppNavbar = () => {
@@ -16,7 +16,8 @@ const AppNavbar = () => {
   
   const navItems = [
     { path: '/chat', label: 'Pentest', icon: MessageSquare },
-    { path: '/rag-search', label: 'CVE Database', icon: Database }
+    { path: '/rag-search', label: 'CVE Database', icon: Database },
+    { path: '/reports', label: 'Reports', icon: FileText }
   ];
   
   const handleLogout = async () => {
