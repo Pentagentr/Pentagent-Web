@@ -565,39 +565,63 @@ Query:"""
             return ""
     
     def _summarize_scan_results(self, scan_results: Dict[str, Any]) -> str:
-        """Scan sonuçlarını LLM için özet haline getirir."""
+        """Scan sonuçlarını LLM için özet haline getirir - GERÇEK SCAN FORMATI."""
         summary_parts = []
+        
+        # Scan sonuçları genellikle tool_name: {result} formatında geliyor
+        # Örnek: {"ssl_scan": {...}, "subdomain_enum": {...}, "port_scan": {...}}
         
         # Target
         target = scan_results.get("target", "")
         if target:
             summary_parts.append(f"Target: {target}")
         
-        # Vulnerabilities
-        vulnerabilities = scan_results.get("vulnerabilities", [])
-        if vulnerabilities:
-            vuln_list = [f"- {v.get('type', 'Unknown')}" for v in vulnerabilities[:5]]
-            summary_parts.append(f"Vulnerabilities Found:\n" + "\n".join(vuln_list))
+        # Her tool sonucunu analiz et
+        for tool_name, tool_result in scan_results.items():
+            if tool_name == "target" or not isinstance(tool_result, dict):
+                continue
+                
+            # Vulnerability/findings anahtarlarını ara
+            findings = None
+            if isinstance(tool_result, dict):
+                findings = tool_result.get("vulnerabilities") or tool_result.get("findings") or tool_result.get("results")
+            
+            if findings and isinstance(findings, (list, dict)):
+                if isinstance(findings, dict):
+                    # Dict formatındaki findings'i listeye çevir
+                    findings_text = f"{tool_name}: " + ", ".join([f"{k}={v}" for k, v in list(findings.items())[:3]])
+                    summary_parts.append(findings_text)
+                else:
+                    # List formatındaki findings
+                    findings_text = f"{tool_name}: " + ", ".join([str(f) for f in findings[:3]])
+                    summary_parts.append(findings_text)
+            elif tool_result:
+                # Genel tool sonucu
+                result_str = str(tool_result)[:100]  # İlk 100 karakter
+                summary_parts.append(f"{tool_name}: {result_str}")
         
-        # Technologies
-        technologies = scan_results.get("technologies", [])
-        if technologies:
-            tech_list = ", ".join(technologies[:5])
-            summary_parts.append(f"Technologies: {tech_list}")
+        # Technologies - tool sonuçlarından çıkar
+        tech_result = scan_results.get("enum_tech_detector") or scan_results.get("tech_detection")
+        if tech_result and isinstance(tech_result, dict):
+            technologies = tech_result.get("technologies") or tech_result.get("detected_technologies")
+            if technologies:
+                if isinstance(technologies, list):
+                    tech_list = ", ".join([str(t) for t in technologies[:3]])
+                else:
+                    tech_list = str(technologies)[:100]
+                summary_parts.append(f"Technologies: {tech_list}")
         
-        # Services
-        services = scan_results.get("services", [])
-        if services:
-            service_list = [f"- {s.get('name', 'Unknown')} (Port {s.get('port', 'N/A')})" 
-                          for s in services[:5]]
-            summary_parts.append(f"Open Services:\n" + "\n".join(service_list))
+        # Port scan sonuçları
+        port_result = scan_results.get("port_scan") or scan_results.get("recon_port_scanner")
+        if port_result and isinstance(port_result, dict):
+            open_ports = port_result.get("open_ports") or port_result.get("ports")
+            if open_ports:
+                ports_str = str(open_ports)[:100]
+                summary_parts.append(f"Open Ports: {ports_str}")
         
-        # Summary
-        summary = scan_results.get("summary", "")
-        if summary:
-            summary_parts.append(f"Summary: {summary}")
-        
-        return "\n\n".join(summary_parts) if summary_parts else "No detailed information available"
+        result = "\n".join(summary_parts) if summary_parts else "No detailed scan results available"
+        logger.info(f"📋 Scan Summary: {result[:200]}...")
+        return result
     
     def _generate_query_from_scan(self, scan_results: Dict[str, Any]) -> str:
         """

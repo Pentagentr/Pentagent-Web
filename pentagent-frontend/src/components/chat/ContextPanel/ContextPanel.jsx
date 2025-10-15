@@ -177,10 +177,43 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
         {activeTab === 'cve' && (
           <>
             {/* CVE Suggestions */}
+            {/* LLM Query - Her zaman göster (loading olsa bile) */}
+            {(llmQuery || cveLoading) && (
+              <div className="bg-obsidian-900/30 border border-purple-500/10 rounded-lg p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Brain className="w-3 h-3 text-purple-400" />
+                  <span className="text-xs font-medium text-purple-400">AI Query</span>
+                </div>
+                {cveLoading ? (
+                  <div className="flex items-center gap-2 text-xs text-text-tertiary">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    <span>Query oluşturuluyor...</span>
+                  </div>
+                ) : llmQuery ? (
+                  <>
+                    <p className="text-xs text-text-secondary font-mono bg-obsidian-950/50 p-2 rounded border border-purple-500/10 mb-2">
+                      "{llmQuery}"
+                    </p>
+                    {scanSummary && (
+                      <div className="pt-2 border-t border-purple-500/10">
+                        <div className="flex items-center gap-2 mb-1">
+                          <FileText className="w-3 h-3 text-platinum-400" />
+                          <span className="text-[10px] font-medium text-platinum-400">Tarama Özeti</span>
+                        </div>
+                        <p className="text-[10px] text-text-tertiary line-clamp-2">
+                          {scanSummary}
+                        </p>
+                      </div>
+                    )}
+                  </>
+                ) : null}
+              </div>
+            )}
+
             {cveLoading ? (
-              <div className="flex flex-col items-center justify-center py-12 space-y-3">
+              <div className="flex flex-col items-center justify-center py-8 space-y-3">
                 <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
-                <p className="text-xs text-text-tertiary">CVE analizi yapılıyor...</p>
+                <p className="text-xs text-text-tertiary">CVE araması yapılıyor...</p>
               </div>
             ) : cveError ? (
               <div className="bg-obsidian-900/50 border border-purple-500/20 rounded-lg p-4 text-center">
@@ -195,30 +228,6 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
               </div>
             ) : cveResults.length > 0 ? (
               <div className="space-y-2.5">
-                {/* LLM Query ve Scan Summary */}
-                {llmQuery && (
-                  <div className="bg-obsidian-900/30 border border-purple-500/10 rounded-lg p-3 mb-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Brain className="w-3 h-3 text-purple-400" />
-                      <span className="text-xs font-medium text-purple-400">LLM Query</span>
-                    </div>
-                    <p className="text-xs text-text-secondary font-mono bg-obsidian-950/50 p-2 rounded border border-purple-500/10">
-                      "{llmQuery}"
-                    </p>
-                    {scanSummary && (
-                      <div className="mt-2 pt-2 border-t border-purple-500/10">
-                        <div className="flex items-center gap-2 mb-1">
-                          <FileText className="w-3 h-3 text-platinum-400" />
-                          <span className="text-xs font-medium text-platinum-400">Scan Özeti</span>
-                        </div>
-                        <p className="text-xs text-text-tertiary line-clamp-2">
-                          {scanSummary}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-                
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="text-xs font-medium text-platinum">
                     İlgili CVE'ler ({cveResults.length})

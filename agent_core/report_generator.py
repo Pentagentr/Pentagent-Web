@@ -1224,55 +1224,112 @@ class ReportGenerator:
         return text
     
     def _create_simple_pdf_from_text(self, text_content: str, pdf_path: str):
-        """Verilen metin içeriğinden basit bir PDF oluşturur - Unicode temizli."""
-        doc = SimpleDocTemplate(pdf_path, pagesize=A4)
+        """Verilen metin içeriğinden profesyonel bir PDF oluşturur - temiz format."""
+        doc = SimpleDocTemplate(pdf_path, pagesize=A4, topMargin=50, bottomMargin=50, leftMargin=50, rightMargin=50)
         styles = getSampleStyleSheet()
-        code_style = ParagraphStyle('Code', parent=styles['Normal'], fontName='Courier', fontSize=8, leading=10)
+        
+        # Özel stiller oluştur
+        heading1_style = ParagraphStyle('CustomHeading1', parent=styles['Heading1'], fontSize=16, spaceAfter=20, spaceBefore=20, textColor=colors.HexColor('#2d3748'))
+        heading2_style = ParagraphStyle('CustomHeading2', parent=styles['Heading2'], fontSize=14, spaceAfter=15, spaceBefore=15, textColor=colors.HexColor('#4a5568'))
+        normal_style = ParagraphStyle('CustomNormal', parent=styles['Normal'], fontSize=10, leading=14, spaceAfter=6)
+        bullet_style = ParagraphStyle('CustomBullet', parent=styles['Bullet'], fontSize=10, leading=14, leftIndent=20, spaceAfter=4)
+        code_style = ParagraphStyle('CustomCode', parent=styles['Normal'], fontName='Courier', fontSize=8, leading=12, leftIndent=20, backgroundColor=colors.HexColor('#f7fafc'))
         
         # Metni temizle
         text_content = self._clean_text_for_pdf(text_content)
         
         story = []
+        prev_was_heading = False
+        
         for line in text_content.split('\n'):
-            # Boş satırları atla
+            # Boş satırlar için boşluk ekle
             if not line.strip():
-                story.append(Spacer(1, 6))
+                if not prev_was_heading:
+                    story.append(Spacer(1, 10))
                 continue
-                
-            # Satır başlangıcına göre stil belirle
+            
             line = line.strip()
-            if line.startswith('=') or line.startswith('-' * 10):
-                story.append(Spacer(1, 12))
-            elif line.startswith('[') and line.endswith(']'):
-                story.append(Paragraph(f"<b>{line}</b>", styles['Heading2']))
-            elif line.startswith('*') or line.startswith('-'):
-                story.append(Paragraph(line, styles['Bullet']))
-            elif "HTTP/" in line or "curl" in line:
-                story.append(Paragraph(line.replace(" ", "&nbsp;"), code_style))
-            else:
+            
+            # Başlıklar (=== veya ---)
+            if line.startswith('===') or line.startswith('---') or (len(line) > 10 and all(c == '=' or c == '-' for c in line)):
+                story.append(Spacer(1, 15))
+                prev_was_heading = True
+                continue
+            
+            # Bölüm başlıkları (1., 2., 3. gibi)
+            if len(line) < 100 and (line.startswith(('1.', '2.', '3.', '4.', '5.', '6.', '7.')) or line.isupper()):
+                story.append(Spacer(1, 20))
                 try:
-                    story.append(Paragraph(line, styles['Normal']))
+                    story.append(Paragraph(f"<b>{line}</b>", heading1_style))
+                    prev_was_heading = True
                 except:
-                    # Eğer hala sorun varsa, basit metin olarak ekle
+                    story.append(Spacer(1, 10))
+                continue
+            
+            # Alt başlıklar ([...] formatında)
+            if line.startswith('[') and line.endswith(']'):
+                story.append(Spacer(1, 12))
+                try:
+                    story.append(Paragraph(f"<b>{line[1:-1]}</b>", heading2_style))
+                    prev_was_heading = True
+                except:
                     story.append(Spacer(1, 6))
+                continue
+            
+            # Liste öğeleri (* veya - veya •)
+            if line.startswith(('*', '-', '•')) or (len(line) > 2 and line[0].isspace() and line.strip().startswith(('*', '-', '•'))):
+                try:
+                    story.append(Paragraph(line, bullet_style))
+                    prev_was_heading = False
+                except:
+                    story.append(Spacer(1, 4))
+                continue
+            
+            # Kod/URL satırları
+            if "HTTP/" in line or "curl" in line or "://" in line or line.startswith("  "):
+                try:
+                    story.append(Paragraph(line.replace(" ", "&nbsp;"), code_style))
+                    prev_was_heading = False
+                except:
+                    story.append(Spacer(1, 4))
+                continue
+            
+            # Normal paragraflar
+            try:
+                story.append(Paragraph(line, normal_style))
+                prev_was_heading = False
+            except Exception as e:
+                # Eğer hala sorun varsa, basit spacer ekle
+                story.append(Spacer(1, 6))
         
         try:
             doc.build(story)
-            logger.info(f"PDF başarıyla oluşturuldu: {pdf_path}")
+            logger.info(f"✅ Profesyonel PDF başarıyla oluşturuldu: {pdf_path}")
         except Exception as e:
-            logger.error(f"PDF oluşturma hatası: {e}")
-            # Fallback: Çok basit PDF oluştur
+            logger.error(f"❌ PDF oluşturma hatası: {e}, fallback kullanılıyor")
+            # Fallback: Canvas ile basit PDF
             from reportlab.pdfgen import canvas
             c = canvas.Canvas(pdf_path, pagesize=A4)
             c.setFont("Helvetica", 10)
             y = 800
-            for line in text_content.split('\n')[:100]:  # İlk 100 satır
+            page_num = 1
+            for line in text_content.split('\n'):
                 if y < 50:
+                    c.setFont("Helvetica", 8)
+                    c.drawString(520, 30, f"Sayfa {page_num}")
                     c.showPage()
+                    c.setFont("Helvetica", 10)
                     y = 800
-                c.drawString(50, y, line[:80])  # İlk 80 karakter
+                    page_num += 1
+                try:
+                    c.drawString(50, y, line[:90])  # İlk 90 karakter
+                except:
+                    pass
                 y -= 15
+            c.setFont("Helvetica", 8)
+            c.drawString(520, 30, f"Sayfa {page_num}")
             c.save()
+            logger.info(f"✅ Fallback PDF oluşturuldu: {pdf_path}")
             
     def _create_json_report(self, state: AgentState, json_path: str):
         """Sektör standardında JSON raporu oluşturur."""
