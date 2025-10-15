@@ -56,9 +56,11 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
   // Scan sonuçları değiştiğinde CVE analizi yap
   useEffect(() => {
     if (scanResults && activeTab === 'cve') {
+      // Her taramada yeni analiz yap
+      setCveResults([]); // Önce önceki sonuçları temizle
       fetchCVESuggestions();
     }
-  }, [scanResults, activeTab]);
+  }, [JSON.stringify(scanResults), activeTab, conversationId]); // JSON.stringify ile deep comparison
 
   const fetchCVESuggestions = async () => {
     if (!scanResults) return;

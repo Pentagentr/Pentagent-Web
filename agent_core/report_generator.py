@@ -876,6 +876,27 @@ class ReportGenerator:
     # MEVCUT DİĞER FONKSİYONLAR
     # ==========================================================================
     
+    def get_structured_report_data_with_cves(self, state: AgentState, cve_findings: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Frontend için yapılandırılmış rapor verilerini döndürür (JSON format).
+        Tool bulguları + Ayrı CVE tablosu
+        """
+        data = self.get_structured_report_data(state)
+        
+        # CVE tablosunu ekle
+        cve_table = []
+        for cve in cve_findings:
+            cve_table.append({
+                "cve_id": cve.get("cve_id", "N/A"),
+                "cvss_skoru": cve.get("cvss_score", "N/A"),
+                "severity": cve.get("severity", "unknown"),
+                "aciklama": cve.get("description", "")[:200] + "..." if len(cve.get("description", "")) > 200 else cve.get("description", ""),
+                "etkilenen_sistem": cve.get("technology") or cve.get("target", "N/A")
+            })
+        
+        data["cve_references"] = cve_table
+        return data
+    
     def get_structured_report_data(self, state: AgentState) -> Dict[str, Any]:
         """
         Frontend için yapılandırılmış rapor verilerini döndürür (JSON format).

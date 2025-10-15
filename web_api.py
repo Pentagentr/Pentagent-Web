@@ -693,6 +693,16 @@ async def generate_security_report(request: Dict[str, Any]):
         
         logger.info(f"Toplam {len(state.findings)} bulgu raporda yer alacak")
         
+        # Bulguları ayır: Tool sonuçları ve CVE'ler
+        tool_findings = [f for f in state.findings if not f.get('title', '').startswith('Iliskili CVE')]
+        cve_findings = [f for f in state.findings if f.get('title', '').startswith('Iliskili CVE')]
+        
+        logger.info(f"Tool bulguları: {len(tool_findings)}, CVE bulguları: {len(cve_findings)}")
+        
+        # State'e sadece tool bulgularını koy (Detaylı bulgular sadece tool sonuçları olacak)
+        all_findings = state.findings.copy()  # Tüm bulguları sakla
+        state.findings = tool_findings
+        
         # Execution time
         state.execution_time = 0  # Rapor oluşturma süresi
         
@@ -701,7 +711,7 @@ async def generate_security_report(request: Dict[str, Any]):
             "target": target,
             "scan_type": "rag_integrated",
             "cve_count": len(cve_results),
-            "finding_count": len(state.findings)
+            "finding_count": len(tool_findings)
         }
         
         # ReportGenerator oluştur
@@ -715,7 +725,7 @@ async def generate_security_report(request: Dict[str, Any]):
         import os
         os.makedirs("reports", exist_ok=True)
         
-        # Raporu oluştur
+        # Raporu oluştur (sadece tool bulguları)
         success = await report_gen.generate_report(state, report_path)
         
         if not success:
@@ -726,8 +736,10 @@ async def generate_security_report(request: Dict[str, Any]):
         with open(txt_path, 'r', encoding='utf-8') as f:
             report_content = f.read()
         
-        # Risk skoru hesapla
+        # Risk skoru hesapla (tüm bulgulardan)
+        state.findings = all_findings  # Tüm bulguları geri koy risk skoru için
         risk_score = report_gen._calculate_risk_score(state.findings)
+        state.findings = tool_findings  # Tekrar tool bulgularına dön
         
         # Zafiyet sayıları
         vulnerabilities = {
@@ -737,8 +749,8 @@ async def generate_security_report(request: Dict[str, Any]):
             "low": len([f for f in state.findings if f.get('severity') == 'low']),
         }
         
-        # Yapılandırılmış rapor verisini al
-        structured_report = report_gen.get_structured_report_data(state)
+        # Yapılandırılmış rapor verisini al (tool bulguları + CVE tablosu)
+        structured_report = report_gen.get_structured_report_data_with_cves(state, cve_findings)
         
         logger.info(f"✅ Rapor başarıyla oluşturuldu: {report_id}")
         

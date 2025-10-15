@@ -12,7 +12,8 @@ import {
   CheckCircle,
   BookOpen,
   TrendingUp,
-  Loader2
+  Loader2,
+  Database
 } from 'lucide-react';
 
 const ReportViewer = ({ report, isOpen, onClose }) => {
@@ -264,6 +265,7 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
   // 5. DETAYLI BULGULAR
   const renderDetayliBulgular = () => {
     const findings = report.structured_data?.detailed_findings || [];
+    const cveReferences = report.structured_data?.cve_references || [];
     
     if (findings.length === 0) {
       return (
@@ -275,55 +277,111 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
     }
     
     return (
-      <div className="space-y-4">
-        {findings.map((finding) => (
-          <div key={finding.id} className="bg-obsidian-900/50 border border-platinum-500/10 rounded-lg p-5">
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="px-2 py-1 bg-obsidian-950 text-text-tertiary rounded text-xs font-mono">
-                    #{finding.id}
-                  </span>
-                  <h4 className="text-sm font-semibold text-text-primary truncate">{finding.baslik}</h4>
-                  <span className={`px-2 py-1 rounded text-xs flex-shrink-0 ${getSeverityColor(finding.severity)}`}>
-                    {getSeverityText(finding.severity)}
-                  </span>
+      <div className="space-y-6">
+        {/* Tool Bulguları */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold text-text-primary">Tespit Edilen Zafiyetler</h3>
+          {findings.map((finding) => (
+            <div key={finding.id} className="bg-obsidian-900/50 border border-platinum-500/10 rounded-lg p-5">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="px-2 py-1 bg-obsidian-950 text-text-tertiary rounded text-xs font-mono">
+                      #{finding.id}
+                    </span>
+                    <h4 className="text-sm font-semibold text-text-primary truncate">{finding.baslik}</h4>
+                    <span className={`px-2 py-1 rounded text-xs flex-shrink-0 ${getSeverityColor(finding.severity)}`}>
+                      {getSeverityText(finding.severity)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-text-tertiary">
+                    {finding.cvss_skoru !== 'N/A' && <span>CVSS: {finding.cvss_skoru}</span>}
+                    {finding.cve_id && finding.cve_id !== 'N/A' && <span className="text-platinum-400">{finding.cve_id}</span>}
+                    {finding.hedef && <span>Hedef: {finding.hedef}</span>}
+                  </div>
                 </div>
-                <div className="flex items-center gap-3 text-xs text-text-tertiary">
-                  {finding.cvss_skoru !== 'N/A' && <span>CVSS: {finding.cvss_skoru}</span>}
-                  {finding.cve_id !== 'N/A' && <span className="text-platinum-400">{finding.cve_id}</span>}
+              </div>
+              
+              <div className="space-y-3 text-sm">
+                <div>
+                  <div className="text-xs text-text-tertiary mb-1">Açıklama</div>
+                  <p className="text-text-secondary text-xs leading-relaxed">{finding.aciklama}</p>
+                </div>
+                
+                {finding.kanit && finding.kanit !== 'Kanıt bulunamadı' && (
+                  <div>
+                    <div className="text-xs text-text-tertiary mb-1">Kanıt</div>
+                    <pre className="bg-obsidian-950 p-3 rounded text-xs text-emerald-400 overflow-x-auto whitespace-pre-wrap">
+                      {finding.kanit}
+                    </pre>
+                  </div>
+                )}
+                
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-xs text-text-tertiary mb-1">İş Etkisi</div>
+                    <p className="text-text-secondary text-xs">{finding.is_etkisi}</p>
+                  </div>
+                  <div>
+                    <div className="text-xs text-text-tertiary mb-1">Çözüm</div>
+                    <p className="text-text-secondary text-xs">{finding.cozum}</p>
+                  </div>
                 </div>
               </div>
             </div>
-            
-            <div className="space-y-3 text-sm">
-              <div>
-                <div className="text-xs text-text-tertiary mb-1">Açıklama</div>
-                <p className="text-text-secondary text-xs leading-relaxed">{finding.aciklama}</p>
+          ))}
+        </div>
+
+        {/* CVE Referansları Tablosu */}
+        {cveReferences.length > 0 && (
+          <div className="space-y-3">
+            <div className="border-t border-platinum-500/10 pt-6">
+              <h3 className="text-sm font-semibold text-text-primary mb-3 flex items-center gap-2">
+                <Database className="w-4 h-4 text-platinum-400" />
+                İlişkili CVE Referansları
+              </h3>
+              <div className="bg-obsidian-900/50 border border-platinum-500/10 rounded-lg overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-obsidian-950 border-b border-platinum-500/10">
+                      <tr>
+                        <th className="text-left py-3 px-4 text-text-tertiary font-medium">CVE ID</th>
+                        <th className="text-left py-3 px-4 text-text-tertiary font-medium">CVSS Skoru</th>
+                        <th className="text-left py-3 px-4 text-text-tertiary font-medium">Severity</th>
+                        <th className="text-left py-3 px-4 text-text-tertiary font-medium">Açıklama</th>
+                        <th className="text-left py-3 px-4 text-text-tertiary font-medium">Etkilenen Sistem</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-platinum-500/10">
+                      {cveReferences.map((cve, index) => (
+                        <tr key={index} className="hover:bg-obsidian-800/30 transition-colors">
+                          <td className="py-3 px-4 font-mono text-platinum-400">{cve.cve_id}</td>
+                          <td className="py-3 px-4">
+                            <span className="px-2 py-1 bg-obsidian-950 rounded text-text-primary font-medium">
+                              {cve.cvss_skoru}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2 py-1 rounded ${getSeverityColor(cve.severity)}`}>
+                              {getSeverityText(cve.severity)}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-text-secondary max-w-md">
+                            <div className="line-clamp-2">{cve.aciklama}</div>
+                          </td>
+                          <td className="py-3 px-4 text-text-secondary">{cve.etkilenen_sistem}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-              
-              {finding.kanit && finding.kanit !== 'Kanıt bulunamadı' && (
-                <div>
-                  <div className="text-xs text-text-tertiary mb-1">Kanıt</div>
-                  <pre className="bg-obsidian-950 p-3 rounded text-xs text-emerald-400 overflow-x-auto whitespace-pre-wrap">
-                    {finding.kanit}
-                  </pre>
-                </div>
-              )}
-              
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                <div>
-                  <div className="text-xs text-text-tertiary mb-1">İş Etkisi</div>
-                  <p className="text-text-secondary text-xs">{finding.is_etkisi}</p>
-                </div>
-                <div>
-                  <div className="text-xs text-text-tertiary mb-1">Çözüm</div>
-                  <p className="text-text-secondary text-xs">{finding.cozum}</p>
-                </div>
-              </div>
+              <p className="text-xs text-text-tertiary mt-2">
+                Toplam {cveReferences.length} ilişkili CVE referansı tespit edildi.
+              </p>
             </div>
           </div>
-        ))}
+        )}
       </div>
     );
   };
