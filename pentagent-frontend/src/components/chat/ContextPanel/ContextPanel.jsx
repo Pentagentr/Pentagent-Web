@@ -174,11 +174,45 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin scrollbar-thumb-purple-500/20 scrollbar-track-transparent">
         
+        {/* LLM Query - TÜM TAB'LARDA GÖSTER (Scan sonuçlarının üstünde) */}
+        {(llmQuery || cveLoading) && activeTab === 'cve' && (
+          <div className="bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/30 rounded-lg p-3 mb-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Brain className="w-4 h-4 text-purple-400" />
+              <span className="text-xs font-semibold text-purple-300">🤖 AI Tarama Sorgusu</span>
+            </div>
+            {cveLoading ? (
+              <div className="flex items-center gap-2 text-xs text-text-tertiary">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                <span>LLM tarama sonuçlarını analiz ediyor...</span>
+              </div>
+            ) : llmQuery ? (
+              <>
+                <div className="bg-obsidian-950/70 p-3 rounded-lg border border-purple-500/20 mb-2">
+                  <p className="text-xs text-purple-200 font-mono leading-relaxed">
+                    "{llmQuery}"
+                  </p>
+                </div>
+                {scanSummary && (
+                  <div className="pt-2 border-t border-purple-500/10">
+                    <div className="flex items-center gap-2 mb-1">
+                      <FileText className="w-3 h-3 text-blue-400" />
+                      <span className="text-[10px] font-medium text-blue-300">Tarama Özeti</span>
+                    </div>
+                    <p className="text-[10px] text-text-secondary leading-relaxed">
+                      {scanSummary}
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : null}
+          </div>
+        )}
+        
         {activeTab === 'cve' && (
           <>
             {/* CVE Suggestions */}
-            {/* LLM Query - Her zaman göster (loading olsa bile) */}
-            {(llmQuery || cveLoading) && (
+            {(llmQuery || cveLoading) && false && (
               <div className="bg-obsidian-900/30 border border-purple-500/10 rounded-lg p-3 mb-3">
                 <div className="flex items-center gap-2 mb-2">
                   <Brain className="w-3 h-3 text-purple-400" />

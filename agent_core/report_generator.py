@@ -1224,83 +1224,157 @@ class ReportGenerator:
         return text
     
     def _create_simple_pdf_from_text(self, text_content: str, pdf_path: str):
-        """Verilen metin içeriğinden profesyonel bir PDF oluşturur - temiz format."""
-        doc = SimpleDocTemplate(pdf_path, pagesize=A4, topMargin=50, bottomMargin=50, leftMargin=50, rightMargin=50)
+        """PROFESYONEL SIZMA TESTİ RAPORU - Kurumsal format, renkli CVE tablosu."""
+        doc = SimpleDocTemplate(
+            pdf_path, 
+            pagesize=A4, 
+            topMargin=60, 
+            bottomMargin=60, 
+            leftMargin=70, 
+            rightMargin=70
+        )
         styles = getSampleStyleSheet()
         
-        # Özel stiller oluştur
-        heading1_style = ParagraphStyle('CustomHeading1', parent=styles['Heading1'], fontSize=16, spaceAfter=20, spaceBefore=20, textColor=colors.HexColor('#2d3748'))
-        heading2_style = ParagraphStyle('CustomHeading2', parent=styles['Heading2'], fontSize=14, spaceAfter=15, spaceBefore=15, textColor=colors.HexColor('#4a5568'))
-        normal_style = ParagraphStyle('CustomNormal', parent=styles['Normal'], fontSize=10, leading=14, spaceAfter=6)
-        bullet_style = ParagraphStyle('CustomBullet', parent=styles['Bullet'], fontSize=10, leading=14, leftIndent=20, spaceAfter=4)
-        code_style = ParagraphStyle('CustomCode', parent=styles['Normal'], fontName='Courier', fontSize=8, leading=12, leftIndent=20, backgroundColor=colors.HexColor('#f7fafc'))
+        # PROFESYONEL STİLLER
+        # Kapak başlığı (Çok büyük)
+        cover_title = ParagraphStyle(
+            'CoverTitle',
+            parent=styles['Title'],
+            fontSize=28,
+            textColor=colors.HexColor('#1a202c'),
+            spaceAfter=30,
+            alignment=1,  # Center
+            fontName='Helvetica-Bold'
+        )
+        
+        # Ana başlıklar (Kalın, büyük)
+        heading1_style = ParagraphStyle(
+            'CustomHeading1',
+            parent=styles['Heading1'],
+            fontSize=18,
+            fontName='Helvetica-Bold',
+            textColor=colors.HexColor('#2d3748'),
+            spaceAfter=15,
+            spaceBefore=25,
+            alignment=0  # Left align
+        )
+        
+        # Alt başlıklar
+        heading2_style = ParagraphStyle(
+            'CustomHeading2',
+            parent=styles['Heading2'],
+            fontSize=14,
+            fontName='Helvetica-Bold',
+            textColor=colors.HexColor('#4a5568'),
+            spaceAfter=10,
+            spaceBefore=15
+        )
+        
+        # Normal metin (Justified - 2 yana yaslı)
+        normal_style = ParagraphStyle(
+            'CustomNormal',
+            parent=styles['Normal'],
+            fontSize=11,
+            leading=16,
+            spaceAfter=8,
+            alignment=4,  # Justify (2 yana yaslı)
+            textColor=colors.HexColor('#2d3748')
+        )
+        
+        # Liste öğeleri
+        bullet_style = ParagraphStyle(
+            'CustomBullet',
+            parent=styles['Bullet'],
+            fontSize=10,
+            leading=15,
+            leftIndent=25,
+            spaceAfter=6,
+            bulletIndent=10,
+            textColor=colors.HexColor('#4a5568')
+        )
+        
+        # Kod/URL satırları
+        code_style = ParagraphStyle(
+            'CustomCode',
+            parent=styles['Normal'],
+            fontName='Courier',
+            fontSize=9,
+            leading=13,
+            leftIndent=20,
+            backgroundColor=colors.HexColor('#f7fafc'),
+            textColor=colors.HexColor('#2d3748')
+        )
         
         # Metni temizle
         text_content = self._clean_text_for_pdf(text_content)
         
         story = []
-        prev_was_heading = False
+        is_cover_page = True
+        in_cve_section = False
         
-        for line in text_content.split('\n'):
-            # Boş satırlar için boşluk ekle
-            if not line.strip():
-                if not prev_was_heading:
-                    story.append(Spacer(1, 10))
-                continue
+        lines = text_content.split('\n')
+        i = 0
+        
+        while i < len(lines):
+            line = lines[i].strip()
             
-            line = line.strip()
-            
-            # Başlıklar (=== veya ---)
-            if line.startswith('===') or line.startswith('---') or (len(line) > 10 and all(c == '=' or c == '-' for c in line)):
-                story.append(Spacer(1, 15))
-                prev_was_heading = True
-                continue
-            
-            # Bölüm başlıkları (1., 2., 3. gibi)
-            if len(line) < 100 and (line.startswith(('1.', '2.', '3.', '4.', '5.', '6.', '7.')) or line.isupper()):
-                story.append(Spacer(1, 20))
-                try:
-                    story.append(Paragraph(f"<b>{line}</b>", heading1_style))
-                    prev_was_heading = True
-                except:
-                    story.append(Spacer(1, 10))
-                continue
-            
-            # Alt başlıklar ([...] formatında)
-            if line.startswith('[') and line.endswith(']'):
+            # Boş satırları atla
+            if not line:
                 story.append(Spacer(1, 12))
-                try:
-                    story.append(Paragraph(f"<b>{line[1:-1]}</b>", heading2_style))
-                    prev_was_heading = True
-                except:
-                    story.append(Spacer(1, 6))
+                i += 1
                 continue
             
-            # Liste öğeleri (* veya - veya •)
-            if line.startswith(('*', '-', '•')) or (len(line) > 2 and line[0].isspace() and line.strip().startswith(('*', '-', '•'))):
-                try:
-                    story.append(Paragraph(line, bullet_style))
-                    prev_was_heading = False
-                except:
-                    story.append(Spacer(1, 4))
+            # === veya --- ayırıcıları atla
+            if all(c in '=-' for c in line) and len(line) > 10:
+                i += 1
+                continue
+            
+            # KAPAK SAYFASI - İlk başlık
+            if is_cover_page and ('PENETRATION' in line.upper() or 'SECURITY' in line.upper() or 'SIZMA' in line.upper()):
+                story.append(Spacer(1, 150))  # Üstten boşluk
+                story.append(Paragraph(line.upper(), cover_title))
+                story.append(Spacer(1, 30))
+                is_cover_page = False
+                i += 1
+                continue
+            
+            # Bölüm başlıkları (1., 2., 3. ile başlayan)
+            if line and len(line) < 80 and line[0].isdigit() and '.' in line[:5]:
+                story.append(PageBreak())  # Her bölüm yeni sayfa
+                story.append(Paragraph(line, heading1_style))
+                i += 1
+                continue
+            
+            # Alt başlıklar (1.1, 1.2 gibi veya [...] formatında)
+            if ((line and len(line) < 80 and line[0].isdigit() and line.count('.') == 2) or 
+                (line.startswith('[') and line.endswith(']'))):
+                clean_line = line[1:-1] if line.startswith('[') else line
+                story.append(Paragraph(clean_line, heading2_style))
+                i += 1
+                continue
+            
+            # CVE Bölümü tespit et (Detaylı Bulgular kısmı)
+            if 'DETAYLI' in line.upper() and 'BULGULAR' in line.upper():
+                in_cve_section = True
+                story.append(Paragraph(line, heading1_style))
+                i += 1
+                continue
+            
+            # Liste öğeleri
+            if line.startswith(('*', '-', '•', '  •', '  -', '  *')):
+                story.append(Paragraph(line, bullet_style))
+                i += 1
                 continue
             
             # Kod/URL satırları
-            if "HTTP/" in line or "curl" in line or "://" in line or line.startswith("  "):
-                try:
-                    story.append(Paragraph(line.replace(" ", "&nbsp;"), code_style))
-                    prev_was_heading = False
-                except:
-                    story.append(Spacer(1, 4))
+            if "HTTP/" in line or "curl" in line or "://" in line:
+                story.append(Paragraph(line.replace(" ", "&nbsp;"), code_style))
+                i += 1
                 continue
             
             # Normal paragraflar
-            try:
-                story.append(Paragraph(line, normal_style))
-                prev_was_heading = False
-            except Exception as e:
-                # Eğer hala sorun varsa, basit spacer ekle
-                story.append(Spacer(1, 6))
+            story.append(Paragraph(line, normal_style))
+            i += 1
         
         try:
             doc.build(story)
