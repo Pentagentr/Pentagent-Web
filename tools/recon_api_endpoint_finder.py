@@ -137,7 +137,8 @@ class ReconApiEndpointFinderTool(MCPTool):
     def _scan_for_endpoints(self, target_url: str, wait_time: int) -> Dict[str, Any]:
         """Ana endpoint tarama fonksiyonu."""
         if not SELENIUM_AVAILABLE:
-            return {"endpoints": [], "error": "Selenium kurulu değil"}
+            self._add_reasoning("fallback", "Selenium kullanılamıyor, HTTP tabanlı endpoint keşfi kullanılıyor.")
+            return self._http_based_endpoint_discovery(target_url)
         
         context = ApiFinderContext(
             target_url=target_url,
@@ -145,14 +146,109 @@ class ReconApiEndpointFinderTool(MCPTool):
             wait_time=wait_time
         )
         
-        # Selenium ile tarama yap
-        context = self._intercept_with_logs_sync(context)
+        try:
+            # Selenium ile tarama yap
+            context = self._intercept_with_logs_sync(context)
+            
+            return {
+                "endpoints": context.endpoints,
+                "scan_duration": time.time() - context.start_time,
+                "ai_reasoning": context.ai_reasoning_log
+            }
+        except Exception as e:
+            logger.error(f"Selenium taraması başarısız: {e}")
+            self._add_reasoning("fallback", f"Selenium hatası ({str(e)}), HTTP tabanlı endpoint keşfi kullanılıyor.")
+            return self._http_based_endpoint_discovery(target_url)
+    
+    def _http_based_endpoint_discovery(self, target_url: str) -> Dict[str, Any]:
+        """HTTP-only endpoint keşfi (Render gibi Selenium olmayan ortamlar için)"""
+        import requests
+        from bs4 import BeautifulSoup
         
-        return {
-            "endpoints": context.endpoints,
-            "scan_duration": time.time() - context.start_time,
-            "ai_reasoning": context.ai_reasoning_log
-        }
+        endpoints = []
+        start_time = time.time()
+        
+        try:
+            # Ana sayfayı indir
+            response = requests.get(target_url, timeout=10, headers={'User-Agent': 'PentagentBot/1.0'})
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # JavaScript dosyalarındaki API endpoint'lerini ara
+            script_tags = soup.find_all('script', src=True)
+            for script in script_tags:
+                script_url = script.get('src')
+                if script_url and not script_url.startswith('http'):
+                    script_url = urlparse(target_url)._replace(path=script_url).geturl()
+                
+                if script_url:
+                    try:
+                        script_response = requests.get(script_url, timeout=5)
+                        script_content = script_response.text
+                        
+                        # Yaygın API pattern'lerini ara
+                        import re
+                        api_patterns = [
+                            r'["\']([/]api[^"\']*)["\']',
+                            r'["\']([/]v\d+[^"\']*)["\']',
+                            r'fetch\(["\']([^"\']+)["\']',
+                            r'axios\.[a-z]+\(["\']([^"\']+)["\']'
+                        ]
+                        
+                        for pattern in api_patterns:
+                            matches = re.findall(pattern, script_content)
+                            for match in matches:
+                                if match and match.startswith('/'):
+                                    full_url = urlparse(target_url)._replace(path=match).geturl()
+                                    endpoints.append({
+                                        "url": full_url,
+                                        "method": "GET",  # Default
+                                        "status_code": "discovered",
+                                        "response_content_type": "application/json",
+                                        "post_data": None,
+                                        "source": "js_static_analysis"
+                                    })
+                    except Exception as e:
+                        logger.debug(f"Script analizi hatası: {e}")
+                        continue
+            
+            # Link'lerden API pattern'lerini ara
+            for link in soup.find_all('a', href=True):
+                href = link.get('href')
+                if href and ('/api/' in href or '/v1/' in href or '/v2/' in href):
+                    endpoints.append({
+                        "url": href if href.startswith('http') else urlparse(target_url)._replace(path=href).geturl(),
+                        "method": "GET",
+                        "status_code": "discovered",
+                        "response_content_type": "application/json",
+                        "post_data": None,
+                        "source": "html_links"
+                    })
+            
+            # Unique endpoint'leri filtrele
+            unique_endpoints = []
+            seen_urls = set()
+            for ep in endpoints:
+                if ep['url'] not in seen_urls:
+                    unique_endpoints.append(ep)
+                    seen_urls.add(ep['url'])
+            
+            return {
+                "endpoints": unique_endpoints,
+                "scan_duration": time.time() - start_time,
+                "ai_reasoning": [
+                    {"phase": "http_based", "thought": f"HTTP tabanlı endpoint keşfi tamamlandı. {len(unique_endpoints)} endpoint bulundu."}
+                ]
+            }
+            
+        except Exception as e:
+            logger.error(f"HTTP tabanlı endpoint keşfi hatası: {e}")
+            return {
+                "endpoints": [],
+                "scan_duration": time.time() - start_time,
+                "ai_reasoning": [
+                    {"phase": "error", "thought": f"HTTP tabanlı endpoint keşfi başarısız: {str(e)}"}
+                ]
+            }
     def _is_relevant_request(self, url: str, content_type: str) -> bool:
         path = urlparse(url).path.lower()
         ct_lower = content_type.lower()

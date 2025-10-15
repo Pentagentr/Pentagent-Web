@@ -574,7 +574,7 @@ async def generate_security_report(request: Dict[str, Any]):
         from agent_core.state import AgentState
         
         # AgentState oluştur
-        state = AgentState(target=target)
+        state = AgentState(target=target, user_task="Güvenlik raporu oluştur")
         state.start_time = datetime.now()
         
         # CVE sonuçlarını findings olarak ekle
