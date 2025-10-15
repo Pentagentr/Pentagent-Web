@@ -589,6 +589,21 @@ async def download_report(report_id: str, format: str = "pdf"):
         logger.error(f"Rapor indirme hatası: {e}")
         raise HTTPException(status_code=500, detail=f"Rapor indirilemedi: {str(e)}")
 
+def _map_cvss_to_severity(cvss_score):
+    """CVSS skorunu severity'e map et"""
+    try:
+        score = float(cvss_score)
+        if score >= 9.0:
+            return 'critical'
+        elif score >= 7.0:
+            return 'high'
+        elif score >= 4.0:
+            return 'medium'
+        else:
+            return 'low'
+    except:
+        return 'medium'
+
 @app.post("/api/generate-report")
 async def generate_security_report(request: Dict[str, Any]):
     """
@@ -617,40 +632,66 @@ async def generate_security_report(request: Dict[str, Any]):
         state = AgentState(target=target, user_task="Güvenlik raporu oluştur")
         state.start_time = datetime.now()
         
-        # CVE sonuçlarını findings olarak ekle
+        # ÖNCELİKLE: Gerçek tarama bulgularını ekle (scan_results'tan)
+        logger.info(f"Scan results tipi: {type(scan_results)}, içerik: {list(scan_results.keys()) if isinstance(scan_results, dict) else 'dict değil'}")
+        
+        # scan_results'dan bulguları çıkar
+        findings_added = 0
+        if isinstance(scan_results, dict):
+            # Tool sonuçlarını kontrol et
+            for key, value in scan_results.items():
+                if isinstance(value, dict):
+                    # Tool sonucu mu?
+                    if value.get('success') and value.get('data'):
+                        tool_data = value.get('data', {})
+                        
+                        # Zafiyetleri bul
+                        vulnerabilities = tool_data.get('vulnerabilities', [])
+                        findings = tool_data.get('findings', [])
+                        results = tool_data.get('results', [])
+                        
+                        # Tüm bulguları işle
+                        for item in (vulnerabilities + findings + results):
+                            if isinstance(item, dict):
+                                finding = {
+                                    'title': item.get('title') or item.get('name') or item.get('vulnerability', 'Tespit Edilen Zafiyet'),
+                                    'severity': item.get('severity', 'medium').lower(),
+                                    'description': item.get('description') or item.get('details') or 'Zafiyet tespit edildi',
+                                    'cvss_score': item.get('cvss_score') or item.get('cvss', 'N/A'),
+                                    'cve_id': item.get('cve_id') or item.get('cve'),
+                                    'evidence': item.get('evidence') or item.get('proof') or item.get('payload', 'Detay mevcut'),
+                                    'recommendation_summary': item.get('recommendation') or item.get('remediation', 'Zafiyet kapatılmalıdır'),
+                                    'business_impact': item.get('business_impact', 'Güvenlik riski oluşturmaktadır'),
+                                    'exploitability': item.get('exploitability', 'Unknown'),
+                                    'target': item.get('url') or item.get('endpoint') or target,
+                                    'technology': item.get('technology') or item.get('service')
+                                }
+                                state.findings.append(finding)
+                                findings_added += 1
+        
+        logger.info(f"Tarama sonuçlarından {findings_added} bulgu eklendi")
+        
+        # SONRA: RAG CVE sonuçlarını referans olarak ekle (sadece ilişkili CVE'ler)
         for i, cve in enumerate(cve_results[:3], 1):  # En yakın 3 CVE
+            # CVSS skorunu doğru çek
+            cvss_score = cve.get('cvss_score') or cve.get('base_score') or cve.get('cvss') or cve.get('baseScore', 'N/A')
+            
             finding = {
-                'title': f"{cve.get('cve_id', f'CVE-{i}')} - {cve.get('description', 'N/A')[:100]}",
-                'severity': cve.get('severity', 'MEDIUM').lower(),
-                'description': cve.get('description', 'No description available'),
-                'cvss_score': cve.get('base_score', 'N/A'),
+                'title': f"Iliskili CVE: {cve.get('cve_id', f'CVE-{i}')}",
+                'severity': _map_cvss_to_severity(cvss_score),
+                'description': cve.get('description', 'Açıklama mevcut değil')[:500],  # İlk 500 karakter
+                'cvss_score': cvss_score,
                 'cve_id': cve.get('cve_id', 'N/A'),
-                'evidence': f"RAG CVE Match Score: {cve.get('score', 0)*100:.1f}%\n\nCVSS Vector: {cve.get('cvss_vector', 'N/A')}\n\n{cve.get('description', 'No description')}",
-                'recommendation_summary': f"Bu CVE ile ilgili bilinen zafiyetleri inceleyerek sistemdeki benzer açıklıkları kapatın. CVSS Skoru: {cve.get('base_score', 'N/A')}",
-                'business_impact': f"Bu zafiyet, CVSS skoru {cve.get('base_score', 'N/A')} olan kritik bir güvenlik açığıdır.",
-                'exploitability': 'Known CVE' if cve.get('cve_id') else 'Unknown',
+                'evidence': f"RAG Eşleşme Skoru: %{cve.get('score', 0)*100:.1f}\n\nCVSS Vektör: {cve.get('cvss_vector') or cve.get('vector', 'N/A')}\n\n{cve.get('description', 'Açıklama yok')}",
+                'recommendation_summary': f"Bu CVE ile ilişkili zafiyetleri kontrol edin. CVSS Skoru: {cvss_score}",
+                'business_impact': f"Bu zafiyet, CVSS skoru {cvss_score} olan bilinen bir güvenlik açığıdır.",
+                'exploitability': 'Known CVE',
                 'target': target,
-                'technology': None
+                'technology': cve.get('affected_product') or cve.get('product')
             }
             state.findings.append(finding)
         
-        # Scan sonuçlarından ek bulgular ekle (varsa)
-        if isinstance(scan_results, dict) and 'vulnerabilities' in scan_results:
-            for vuln in scan_results['vulnerabilities'][:5]:  # İlk 5 bulgu
-                finding = {
-                    'title': vuln.get('title', 'Unknown Vulnerability'),
-                    'severity': vuln.get('severity', 'low'),
-                    'description': vuln.get('description', 'No description'),
-                    'cvss_score': vuln.get('cvss_score', 'N/A'),
-                    'cve_id': vuln.get('cve_id'),
-                    'evidence': vuln.get('evidence', 'No evidence'),
-                    'recommendation_summary': vuln.get('recommendation', 'No recommendation'),
-                    'business_impact': vuln.get('business_impact', 'Impact not assessed'),
-                    'exploitability': vuln.get('exploitability', 'Unknown'),
-                    'target': target,
-                    'technology': vuln.get('technology')
-                }
-                state.findings.append(finding)
+        logger.info(f"Toplam {len(state.findings)} bulgu raporda yer alacak")
         
         # Execution time
         state.execution_time = 0  # Rapor oluşturma süresi

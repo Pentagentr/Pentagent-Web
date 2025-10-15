@@ -1077,26 +1077,94 @@ class ReportGenerator:
             logger.error(f"Rapor oluşturma sırasında kritik hata: {e}", exc_info=True)
             return False
                 
+    def _clean_text_for_pdf(self, text: str) -> str:
+        """PDF için metni temizle - emoji ve özel karakterleri kaldır"""
+        import re
+        # Emoji ve özel karakterleri temizle
+        text = text.encode('ascii', 'ignore').decode('ascii')
+        # Çoklu boşlukları tek boşluğa çevir
+        text = re.sub(r'\s+', ' ', text)
+        # Özel karakterleri değiştir
+        replacements = {
+            '🔍': '[Arama]',
+            '🛡️': '[Guvenlik]',
+            '⚙️': '[Ayar]',
+            '🔧': '[Arac]',
+            '📊': '[Rapor]',
+            '✅': '[Tamam]',
+            '❌': '[Hata]',
+            '⚠️': '[Uyari]',
+            '💡': '[Oneri]',
+            '🚨': '[Kritik]',
+            '📋': '[Liste]',
+            '🌐': '[Web]',
+            '🔐': '[Kilit]',
+            '📦': '[Paket]',
+            '🎯': '[Hedef]',
+            '═': '=',
+            '─': '-',
+            '│': '|',
+            '┌': '+',
+            '└': '+',
+            '├': '+',
+            '┤': '+',
+            '■': '*',
+            '□': '-'
+        }
+        for old, new in replacements.items():
+            text = text.replace(old, new)
+        return text
+    
     def _create_simple_pdf_from_text(self, text_content: str, pdf_path: str):
-        """Verilen metin içeriğinden basit bir PDF oluşturur."""
+        """Verilen metin içeriğinden basit bir PDF oluşturur - Unicode temizli."""
         doc = SimpleDocTemplate(pdf_path, pagesize=A4)
         styles = getSampleStyleSheet()
         code_style = ParagraphStyle('Code', parent=styles['Normal'], fontName='Courier', fontSize=8, leading=10)
         
+        # Metni temizle
+        text_content = self._clean_text_for_pdf(text_content)
+        
         story = []
         for line in text_content.split('\n'):
-            if line.strip().startswith('='):
-                 story.append(Paragraph(line.replace("=", "-"), styles['h2']))
-            elif line.strip().startswith('[') and line.strip().endswith(']'):
-                 story.append(Paragraph(f"<b>{line}</b>", styles['h3']))
-            elif line.strip().startswith('•') or line.strip().startswith('-'):
-                 story.append(Paragraph(line, styles['Bullet']))
+            # Boş satırları atla
+            if not line.strip():
+                story.append(Spacer(1, 6))
+                continue
+                
+            # Satır başlangıcına göre stil belirle
+            line = line.strip()
+            if line.startswith('=') or line.startswith('-' * 10):
+                story.append(Spacer(1, 12))
+            elif line.startswith('[') and line.endswith(']'):
+                story.append(Paragraph(f"<b>{line}</b>", styles['Heading2']))
+            elif line.startswith('*') or line.startswith('-'):
+                story.append(Paragraph(line, styles['Bullet']))
             elif "HTTP/" in line or "curl" in line:
                 story.append(Paragraph(line.replace(" ", "&nbsp;"), code_style))
             else:
-                 story.append(Paragraph(line, styles['Normal']))
+                try:
+                    story.append(Paragraph(line, styles['Normal']))
+                except:
+                    # Eğer hala sorun varsa, basit metin olarak ekle
+                    story.append(Spacer(1, 6))
         
-        doc.build(story)
+        try:
+            doc.build(story)
+            logger.info(f"PDF başarıyla oluşturuldu: {pdf_path}")
+        except Exception as e:
+            logger.error(f"PDF oluşturma hatası: {e}")
+            # Fallback: Çok basit PDF oluştur
+            from reportlab.pdfgen import canvas
+            c = canvas.Canvas(pdf_path, pagesize=A4)
+            c.setFont("Helvetica", 10)
+            y = 800
+            for line in text_content.split('\n')[:100]:  # İlk 100 satır
+                if y < 50:
+                    c.showPage()
+                    y = 800
+                c.drawString(50, y, line[:80])  # İlk 80 karakter
+                y -= 15
+            c.save()
             
     def _create_json_report(self, state: AgentState, json_path: str):
         """Sektör standardında JSON raporu oluşturur."""
