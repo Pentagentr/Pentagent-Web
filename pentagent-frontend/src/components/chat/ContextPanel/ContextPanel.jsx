@@ -14,15 +14,18 @@ import {
   ExternalLink,
   Loader2
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import Button from '../../common/Button';
 import Card from '../../common/Card';
 import { pentagentAPI } from '../../../services/pentagentAPI';
 
 const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('cve');
   const [cveResults, setCveResults] = useState([]);
   const [cveLoading, setCveLoading] = useState(false);
   const [cveError, setCveError] = useState('');
+  const [reportGenerating, setReportGenerating] = useState(false);
 
   // Mock data - would come from props/context in real implementation
   const scanContext = {
@@ -86,6 +89,40 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
       LOW: 'bg-success'
     };
     return colors[severity] || 'bg-text-tertiary';
+  };
+
+  // Rapor oluşturma handler
+  const handleGenerateReport = async () => {
+    if (!scanResults || !cveResults || cveResults.length === 0) {
+      alert('Rapor oluşturmak için önce tarama yapın ve CVE sonuçlarını bekleyin.');
+      return;
+    }
+
+    setReportGenerating(true);
+    
+    try {
+      // En yakın 3 CVE'yi seç
+      const topCVEs = cveResults.slice(0, 3);
+      
+      // Rapor verilerini localStorage'a kaydet
+      const reportData = {
+        timestamp: Date.now(),
+        scanResults: scanResults,
+        cveResults: topCVEs,
+        target: scanResults.target || 'Unknown Target',
+        generatedAt: new Date().toISOString()
+      };
+      
+      localStorage.setItem('pendingReport', JSON.stringify(reportData));
+      
+      // Rapor sayfasına yönlendir
+      navigate('/reports?action=generate');
+    } catch (error) {
+      console.error('Rapor oluşturma hatası:', error);
+      alert('Rapor oluşturulurken bir hata oluştu: ' + error.message);
+    } finally {
+      setReportGenerating(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -222,9 +259,22 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
 
       {/* Actions */}
       <div className="p-3 border-t border-purple-500/10 space-y-2 bg-obsidian-900/50">
-        <button className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-lg text-xs font-medium text-purple-400 transition-all duration-300">
-          <Download className="w-3.5 h-3.5" />
-          Generate Report
+        <button 
+          onClick={handleGenerateReport}
+          disabled={reportGenerating || !cveResults || cveResults.length === 0}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-lg text-xs font-medium text-purple-400 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {reportGenerating ? (
+            <>
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Oluşturuluyor...
+            </>
+          ) : (
+            <>
+              <Download className="w-3.5 h-3.5" />
+              Generate Report
+            </>
+          )}
         </button>
         <button className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-obsidian-850 hover:bg-obsidian-800 border border-purple-500/20 rounded-lg text-xs font-medium text-text-secondary hover:text-purple-400 transition-all duration-300">
           <Share2 className="w-3.5 h-3.5" />

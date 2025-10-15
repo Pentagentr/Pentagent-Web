@@ -1,15 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, FileText, Download, Archive, AlertCircle } from 'lucide-react';
+import { Plus, FileText, Download, Archive, AlertCircle, Loader2, Shield } from 'lucide-react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { AppLayout } from '../components/layout';
 import { ReportCard, ReportFilters, ReportViewer } from '../components/reports';
 import Button from '../components/common/Button';
+import { pentagentAPI } from '../services/pentagentAPI';
 
 const Reports = () => {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [reports, setReports] = useState([]);
   const [filteredReports, setFilteredReports] = useState([]);
   const [selectedReport, setSelectedReport] = useState(null);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState(null);
 
   // Mock reports data
   const mockReports = [
@@ -112,13 +118,94 @@ const Reports = () => {
   ];
 
   useEffect(() => {
-    // Simulate loading
-    setTimeout(() => {
-      setReports(mockReports);
-      setFilteredReports(mockReports);
+    // Rapor oluşturma isteği var mı kontrol et
+    const action = searchParams.get('action');
+    if (action === 'generate') {
+      handleGenerateNewReport();
+    } else {
+      // Normal sayfa yüklemesi - mock reports göster
+      setTimeout(() => {
+        setReports(mockReports);
+        setFilteredReports(mockReports);
+        setLoading(false);
+      }, 1000);
+    }
+  }, [searchParams]);
+
+  const handleGenerateNewReport = async () => {
+    setGenerating(true);
+    setGenerationError(null);
+
+    try {
+      // localStorage'dan pending report verilerini al
+      const pendingReportStr = localStorage.getItem('pendingReport');
+      if (!pendingReportStr) {
+        throw new Error('Rapor verileri bulunamadı');
+      }
+
+      const pendingReport = JSON.parse(pendingReportStr);
+      console.log('Rapor oluşturuluyor:', pendingReport);
+
+      // Backend'e rapor oluşturma isteği gönder
+      const response = await fetch(`${pentagentAPI.baseURL}/api/generate-report`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          target: pendingReport.target,
+          scan_results: pendingReport.scanResults,
+          cve_results: pendingReport.cveResults,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Rapor oluşturulamadı');
+      }
+
+      const reportData = await response.json();
+      console.log('Rapor oluşturuldu:', reportData);
+
+      // Yeni raporu listeye ekle
+      const newReport = {
+        id: reportData.report_id || Date.now().toString(),
+        title: `Security Assessment - ${pendingReport.target}`,
+        target: pendingReport.target,
+        status: 'completed',
+        createdAt: new Date().toISOString(),
+        format: 'PDF',
+        pages: reportData.pages || 0,
+        riskScore: reportData.risk_score || 0,
+        vulnerabilities: reportData.vulnerabilities || {
+          critical: pendingReport.cveResults.filter(c => c.severity === 'CRITICAL').length,
+          high: pendingReport.cveResults.filter(c => c.severity === 'HIGH').length,
+          medium: pendingReport.cveResults.filter(c => c.severity === 'MEDIUM').length,
+          low: pendingReport.cveResults.filter(c => c.severity === 'LOW').length,
+        },
+        downloadUrl: reportData.download_url,
+        reportContent: reportData.report_content,
+      };
+
+      setReports(prev => [newReport, ...prev]);
+      setFilteredReports(prev => [newReport, ...prev]);
+
+      // localStorage'ı temizle
+      localStorage.removeItem('pendingReport');
+
+      // Raporu göster
+      setSelectedReport(newReport);
+      setViewerOpen(true);
+    } catch (error) {
+      console.error('Rapor oluşturma hatası:', error);
+      setGenerationError(error.message);
+    } finally {
+      setGenerating(false);
       setLoading(false);
-    }, 1000);
-  }, []);
+      // URL'den action parametresini temizle
+      navigate('/reports', { replace: true });
+    }
+  };
 
   const handleFilterChange = (filters) => {
     let filtered = [...reports];
@@ -243,13 +330,51 @@ const Reports = () => {
     // Implement bulk actions
   };
 
-  if (loading) {
+  if (loading || generating) {
     return (
       <AppLayout activeItem="/reports">
-        <div className="flex items-center justify-center h-64">
+        <div className="flex flex-col items-center justify-center h-64 space-y-4">
           <div className="flex items-center gap-3">
-            <div className="w-6 h-6 border-2 border-platinum-500 border-t-transparent rounded-full animate-spin" />
-            <span className="text-text-secondary">Loading reports...</span>
+            <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
+            <span className="text-text-primary font-medium">
+              {generating ? 'Rapor oluşturuluyor...' : 'Loading reports...'}
+            </span>
+          </div>
+          {generating && (
+            <div className="bg-obsidian-900 border border-purple-500/20 rounded-xl p-6 max-w-md">
+              <div className="flex items-center gap-3 mb-4">
+                <Shield className="w-6 h-6 text-purple-400" />
+                <h3 className="text-lg font-semibold text-text-primary">Rapor Hazırlanıyor</h3>
+              </div>
+              <div className="space-y-2 text-sm text-text-secondary">
+                <p>✓ Tarama sonuçları analiz ediliyor</p>
+                <p>✓ RAG CVE veritabanı sorgulanıyor</p>
+                <p>✓ En alakalı CVE'ler seçiliyor</p>
+                <p className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+                  PDF raporu oluşturuluyor
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (generationError) {
+    return (
+      <AppLayout activeItem="/reports">
+        <div className="flex flex-col items-center justify-center h-64 space-y-4">
+          <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-6 max-w-md">
+            <div className="flex items-center gap-3 mb-4">
+              <AlertCircle className="w-6 h-6 text-rose-500" />
+              <h3 className="text-lg font-semibold text-text-primary">Rapor Oluşturulamadı</h3>
+            </div>
+            <p className="text-sm text-text-secondary mb-4">{generationError}</p>
+            <Button variant="secondary" onClick={() => navigate('/chat')}>
+              Tarama Sayfasına Dön
+            </Button>
           </div>
         </div>
       </AppLayout>

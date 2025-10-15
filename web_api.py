@@ -549,6 +549,140 @@ async def get_rag_stats():
         logger.error(f"Stats hatası: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/generate-report")
+async def generate_security_report(request: Dict[str, Any]):
+    """
+    RAG CVE entegrasyonu ile güvenlik raporu oluştur.
+    
+    Body:
+        - target: Hedef sistem
+        - scan_results: Tarama sonuçları
+        - cve_results: RAG'dan gelen en alakalı CVE'ler (top 3)
+    """
+    try:
+        target = request.get("target", "Unknown Target")
+        scan_results = request.get("scan_results", {})
+        cve_results = request.get("cve_results", [])
+        
+        if not scan_results:
+            raise HTTPException(status_code=400, detail="scan_results gerekli")
+        
+        logger.info(f"Rapor oluşturuluyor - Target: {target}, CVE count: {len(cve_results)}")
+        
+        # ReportGenerator'ı import et
+        from agent_core.report_generator import ReportGenerator
+        from agent_core.state import AgentState
+        
+        # AgentState oluştur
+        state = AgentState(target=target)
+        state.start_time = datetime.now()
+        
+        # CVE sonuçlarını findings olarak ekle
+        for i, cve in enumerate(cve_results[:3], 1):  # En yakın 3 CVE
+            finding = {
+                'title': f"{cve.get('cve_id', f'CVE-{i}')} - {cve.get('description', 'N/A')[:100]}",
+                'severity': cve.get('severity', 'MEDIUM').lower(),
+                'description': cve.get('description', 'No description available'),
+                'cvss_score': cve.get('base_score', 'N/A'),
+                'cve_id': cve.get('cve_id', 'N/A'),
+                'evidence': f"RAG CVE Match Score: {cve.get('score', 0)*100:.1f}%\n\nCVSS Vector: {cve.get('cvss_vector', 'N/A')}\n\n{cve.get('description', 'No description')}",
+                'recommendation_summary': f"Bu CVE ile ilgili bilinen zafiyetleri inceleyerek sistemdeki benzer açıklıkları kapatın. CVSS Skoru: {cve.get('base_score', 'N/A')}",
+                'business_impact': f"Bu zafiyet, CVSS skoru {cve.get('base_score', 'N/A')} olan kritik bir güvenlik açığıdır.",
+                'exploitability': 'Known CVE' if cve.get('cve_id') else 'Unknown',
+                'target': target,
+                'technology': None
+            }
+            state.findings.append(finding)
+        
+        # Scan sonuçlarından ek bulgular ekle (varsa)
+        if isinstance(scan_results, dict) and 'vulnerabilities' in scan_results:
+            for vuln in scan_results['vulnerabilities'][:5]:  # İlk 5 bulgu
+                finding = {
+                    'title': vuln.get('title', 'Unknown Vulnerability'),
+                    'severity': vuln.get('severity', 'low'),
+                    'description': vuln.get('description', 'No description'),
+                    'cvss_score': vuln.get('cvss_score', 'N/A'),
+                    'cve_id': vuln.get('cve_id'),
+                    'evidence': vuln.get('evidence', 'No evidence'),
+                    'recommendation_summary': vuln.get('recommendation', 'No recommendation'),
+                    'business_impact': vuln.get('business_impact', 'Impact not assessed'),
+                    'exploitability': vuln.get('exploitability', 'Unknown'),
+                    'target': target,
+                    'technology': vuln.get('technology')
+                }
+                state.findings.append(finding)
+        
+        # Execution time
+        state.execution_time = 0  # Rapor oluşturma süresi
+        
+        # Context summary (opsiyonel)
+        state.context_summary = {
+            "target": target,
+            "scan_type": "rag_integrated",
+            "cve_count": len(cve_results),
+            "finding_count": len(state.findings)
+        }
+        
+        # ReportGenerator oluştur
+        report_gen = ReportGenerator(rag_client=None, llm_api_key=None)
+        
+        # Rapor oluştur (PDF, TXT, JSON)
+        report_id = f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        report_path = f"reports/{report_id}"
+        
+        # reports dizinini oluştur
+        import os
+        os.makedirs("reports", exist_ok=True)
+        
+        # Raporu oluştur
+        success = await report_gen.generate_report(state, report_path)
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Rapor oluşturulamadı")
+        
+        # Rapor içeriğini oku (TXT)
+        txt_path = f"{report_path}.txt"
+        with open(txt_path, 'r', encoding='utf-8') as f:
+            report_content = f.read()
+        
+        # Risk skoru hesapla
+        risk_score = report_gen._calculate_risk_score(state.findings)
+        
+        # Zafiyet sayıları
+        vulnerabilities = {
+            "critical": len([f for f in state.findings if f.get('severity') == 'critical']),
+            "high": len([f for f in state.findings if f.get('severity') == 'high']),
+            "medium": len([f for f in state.findings if f.get('severity') == 'medium']),
+            "low": len([f for f in state.findings if f.get('severity') == 'low']),
+        }
+        
+        logger.info(f"✅ Rapor başarıyla oluşturuldu: {report_id}")
+        
+        return {
+            "success": True,
+            "report_id": report_id,
+            "target": target,
+            "risk_score": risk_score,
+            "vulnerabilities": vulnerabilities,
+            "pages": len(report_content.split('\n')) // 50,  # Tahmini sayfa sayısı
+            "download_url": f"/api/reports/{report_id}/download",
+            "report_content": report_content[:5000],  # İlk 5000 karakter
+            "formats_available": ["txt", "pdf", "json"],
+            "files": {
+                "txt": f"{txt_path}",
+                "pdf": f"{report_path}.pdf",
+                "json": f"{report_path}.json"
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Rapor oluşturma hatası: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Rapor oluşturma hatası: {str(e)}")
+
 @app.get("/api/debug/test-qdrant")
 async def test_qdrant_connection():
     """Debug: Render'dan HuggingFace Space'e bağlantı testi"""
