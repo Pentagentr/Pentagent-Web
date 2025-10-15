@@ -1119,12 +1119,25 @@ class ReportGenerator:
             ]
         }
         
+        # CVE referansları ekle
+        cve_references = []
+        for finding in sorted_findings:
+            if finding.get("cve_id") and finding.get("cve_id") != "N/A":
+                cve_references.append({
+                    "cve_id": finding.get("cve_id"),
+                    "title": finding.get("title"),
+                    "severity": finding.get("severity"),
+                    "description": finding.get("description"),
+                    "target": finding.get("target", state.target)
+                })
+        
         return {
             "executive_summary": executive_summary,
             "methodology": methodology,
             "detailed_findings": detailed_findings,
             "recommendations": recommendations,
-            "appendix": appendix
+            "appendix": appendix,
+            "cve_references": cve_references
         }
 
     async def generate_report(self, state: AgentState, output_path: str) -> bool:
@@ -1507,25 +1520,29 @@ class ReportGenerator:
                 "compliance_gaps": len([k for k, v in final_analysis.get("compliance_status", {}).items() if v != "compliant"])
             }
             
-            # JSON formatında döndür - uzman seviyesi
+            # Frontend için structured_data formatında döndür
+            structured_data = self.get_structured_report_data(state)
+            
+            # JSON formatında döndür - frontend uyumlu
             return {
                 "report_type": "professional_dynamic",
                 "target": state.target,
                 "risk_level": final_analysis.get("risk_level", "unknown"),
                 "risk_score": risk_score,
-                "vulnerabilities_count": len(vulnerabilities),
+                "vulnerabilities_count": len(state.findings),
                 "recommendations_count": len(final_analysis.get("recommendations", [])),
                 "executive_summary": executive_summary,
-                "technical_findings": vulnerabilities,
+                "technical_findings": state.findings,
                 "compliance_status": final_analysis.get("compliance_status", {}),
                 "recommendations": final_analysis.get("recommendations", []),
                 "attack_surface_analysis": final_analysis.get("attack_surface_analysis", {}),
                 "test_coverage": final_analysis.get("coverage_analysis", {}),
                 "report_content": report_content,
+                "structured_data": structured_data,  # Frontend için gerekli
                 "dynamic_insights": {
-                    "primary_threat_vector": self._identify_primary_threat_vector(vulnerabilities),
-                    "immediate_actions_required": len([v for v in vulnerabilities if v.get('severity') in ['critical', 'high']]),
-                    "strategic_recommendations": self._extract_strategic_recommendations(vulnerabilities)
+                    "primary_threat_vector": self._identify_primary_threat_vector(state.findings),
+                    "immediate_actions_required": len([v for v in state.findings if v.get('severity') in ['critical', 'high']]),
+                    "strategic_recommendations": self._extract_strategic_recommendations(state.findings)
                 }
             }
             
