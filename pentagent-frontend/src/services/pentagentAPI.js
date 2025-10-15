@@ -58,8 +58,10 @@ class PentagentAPI {
     }
 
     try {
-      console.log(`WebSocket bağlantısı kuruluyor... (Deneme: ${this.reconnectAttempts + 1})`);
-      console.log(`WebSocket URL: ${this.wsURL}`);
+      // Sadece ilk deneme ve her 3. denemede logla
+      if (this.reconnectAttempts === 0 || this.reconnectAttempts % 3 === 0) {
+        console.log(`🔌 WebSocket bağlanıyor... (Deneme: ${this.reconnectAttempts + 1})`);
+      }
       
       // WebSocket bağlantısını kur
       this.ws = new WebSocket(this.wsURL);
@@ -120,22 +122,21 @@ class PentagentAPI {
 
       this.ws.onclose = (event) => {
         clearTimeout(connectionTimeout);
-        console.log('WebSocket bağlantısı kesildi:', event.code, event.reason);
         
         this.isConnected = false;
         this.stopHeartbeat();
         
         // Manuel disconnect veya normal kapanış (1000) ise reconnect yapma
         if (this.isManualDisconnect || event.code === 1000) {
-          if (event.code === 1000) {
-            console.log('✅ WebSocket normal şekilde kapandı, reconnect yapılmıyor');
-          }
           return;
         }
         
         // Sadece gerçek bağlantı sorunlarında reconnect yap
         if (event.code === 1006) {
-          console.warn('⚠️ Beklenmeyen kapanma (1006), 5 saniye sonra reconnect...');
+          // İlk denemede veya son denemede logla
+          if (this.reconnectAttempts === 0 || this.reconnectAttempts === this.maxReconnectAttempts - 1) {
+            console.warn('⚠️ WebSocket bağlantı kesintisi, yeniden deneniyor...');
+          }
           onStatusChange('disconnected');
           
           // 5 saniye bekle, sonra reconnect
@@ -144,33 +145,15 @@ class PentagentAPI {
               this.attemptReconnect(onMessage, onStatusChange);
             }
           }, 5000);
-        } else {
-          console.log(`ℹ️ WebSocket ${event.code} kodu ile kapandı`);
         }
       };
 
       this.ws.onerror = (error) => {
         clearTimeout(connectionTimeout);
-        console.error('WebSocket hatası:', error);
-        if (this.ws) {
-          console.error('WebSocket readyState:', this.ws.readyState);
+        // Sadece kritik hataları logla
+        if (this.reconnectAttempts === 0 || this.reconnectAttempts === this.maxReconnectAttempts) {
+          console.error('❌ WebSocket bağlantı hatası (Deneme:', this.reconnectAttempts + 1, ')');
         }
-        console.error('WebSocket URL:', this.wsURL);
-        console.error('Error details:', {
-          type: error.type,
-          target: error.target,
-          currentTarget: error.currentTarget
-        });
-        
-        // Hata tipine göre daha detaylı bilgi
-        if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
-          console.error('❌ WebSocket bağlantı kurulurken hata oluştu');
-        } else if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-          console.error('❌ WebSocket bağlantısı açıkken hata oluştu');
-        } else {
-          console.error('❌ WebSocket bağlantısı kapalıyken hata oluştu');
-        }
-        
         onStatusChange('error');
       };
 
