@@ -1280,9 +1280,12 @@ Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu haz�
             }
 
     def _update_context_with_results(self, tool_name: str, result: Dict[str, Any]):
-        """Tool sonuçlarını context'e ekle ve GERÇEK BULGULAR oluştur"""
+        """Tool sonuçlarını context'e ekle ve GERÇEK BULGULAR oluştur - TÜM TOOL'LAR İÇİN"""
         if result.get("success", False):
             data = result.get("data", {})
+            
+            # ÖNEMLİ: TÜM TOOL ÇIKTILARINI KAYDET
+            self._save_tool_output_to_file(tool_name, result)
             
             # Tool'a göre bilgi çıkar ve JSON serializable hale getir
             if tool_name == "enum_port_scanner":
@@ -1419,9 +1422,73 @@ Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu haz�
                     }
                     self._add_finding(finding)
             
+            # GENEL TOOL ÇIKTI KAYDETME - TÜM TOOL'LAR İÇİN
+            else:
+                # Diğer tool'lar için genel bulgu oluştur
+                if data and isinstance(data, dict) and len(data) > 0:
+                    finding = {
+                        "title": f"{tool_name} Tool Results",
+                        "severity": "info",
+                        "description": f"{tool_name} tool'u çalıştırıldı ve {len(data)} veri noktası toplandı",
+                        "evidence": f"Tool: {tool_name}, Data keys: {list(data.keys())[:5]}",
+                        "target": self.current_target,
+                        "technology": "Tool Output"
+                    }
+                    self._add_finding(finding)
+            
             # Genel bilgi toplama
             self.discovered_information["last_successful_tool"] = tool_name
             self.discovered_information["total_tools_executed"] = len(self.discovered_information.get("vulnerabilities", []))
+    
+    def _save_tool_output_to_file(self, tool_name: str, result: Dict[str, Any]):
+        """TÜM TOOL ÇIKTILARINI DOSYAYA KAYDET - RAPOR VE LLM İÇİN"""
+        try:
+            import json
+            from datetime import datetime
+            
+            # Tool outputs klasörünü oluştur
+            import os
+            outputs_dir = "tool_outputs"
+            os.makedirs(outputs_dir, exist_ok=True)
+            
+            # Session ID oluştur
+            if not hasattr(self, 'session_id'):
+                timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                self.session_id = f"pentest_{timestamp}"
+            
+            # Dosya adı
+            output_file = f"{outputs_dir}/{self.session_id}_tool_outputs.json"
+            
+            # Mevcut çıktıları oku veya yeni oluştur
+            if os.path.exists(output_file):
+                with open(output_file, 'r', encoding='utf-8') as f:
+                    all_outputs = json.load(f)
+            else:
+                all_outputs = {
+                    "session_id": self.session_id,
+                    "target": self.current_target,
+                    "user_task": self.user_task,
+                    "start_time": datetime.now().isoformat(),
+                    "tool_outputs": {}
+                }
+            
+            # Tool çıktısını ekle
+            all_outputs["tool_outputs"][tool_name] = {
+                "timestamp": datetime.now().isoformat(),
+                "success": result.get("success", False),
+                "data": result.get("data", {}),
+                "ai_summary": result.get("ai_summary", ""),
+                "error": result.get("error", "")
+            }
+            
+            # Dosyayı kaydet
+            with open(output_file, 'w', encoding='utf-8') as f:
+                json.dump(all_outputs, f, indent=2, ensure_ascii=False)
+            
+            logger.info(f"💾 Tool çıktısı kaydedildi: {tool_name} -> {output_file}")
+            
+        except Exception as e:
+            logger.error(f"Tool çıktısı kaydetme hatası: {e}")
     
     def _add_finding(self, finding: Dict[str, Any]):
         """Yeni bulgu ekle"""

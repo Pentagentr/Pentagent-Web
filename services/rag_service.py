@@ -627,7 +627,7 @@ CVE Query:"""
     
     def _prepare_json_findings_for_ai(self, scan_results: Dict[str, Any]) -> str:
         """
-        JSON bulgularını AI'ya vermek için hazırla - GELİŞTİRİLMİŞ ANALİZ.
+        JSON bulgularını AI'ya vermek için hazırla - GELİŞTİRİLMİŞ ANALİZ + TOOL ÇIKTILARI.
         """
         try:
             import json
@@ -763,42 +763,67 @@ CVE Query:"""
                             "severity": "medium",
                             "description": f"Eksik güvenlik header'ları: {', '.join(missing_headers)}",
                             "technology": "HTTP",
-                            "target": target
+                            "target": target,
+                            "tool_source": tool_name,
+                            "evidence": f"Missing headers: {missing_headers}"
                         })
                 
-                # Technology detection
-                elif "tech" in tool_name.lower():
-                    technologies = tool_result.get("technologies", []) or tool_result.get("detected_technologies", [])
-                    if technologies:
+                # Port scanner bulguları
+                elif "port" in tool_name.lower():
+                    open_ports = tool_result.get("open_ports", [])
+                    services = tool_result.get("services", [])
+                    if open_ports:
                         findings.append({
-                            "title": "Technology Detection",
-                            "severity": "low",
-                            "description": f"{len(technologies)} teknoloji tespit edildi",
-                            "technology": "Technology Stack",
-                            "target": target
+                            "title": f"Open Ports Discovered ({len(open_ports)} total)",
+                            "severity": "medium",
+                            "description": f"Hedefte {len(open_ports)} açık port tespit edildi: {', '.join(map(str, open_ports[:10]))}",
+                            "technology": "Network",
+                            "target": target,
+                            "tool_source": tool_name,
+                            "evidence": f"Open ports: {open_ports[:10]}"
                         })
                 
-                # Vulnerability scanners
-                elif any(vuln_tool in tool_name.lower() for vuln_tool in ["verify_xss", "verify_sqli", "verify_lfi"]):
+                # Vulnerability test bulguları
+                elif any(vuln_type in tool_name.lower() for vuln_type in ["xss", "sqli", "lfi", "verify"]):
                     vulnerabilities = tool_result.get("vulnerabilities", [])
-                    if vulnerabilities:
-                        for vuln in vulnerabilities:
-                            findings.append({
-                                "title": vuln.get("type", f"{tool_name} vulnerability"),
-                                "severity": vuln.get("severity", "medium"),
-                                "description": vuln.get("description", "Vulnerability detected"),
-                                "technology": "Web Application",
-                                "target": target
-                            })
+                    findings_data = tool_result.get("findings", [])
+                    if vulnerabilities or findings_data:
+                        vuln_count = len(vulnerabilities) + len(findings_data)
+                        findings.append({
+                            "title": f"Security Vulnerabilities Detected ({vuln_count} total)",
+                            "severity": "high",
+                            "description": f"{tool_name} ile {vuln_count} güvenlik açığı tespit edildi",
+                            "technology": "Web Application",
+                            "target": target,
+                            "tool_source": tool_name,
+                            "evidence": f"Vulnerabilities: {vuln_count} found"
+                        })
+                
+                # GENEL TOOL ÇIKTI - TÜM TOOL'LAR İÇİN
+                else:
+                    # Diğer tool'lar için genel bulgu oluştur
+                    if tool_result and isinstance(tool_result, dict) and len(tool_result) > 0:
+                        data_keys = list(tool_result.keys())
+                        findings.append({
+                            "title": f"{tool_name} Tool Results",
+                            "severity": "info",
+                            "description": f"{tool_name} tool'u çalıştırıldı ve {len(data_keys)} veri noktası toplandı",
+                            "technology": "Tool Output",
+                            "target": target,
+                            "tool_source": tool_name,
+                            "evidence": f"Data keys: {data_keys[:5]}"
+                        })
             
-            # JSON formatında döndür
+            # Bulguları JSON'a çevir
             if findings:
+                logger.info(f"📊 {len(findings)} bulgu JSON'a çevrildi")
                 return json.dumps(findings, indent=2, ensure_ascii=False)
             else:
+                logger.warning("⚠️ Hiç bulgu bulunamadı")
                 return "No findings"
                 
         except Exception as e:
-            logger.error(f"JSON bulguları hazırlama hatası: {e}")
+            logger.error(f"JSON findings hazırlama hatası: {e}")
             return "No findings"
     
     def _extract_security_findings(self, scan_results: Dict[str, Any]) -> str:
