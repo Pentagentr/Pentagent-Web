@@ -1444,17 +1444,22 @@ class ReportGenerator:
         try:
             report_parts = []
             
-            # Başlık
-            report_parts.append("# PENTEST GÜVENLİK RAPORU")
+            # Profesyonel Başlık
+            report_parts.append("# PROFESYONEL SIZMA TESTİ RAPORU")
             report_parts.append("")
-            report_parts.append(f"**Hedef:** {state.target}")
-            report_parts.append(f"**Tarih:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            report_parts.append(f"**Risk Skoru:** {risk_score or 'N/A'}")
+            report_parts.append("---")
+            report_parts.append("")
+            report_parts.append(f"**Hedef Sistem:** {state.target}")
+            report_parts.append(f"**Test Tarihi:** {datetime.now().strftime('%d %B %Y, %H:%M')}")
+            report_parts.append(f"**Risk Skoru:** {risk_score or 'N/A'}/100")
+            report_parts.append(f"**Rapor ID:** PENTAGENT-{datetime.now().strftime('%Y%m%d%H%M%S')}")
+            report_parts.append("")
+            report_parts.append("---")
             report_parts.append("")
             
-            # Yönetici özeti
-            report_parts.append("1. YÖNETİCİ ÖZETİ")
-            report_parts.append("-" * 30)
+            # Yönetici Özeti
+            report_parts.append("## 1. YÖNETİCİ ÖZETİ")
+            report_parts.append("")
             findings_count = len(state.findings)
             critical_count = len([f for f in state.findings if f.get('severity') == 'critical'])
             high_count = len([f for f in state.findings if f.get('severity') == 'high'])
@@ -1464,10 +1469,10 @@ class ReportGenerator:
             report_parts.append(f"Yüksek seviye: {high_count}")
             report_parts.append("")
             
-            # Detaylı bulgular
+            # Detaylı Bulgular
             if state.findings:
-                report_parts.append("2. DETAYLI BULGULAR")
-                report_parts.append("-" * 30)
+                report_parts.append("## 2. DETAYLI BULGULAR")
+                report_parts.append("")
                 
                 for i, finding in enumerate(state.findings, 1):
                     report_parts.append(f"{i}. {finding.get('title', 'Bilinmeyen Bulgu')}")
@@ -1489,10 +1494,9 @@ class ReportGenerator:
                         report_parts.append(f"Çıktı: {str(tool_data)[:500]}...")
                         report_parts.append("")
             
-            # CVE bölümü ekle
+            # CVE Analizi
             if cve_results:
                 report_parts.append("## 3. CVE ANALİZİ")
-                report_parts.append("-" * 30)
                 report_parts.append("")
                 
                 for i, cve in enumerate(cve_results[:10], 1):  # Top 10 CVE
@@ -1508,10 +1512,9 @@ class ReportGenerator:
                         report_parts.append(f"**Description:** {description}")
                         report_parts.append("")
             
-            # Tool çıktıları bölümü
+            # Tool Çıktıları
             if hasattr(state, 'discovered_information') and state.discovered_information:
                 report_parts.append("## 4. TOOL ÇIKTILARI")
-                report_parts.append("-" * 30)
                 report_parts.append("")
                 
                 for tool_name, tool_data in state.discovered_information.items():

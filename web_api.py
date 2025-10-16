@@ -917,6 +917,23 @@ async def generate_security_report(request: Dict[str, Any]):
             structured_report["execution_summary"] = enriched_data["execution_summary"]
             structured_report["findings"] = state.findings  # Bulguları ekle
             structured_report["cve_results"] = cve_findings  # CVE'leri ekle
+            
+            # Frontend'in beklediği detailed_findings formatına çevir
+            detailed_findings = []
+            for i, finding in enumerate(state.findings, 1):
+                detailed_findings.append({
+                    "id": i,
+                    "baslik": finding.get("title", "Bulgu"),
+                    "severity": finding.get("severity", "medium"),
+                    "aciklama": finding.get("description", "Açıklama bulunamadı"),
+                    "kanit": finding.get("evidence", "Kanıt bulunamadı"),
+                    "is_etkisi": finding.get("impact", "Etki analizi yapılamadı"),
+                    "cozum": finding.get("recommendation", "Çözüm önerisi bulunamadı"),
+                    "cvss_skoru": finding.get("cvss_score", "N/A"),
+                    "cve_id": finding.get("cve_id", "N/A"),
+                    "hedef": finding.get("affected_component", state.target)
+                })
+            structured_report["detailed_findings"] = detailed_findings
         
         logger.info(f"✅ Rapor başarıyla oluşturuldu: {report_id}")
         
