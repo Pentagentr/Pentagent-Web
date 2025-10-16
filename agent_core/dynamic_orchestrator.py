@@ -1253,7 +1253,7 @@ Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu haz�
                 await self._send_findings_to_rag_for_query(rag_service, findings)
             
             # Profesyonel rapor oluştur
-            report_data = await report_gen.generate_comprehensive_report(
+            report_data = await report_gen.generate_comprehensive_report_async(
                 state=state,
                 final_analysis=final_analysis,
                 execution_results=execution_results

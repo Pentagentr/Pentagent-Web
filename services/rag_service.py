@@ -267,32 +267,17 @@ class RAGService:
                 "Content-Type": "application/json"
             }
             
-            # BAAI/bge-reranker-base için farklı format deneyelim
-            # Bu model sentence-transformers ile kullanılıyor, API formatı farklı olabilir
-            if "bge-reranker" in reranker_model.lower():
-                # BGE Reranker için özel format
-                payload = {
-                    "inputs": {
-                        "source_sentence": query,
-                        "sentences": documents
-                    },
-                    "options": {
-                        "wait_for_model": True,
-                        "use_cache": False
-                    }
+            # BAAI/bge-reranker-base cross-encoder formatı kullanır
+            # Tüm reranker modelleri için standart cross-encoder formatı
+            pairs = [[query, doc] for doc in documents]
+            payload = {
+                "inputs": pairs,
+                "options": {
+                    "wait_for_model": True,
+                    "use_cache": False
                 }
-                logger.info(f"🎯 BGE Reranker formatı kullanılıyor")
-            else:
-                # Standart cross-encoder formatı
-                pairs = [[query, doc] for doc in documents]
-                payload = {
-                    "inputs": pairs,
-                    "options": {
-                        "wait_for_model": True,
-                        "use_cache": False
-                    }
-                }
-                logger.info(f"🎯 Cross-encoder formatı kullanılıyor")
+            }
+            logger.info(f"🎯 Cross-encoder formatı kullanılıyor: {reranker_model}")
             
             # Log için document sayısını al
             doc_count = len(documents)

@@ -1515,7 +1515,7 @@ class ReportGenerator:
             return "Rapor oluşturulamadı"
 
     # Dynamic orchestrator ile entegrasyon için yeni metod - RAG ENTEGRASYONU
-    async def generate_comprehensive_report(self, state: AgentState, final_analysis: Dict[str, Any], execution_results: Dict[str, Any]) -> Dict[str, Any]:
+    async def generate_comprehensive_report_async(self, state: AgentState, final_analysis: Dict[str, Any], execution_results: Dict[str, Any]) -> Dict[str, Any]:
         """Dynamic orchestrator için kapsamlı ve dinamik rapor oluşturur - RAG entegrasyonu ile"""
         try:
             # State'den findings al - MEVCUT BULGULARI KORU!
