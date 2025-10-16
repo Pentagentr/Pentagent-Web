@@ -827,9 +827,8 @@ async def generate_security_report(request: Dict[str, Any]):
             report_content = f.read()
         
         # Risk skoru hesapla (tüm bulgulardan)
-        state.findings = all_findings  # Tüm bulguları geri koy risk skoru için
-        risk_score = report_gen._calculate_risk_score(state.findings)
-        state.findings = tool_findings  # Tekrar tool bulgularına dön
+        all_findings = state.findings  # Tüm bulguları al
+        risk_score = report_gen._calculate_risk_score(all_findings)
         
         # Zafiyet sayıları
         vulnerabilities = {

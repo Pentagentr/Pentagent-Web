@@ -1878,7 +1878,7 @@ Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu haz�
         print("=" * 80)
 
     async def _send_findings_to_rag_for_query(self, rag_service, findings: List[Dict[str, Any]]):
-        """Tool bulgularını RAG'a gönder ve spesifik CVE query oluştur"""
+        """Tool bulgularını RAG'a gönder ve spesifik CVE query oluştur - GELİŞTİRİLMİŞ"""
         try:
             if not findings:
                 logger.warning("⚠️ Hiç bulgu yok, RAG query oluşturulamıyor")
@@ -1890,7 +1890,8 @@ Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu haz�
             # Scan results formatında hazırla - TOOL SONUÇLARINI DA EKLE
             scan_results = {
                 "target": self.current_target,
-                "findings": findings
+                "findings": findings,
+                "context_summary": self.discovered_information
             }
             
             # Tool sonuçlarını da ekle (RAG için daha detaylı analiz)
@@ -1899,10 +1900,17 @@ Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu haz�
                     if tool_data and isinstance(tool_data, (dict, list)):
                         scan_results[f"tool_{tool_name}"] = tool_data
             
+            # Execution history'yi de ekle (hangi tool'lar çalıştırıldı)
+            scan_results["execution_summary"] = {
+                "tools_executed": [h.get("tool") for h in self.execution_history],
+                "successful_tools": [h.get("tool") for h in self.execution_history if h.get("success", False)],
+                "failed_tools": [h.get("tool") for h in self.execution_history if not h.get("success", False)]
+            }
+            
             # RAG servisinden spesifik query oluştur
             optimized_query = await rag_service.generate_optimized_query(scan_results)
             
-            if optimized_query:
+            if optimized_query and optimized_query != "web application security vulnerability exploitation":
                 logger.info(f"✅ RAG query oluşturuldu: {optimized_query}")
                 
                 # RAG'dan CVE'leri ara
@@ -1915,7 +1923,7 @@ Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu haz�
                 else:
                     logger.warning("⚠️ RAG'dan CVE bulunamadı")
             else:
-                logger.warning("⚠️ RAG query oluşturulamadı")
+                logger.warning("⚠️ RAG query oluşturulamadı veya generic query döndü")
                 
         except Exception as e:
             logger.error(f"RAG query oluşturma hatası: {e}")

@@ -536,22 +536,32 @@ class RAGService:
             prompt = f"""Sen bir pentest uzmanısın. Aşağıdaki JSON formatındaki GÜVENLİK BULGULARINI analiz et ve CVE database query oluştur.
 
 📊 JSON BULGULAR:
-{json_findings[:1000]}
+{json_findings[:1500]}
 
-Query kuralları:
-- JSON'daki bulgulara odaklan (title, severity, description, technology, evidence)
+🎯 QUERY KURALLARI:
+- JSON'daki bulgulara odaklan (title, severity, description, technology, evidence, tool_source)
 - Teknoloji adı ve versiyonu varsa ekle (örn: WordPress 5.0, Apache 2.4.49)
 - Web teknolojileri tespit edilmişse: "web application vulnerability [technology]"
-- API endpoint'ler varsa: "API security vulnerability"
-- Form/parametre varsa: "web application input validation vulnerability"
+- API endpoint'ler varsa: "API security vulnerability [technology]"
+- Form/parametre varsa: "web application input validation vulnerability [technology]"
+- Admin panel varsa: "admin panel vulnerability [technology]"
+- Missing headers varsa: "security headers vulnerability [technology]"
 - Max 120 karakter, ÖZLÜ ve SPESİFİK
 - SADECE query string döndür, açıklama YAPMA
 
-Örnekler:
+💡 ÖRNEK QUERY'LER:
 - "WordPress 5.0 vulnerability CVE"
 - "Apache 2.4.49 path traversal CVE"
 - "web application SQL injection vulnerability"
 - "API security authentication bypass CVE"
+- "admin panel vulnerability CVE"
+- "security headers vulnerability CVE"
+
+🔍 ANALİZ ET:
+1. Hangi teknolojiler tespit edildi?
+2. Hangi güvenlik açıkları bulundu?
+3. Hangi tool'lar çalıştırıldı?
+4. En kritik bulgu nedir?
 
 CVE Query:"""
             
@@ -600,7 +610,7 @@ CVE Query:"""
     
     def _prepare_json_findings_for_ai(self, scan_results: Dict[str, Any]) -> str:
         """
-        JSON bulgularını AI'ya vermek için hazırla.
+        JSON bulgularını AI'ya vermek için hazırla - GELİŞTİRİLMİŞ ANALİZ.
         """
         try:
             import json
@@ -609,9 +619,33 @@ CVE Query:"""
             if "findings" in scan_results and scan_results["findings"]:
                 findings = scan_results["findings"]
                 logger.info(f"📊 Mevcut {len(findings)} bulgu kullanılıyor")
-                return json.dumps(findings, indent=2, ensure_ascii=False)
+                
+                # Bulguları zenginleştir - context_summary ve execution_summary ekle
+                enriched_findings = []
+                for finding in findings:
+                    enriched_finding = finding.copy()
+                    
+                    # Context summary'den ek bilgi ekle
+                    if "context_summary" in scan_results:
+                        context = scan_results["context_summary"]
+                        if "technologies" in context:
+                            enriched_finding["detected_technologies"] = context["technologies"]
+                        if "open_ports" in context:
+                            enriched_finding["open_ports"] = context["open_ports"]
+                        if "parameters" in context:
+                            enriched_finding["discovered_parameters"] = context["parameters"]
+                    
+                    # Execution summary'den ek bilgi ekle
+                    if "execution_summary" in scan_results:
+                        exec_summary = scan_results["execution_summary"]
+                        enriched_finding["tools_executed"] = exec_summary.get("tools_executed", [])
+                        enriched_finding["successful_tools"] = exec_summary.get("successful_tools", [])
+                    
+                    enriched_findings.append(enriched_finding)
+                
+                return json.dumps(enriched_findings, indent=2, ensure_ascii=False)
             
-            # Tool sonuçlarından bulguları çıkar
+            # Tool sonuçlarından bulguları çıkar - GELİŞTİRİLMİŞ
             findings = []
             target = scan_results.get("target", "target")
             
@@ -640,7 +674,9 @@ CVE Query:"""
                             "severity": "medium",
                             "description": f"Web uygulamasında {len(technologies)} teknoloji tespit edildi: {tech_str}",
                             "technology": tech_str,
-                            "target": target
+                            "target": target,
+                            "tool_source": tool_name,
+                            "evidence": f"Technologies: {tech_str}"
                         })
                     
                     # Form ve parametre bulguları
@@ -655,6 +691,7 @@ CVE Query:"""
                             "description": f"Web uygulamasında {form_count} form ve {param_count} parametre tespit edildi. Parametreler: {param_list}",
                             "technology": "Web Application",
                             "target": target,
+                            "tool_source": tool_name,
                             "evidence": f"Forms: {form_count}, Parameters: {param_list}"
                         })
                     
@@ -667,6 +704,7 @@ CVE Query:"""
                             "description": f"Web uygulamasında {len(endpoints)} API endpoint tespit edildi: {endpoint_list}",
                             "technology": "Web API",
                             "target": target,
+                            "tool_source": tool_name,
                             "evidence": f"Endpoints: {endpoint_list}"
                         })
                 
@@ -679,7 +717,9 @@ CVE Query:"""
                             "severity": "high",
                             "description": f"{len(panels)} admin panel ve management interface keşfedildi",
                             "technology": "Infrastructure",
-                            "target": target
+                            "target": target,
+                            "tool_source": tool_name,
+                            "evidence": f"Panels: {panels[:5]}"
                         })
                 
                 # Teknoloji tespiti bulguları
@@ -692,7 +732,9 @@ CVE Query:"""
                             "severity": "medium",
                             "description": f"Web uygulamasında {len(technologies)} teknoloji tespit edildi: {tech_str}",
                             "technology": tech_str,
-                            "target": target
+                            "target": target,
+                            "tool_source": tool_name,
+                            "evidence": f"Technologies: {tech_str}"
                         })
                 
                 # Missing headers
