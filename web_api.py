@@ -630,10 +630,11 @@ async def generate_security_report(request: Dict[str, Any]):
         # ReportGenerator'ı import et
         from agent_core.report_generator import ReportGenerator
         from agent_core.state import AgentState
+        from datetime import datetime as dt
         
         # AgentState oluştur
         state = AgentState(target=target, user_task="Güvenlik raporu oluştur")
-        state.start_time = datetime.now()
+        state.start_time = dt.now()
         
         # ÖNCELİKLE: Gerçek tarama bulgularını ekle (scan_results'tan)
         logger.info(f"Scan results tipi: {type(scan_results)}, içerik: {list(scan_results.keys()) if isinstance(scan_results, dict) else 'dict değil'}")
@@ -814,7 +815,8 @@ async def generate_security_report(request: Dict[str, Any]):
         report_gen = ReportGenerator(rag_client=None, llm_api_key=None)
         
         # Rapor oluştur (PDF, TXT, JSON)
-        report_id = f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        from datetime import datetime as dt
+        report_id = f"report_{dt.now().strftime('%Y%m%d_%H%M%S')}"
         report_path = f"reports/{report_id}"
         
         # reports dizinini oluştur
