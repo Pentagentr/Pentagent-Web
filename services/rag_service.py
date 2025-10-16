@@ -614,36 +614,39 @@ class RAGService:
                 return "web application security vulnerability exploitation"
             
             # LLM'ye TÜM TOOL ÇIKTILARINI ver - KRİTİK: JSON FORMATINDA
-            prompt = f"""Sen bir Kıdemli Siber Güvenlik Analistisin. Aşağıdaki penetrasyon testi sonuçlarını analiz et ve CVE veritabanı için optimize edilmiş arama sorgusu oluştur.
-
-🎯 HEDEF: {scan_results.get('target', 'Unknown')}
+            prompt = f"""Sen bir pentest uzmanısın. Aşağıdaki JSON formatındaki TÜM TOOL ÇIKTILARINI analiz et ve CVE database query oluştur.
 
 📊 TÜM TOOL ÇIKTILARI:
-{all_tool_outputs[:2500]}
+{all_tool_outputs[:2000]}
 
-🔍 DETAYLI ANALİZ GÖREVİN:
-1. **TEKNOLOJİ TESPİTİ**: Hangi yazılımlar, versiyonlar, servisler tespit edildi?
-2. **GÜVENLİK AÇIKLARI**: Hangi zafiyetler, misconfigurations, vulnerabilities bulundu?
-3. **ATTACK VECTOR'LER**: Hangi saldırı yolları ortaya çıktı?
-4. **KRİTİK BULGULAR**: En önemli güvenlik riskleri neler?
-
-🎯 QUERY OLUŞTURMA KURALLARI:
-- EN SPESİFİK teknoloji ve versiyonu kullan (örn: "Apache 2.4.49", "WordPress 5.8.1")
-- Zafiyet türünü belirt (örn: "path traversal", "SQL injection", "XSS")
-- CVE veritabanında bulunabilir format kullan
-- Max 100 karakter, ÖZLÜ ve SPESİFİK
+🎯 QUERY KURALLARI:
+- JSON'daki TÜM tool çıktılarına odaklan (tool_name, data, findings, vulnerabilities)
+- Teknoloji adı ve versiyonu varsa ekle (örn: WordPress 5.0, Apache 2.4.49)
+- Web teknolojileri tespit edilmişse: "web application vulnerability [technology]"
+- API endpoint'ler varsa: "API security vulnerability [technology]"
+- Form/parametre varsa: "web application input validation vulnerability [technology]"
+- Admin panel varsa: "admin panel vulnerability [technology]"
+- Missing headers varsa: "security headers vulnerability [technology]"
+- Port taraması varsa: "network service vulnerability [service]"
+- Directory bruteforce varsa: "directory traversal vulnerability"
+- Max 120 karakter, ÖZLÜ ve SPESİFİK
 - SADECE query string döndür, açıklama YAPMA
 
-💡 KALİTELİ QUERY ÖRNEKLERİ:
-- "Apache 2.4.49 path traversal vulnerability CVE"
-- "WordPress 5.8.1 SQL injection vulnerability CVE"
-- "nginx 1.18.0 remote code execution CVE"
-- "PHP 7.4.3 file upload vulnerability CVE"
-- "MySQL 8.0.25 authentication bypass CVE"
-- "OpenSSH 8.2 privilege escalation CVE"
-- "Docker 20.10 container escape vulnerability CVE"
+💡 ÖRNEK QUERY'LER:
+- "WordPress 5.0 vulnerability CVE"
+- "Apache 2.4.49 path traversal CVE"
+- "web application SQL injection vulnerability"
+- "API security authentication bypass CVE"
+- "admin panel vulnerability CVE"
+- "security headers vulnerability CVE"
+- "network service vulnerability SSH"
 
-⚠️ ÖNEMLİ: Generic query'ler kabul edilmez! Mutlaka spesifik teknoloji+versiyon+zafiyet kombinasyonu kullan.
+🔍 ANALİZ ET:
+1. Hangi teknolojiler tespit edildi?
+2. Hangi güvenlik açıkları bulundu?
+3. Hangi tool'lar çalıştırıldı?
+4. En kritik bulgu nedir?
+5. Hangi servisler açık?
 
 CVE Query:"""
             

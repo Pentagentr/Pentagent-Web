@@ -866,22 +866,34 @@ async def generate_security_report(request: Dict[str, Any]):
         except Exception as e:
             logger.warning(f"Tool outputs dosyası okuma hatası: {e}")
         
-        # Rapor için zenginleştirilmiş veri hazırla
+        # CVE'leri enriched_data'ya ekle
+        cve_findings = []
+        if cve_results:
+            for cve in cve_results:
+                if isinstance(cve, dict):
+                    cve_findings.append(cve)
+                else:
+                    # CVEResult object ise dict'e çevir
+                    cve_findings.append(cve.to_dict() if hasattr(cve, 'to_dict') else str(cve))
+        
+        # Rapor için zenginleştirilmiş veri hazırla - CVE'LER DAHİL
         enriched_data = {
             "findings": state.findings,
             "target": state.target,
             "user_task": state.user_task,
             "all_tool_outputs": all_tool_outputs,
             "discovered_information": state.discovered_information,
+            "cve_results": cve_findings,  # CVE'leri ekle
             "execution_summary": {
                 "tools_executed": list(all_tool_outputs.keys()),
                 "successful_tools": list(all_tool_outputs.keys()),
                 "total_findings": len(state.findings),
+                "total_cves": len(cve_findings),
                 "scan_duration": "N/A"
             }
         }
         
-        # Profesyonel rapor oluştur
+        # Profesyonel rapor oluştur - SYNC VERSİYON KULLAN (sadece enriched_data)
         report_content = report_gen.generate_comprehensive_report(enriched_data)
         
         # Risk skoru hesapla (tüm bulgulardan)
@@ -896,8 +908,13 @@ async def generate_security_report(request: Dict[str, Any]):
             "low": len([f for f in state.findings if f.get('severity') == 'low']),
         }
         
-        # Yapılandırılmış rapor verisini al (tool bulguları + CVE tablosu)
+        # Yapılandırılmış rapor verisini al (tool bulguları + CVE tablosu + detaylı çıktılar)
         structured_report = report_gen.get_structured_report_data_with_cves(state, cve_findings)
+        
+        # Structured report'a tool çıktılarını da ekle
+        if structured_report:
+            structured_report["all_tool_outputs"] = all_tool_outputs
+            structured_report["execution_summary"] = enriched_data["execution_summary"]
         
         logger.info(f"✅ Rapor başarıyla oluşturuldu: {report_id}")
         
