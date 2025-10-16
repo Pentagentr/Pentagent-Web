@@ -294,7 +294,9 @@ class RAGService:
                 }
                 logger.info(f"🎯 Cross-encoder formatı kullanılıyor")
             
-            logger.info(f"📤 {len(pairs)} query-document çifti reranker'a gönderiliyor")
+            # Log için document sayısını al
+            doc_count = len(documents)
+            logger.info(f"📤 {doc_count} document reranker'a gönderiliyor")
             
             # HuggingFace API'ye istek gönder
             async with aiohttp.ClientSession() as session:
@@ -1209,15 +1211,29 @@ CVE Query:"""
                 }
             }
             
-            # Firebase'e kaydet (mevcut Firebase bağlantısı kullan)
+            # Firebase'e kaydet (opsiyonel - hata durumunda devam et)
             try:
-                from config import firebase_db
-                if firebase_db:
-                    scan_ref = firebase_db.collection('scan_results').document()
+                # Firebase import'unu güvenli şekilde yap
+                try:
+                    import firebase_admin
+                    from firebase_admin import credentials, firestore
+                    
+                    # Firebase app zaten initialize edilmiş mi kontrol et
+                    if not firebase_admin._apps:
+                        # Default credentials kullan (service account key)
+                        cred = credentials.ApplicationDefault()
+                        firebase_admin.initialize_app(cred)
+                    
+                    db = firestore.client()
+                    scan_ref = db.collection('scan_results').document()
                     scan_ref.set(scan_data)
                     logger.info(f"✅ Scan results Firebase'e kaydedildi: {target}")
+                except ImportError:
+                    logger.warning("⚠️ Firebase kütüphanesi yüklü değil, Firebase kayıt atlanıyor")
+                except Exception as firebase_error:
+                    logger.warning(f"⚠️ Firebase kayıt hatası: {firebase_error}")
             except Exception as e:
-                logger.error(f"Firebase kayıt hatası: {e}")
+                logger.warning(f"⚠️ Firebase bağlantı hatası: {e}")
             
             # RAG engine'e de kaydet (opsiyonel)
             try:
@@ -1285,12 +1301,17 @@ CVE Query:"""
                     logger.info("✅ Token geçerli, inference API'yi deneyeceğiz")
                     return True  # Deneme yapalım
             else:
-                logger.error(f"❌ HuggingFace token geçersiz! Status: {response.status_code}")
+                logger.warning(f"⚠️ HuggingFace token kontrol hatası: Status {response.status_code}")
                 if response.status_code == 401:
-                    logger.error("💡 Token süresi dolmuş veya geçersiz")
+                    logger.warning("💡 Token süresi dolmuş olabilir, ama deneyeceğiz")
                 elif response.status_code == 403:
-                    logger.error("💡 Token yetkisi yetersiz")
-                return False
+                    logger.warning("💡 Token yetkisi belirsiz, ama deneyeceğiz")
+                else:
+                    logger.warning(f"⚠️ Beklenmeyen status: {response.status_code}")
+                
+                # Token geçersiz olsa bile deneme yapalım
+                logger.info("🔄 Token kontrol hatası olmasına rağmen inference API'yi deneyeceğiz")
+                return True
                 
         except Exception as e:
             logger.error(f"❌ HuggingFace token kontrol hatası: {e}")

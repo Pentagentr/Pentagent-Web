@@ -36,6 +36,9 @@ class AgentState:
         
         # Tool sonuçları için
         self.tool_results: List[Dict[str, Any]] = []
+        
+        # Keşfedilen bilgiler (dynamic orchestrator ile uyumlu)
+        self.discovered_information: Dict[str, Any] = {}
 
     def add_completed_step(self, step_result: Dict[str, Any]):
         """Tamamlanan bir adımı geçmişe ekler."""
