@@ -869,7 +869,7 @@ async def generate_security_report(request: Dict[str, Any]):
         # Rapor için zenginleştirilmiş veri hazırla
         enriched_data = {
             "findings": state.findings,
-            "target": state.current_target,
+            "target": state.target,
             "user_task": state.user_task,
             "all_tool_outputs": all_tool_outputs,
             "discovered_information": state.discovered_information,
