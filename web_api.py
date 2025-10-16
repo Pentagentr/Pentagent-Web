@@ -762,26 +762,24 @@ async def generate_security_report(request: Dict[str, Any]):
                     logger.info(f"✅ RAG query oluşturuldu: {optimized_query}")
                     
                     # RAG'dan CVE'leri ara
-                    rag_results = await rag_service.search_cve(optimized_query, limit=3)
+                    rag_results = await rag_service.search(optimized_query)
                     
                     if rag_results:
                         logger.info(f"🎯 RAG'dan {len(rag_results)} CVE bulundu")
                         # CVE'leri findings'e ekle
                         for i, cve in enumerate(rag_results[:3], 1):
-                            # CVEResult objesini dict'e çevir
-                            cve_dict = cve.to_dict() if hasattr(cve, 'to_dict') else cve
                             finding = {
-                                'title': f"RAG CVE: {cve_dict.get('cve_id', f'CVE-{i}')}",
-                                'severity': _map_cvss_to_severity(cve_dict.get('cvss_score', 5.0)),
-                                'description': cve_dict.get('description', 'Açıklama mevcut değil')[:500],
-                                'cvss_score': cve_dict.get('cvss_score', 'N/A'),
-                                'cve_id': cve_dict.get('cve_id', 'N/A'),
-                                'evidence': f"RAG Query: {optimized_query}\n\n{cve_dict.get('description', 'Açıklama yok')}",
-                                'recommendation_summary': f"Bu CVE ile ilişkili zafiyetleri kontrol edin. CVSS: {cve_dict.get('cvss_score', 'N/A')}",
-                                'business_impact': f"RAG ile tespit edilen bilinen güvenlik açığı. CVSS: {cve_dict.get('cvss_score', 'N/A')}",
+                                'title': f"RAG CVE: {cve.get('cve_id', f'CVE-{i}')}",
+                                'severity': _map_cvss_to_severity(cve.get('cvss_score', 5.0)),
+                                'description': cve.get('description', 'Açıklama mevcut değil')[:500],
+                                'cvss_score': cve.get('cvss_score', 'N/A'),
+                                'cve_id': cve.get('cve_id', 'N/A'),
+                                'evidence': f"RAG Query: {optimized_query}\n\n{cve.get('description', 'Açıklama yok')}",
+                                'recommendation_summary': f"Bu CVE ile ilişkili zafiyetleri kontrol edin. CVSS: {cve.get('cvss_score', 'N/A')}",
+                                'business_impact': f"RAG ile tespit edilen bilinen güvenlik açığı. CVSS: {cve.get('cvss_score', 'N/A')}",
                                 'exploitability': 'Known CVE',
                                 'target': target,
-                                'technology': cve_dict.get('product') or cve_dict.get('vendor') or 'Unknown'
+                                'technology': cve.get('affected_product') or cve.get('product') or 'Unknown'
                             }
                             tool_findings.append(finding)
                     else:

@@ -220,6 +220,14 @@ class RAGService:
             reranker_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
             inference_url = f"https://api-inference.huggingface.co/models/{reranker_model}"
             
+            # Token kontrolü
+            if not config.HUGGINGFACE_TOKEN:
+                logger.error("❌ HUGGINGFACE_TOKEN environment variable tanımlı değil!")
+                logger.error("💡 Render.com'da Environment Variables bölümünden HUGGINGFACE_TOKEN ekleyin")
+                raise Exception("HUGGINGFACE_TOKEN tanımlı değil")
+            
+            logger.info(f"🔑 HuggingFace Token: {config.HUGGINGFACE_TOKEN[:10]}... (ilk 10 karakter)")
+            
             headers = {
                 "Authorization": f"Bearer {config.HUGGINGFACE_TOKEN}",
                 "Content-Type": "application/json"
@@ -307,6 +315,13 @@ class RAGService:
             logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
             return results
     
+    async def search(self, query: str, limit: int = 5, severity: Optional[str] = None) -> List[CVEResult]:
+        """
+        Async search metodu - web_api.py için.
+        Reranker ZORUNLU kullanılır.
+        """
+        return self.search_cve(query, limit, severity, use_reranker=True)
+    
     def search_cve(
         self,
         query: str,
@@ -321,7 +336,7 @@ class RAGService:
             query: Arama sorgusu
             limit: Maksimum sonuç sayısı (default: 5)
             severity: Severity filtresi (CRITICAL, HIGH, MEDIUM, LOW)
-            use_reranker: Reranker kullanılsın mı? (None: config'den al)
+            use_reranker: Reranker kullanılsın mı? (None: ZORUNLU True)
             
         Returns:
             Rerank edilmiş CVEResult listesi
@@ -338,9 +353,11 @@ class RAGService:
         try:
             logger.info(f"CVE araması yapılıyor: '{query}' (limit={limit}, severity={severity})")
             
-            # Reranker kullanılacaksa daha fazla sonuç al
-            reranker_enabled = use_reranker if use_reranker is not None else config.USE_RERANKER
-            fetch_limit = config.RERANKER_TOP_K if reranker_enabled else limit
+            # Reranker ZORUNLU - her zaman True
+            reranker_enabled = True if use_reranker is None else use_reranker
+            # 20 sparse vektör için fetch_limit = 20
+            fetch_limit = 20 if reranker_enabled else limit
+            logger.info(f"🎯 Reranker ZORUNLU - {fetch_limit} sonuç çekilecek, reranking sonrası {limit} döndürülecek")
             
             # Severity filtresi varsa
             if severity:
