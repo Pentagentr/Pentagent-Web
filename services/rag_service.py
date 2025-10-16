@@ -535,34 +535,36 @@ class RAGService:
     
     def _generate_optimized_query_with_llm(self, scan_results: Dict[str, Any]) -> str:
         """
-        LLM ile optimize RAG query oluştur - SADECE GÜVENLİK BULGULARI.
+        LLM ile optimize RAG query oluştur - TÜM TOOL ÇIKTILARI İLE.
         Scan sonuçlarını analiz edip en iyi CVE arama sorgusunu üretir.
         """
         try:
             # Unified LLM (Groq default)
             model = UnifiedLLM()
             
-            # JSON bulgularını hazırla - AI'ya ver
-            json_findings = self._prepare_json_findings_for_ai(scan_results)
+            # TÜM TOOL ÇIKTILARINI HAZIRLA - JSON FORMATINDA
+            all_tool_outputs = self._prepare_all_tool_outputs_for_ai(scan_results)
             
-            if not json_findings or json_findings == "No findings":
-                logger.warning("⚠️ Hiç bulgu yok, generic query kullanılıyor")
+            if not all_tool_outputs or all_tool_outputs == "No tool outputs":
+                logger.warning("⚠️ Hiç tool çıktısı yok, generic query kullanılıyor")
                 return "web application security vulnerability exploitation"
             
-            # LLM'ye JSON bulgularını ver - KRİTİK: JSON FORMATINDA
-            prompt = f"""Sen bir pentest uzmanısın. Aşağıdaki JSON formatındaki GÜVENLİK BULGULARINI analiz et ve CVE database query oluştur.
+            # LLM'ye TÜM TOOL ÇIKTILARINI ver - KRİTİK: JSON FORMATINDA
+            prompt = f"""Sen bir pentest uzmanısın. Aşağıdaki JSON formatındaki TÜM TOOL ÇIKTILARINI analiz et ve CVE database query oluştur.
 
-📊 JSON BULGULAR:
-{json_findings[:1500]}
+📊 TÜM TOOL ÇIKTILARI:
+{all_tool_outputs[:2000]}
 
 🎯 QUERY KURALLARI:
-- JSON'daki bulgulara odaklan (title, severity, description, technology, evidence, tool_source)
+- JSON'daki TÜM tool çıktılarına odaklan (tool_name, data, findings, vulnerabilities)
 - Teknoloji adı ve versiyonu varsa ekle (örn: WordPress 5.0, Apache 2.4.49)
 - Web teknolojileri tespit edilmişse: "web application vulnerability [technology]"
 - API endpoint'ler varsa: "API security vulnerability [technology]"
 - Form/parametre varsa: "web application input validation vulnerability [technology]"
 - Admin panel varsa: "admin panel vulnerability [technology]"
 - Missing headers varsa: "security headers vulnerability [technology]"
+- Port taraması varsa: "network service vulnerability [service]"
+- Directory bruteforce varsa: "directory traversal vulnerability"
 - Max 120 karakter, ÖZLÜ ve SPESİFİK
 - SADECE query string döndür, açıklama YAPMA
 
@@ -573,12 +575,14 @@ class RAGService:
 - "API security authentication bypass CVE"
 - "admin panel vulnerability CVE"
 - "security headers vulnerability CVE"
+- "network service vulnerability SSH"
 
 🔍 ANALİZ ET:
 1. Hangi teknolojiler tespit edildi?
 2. Hangi güvenlik açıkları bulundu?
 3. Hangi tool'lar çalıştırıldı?
 4. En kritik bulgu nedir?
+5. Hangi servisler açık?
 
 CVE Query:"""
             
@@ -616,14 +620,89 @@ CVE Query:"""
                 query = str(response).strip()
             
             # Query'yi temizle
-            query = query.replace('"', '').replace("'", "").strip()
-            
-            logger.info(f"✅ LLM optimize query: '{query}'")
-            return query
+            if query and len(query) > 10:
+                # JSON formatından çıkar
+                if query.startswith('"') and query.endswith('"'):
+                    query = query[1:-1]
+                
+                logger.info(f"✅ LLM query oluşturuldu: '{query}'")
+                return query
+            else:
+                logger.warning("LLM boş veya kısa query döndürdü")
+                return self._generate_query_from_scan(scan_results)
             
         except Exception as e:
             logger.error(f"LLM query oluşturma hatası: {e}")
             return ""
+    
+    def _prepare_all_tool_outputs_for_ai(self, scan_results: Dict[str, Any]) -> str:
+        """
+        TÜM TOOL ÇIKTILARINI AI'ya vermek için hazırla - JSON FORMATINDA.
+        """
+        try:
+            import json
+            
+            # Tool çıktılarını topla
+            tool_outputs = []
+            target = scan_results.get("target", "target")
+            
+            # Scan results'tan tool çıktılarını çıkar
+            for key, value in scan_results.items():
+                if key.startswith("tool_") and isinstance(value, dict):
+                    tool_name = key[5:]  # "tool_" prefix'ini kaldır
+                    
+                    tool_output = {
+                        "tool_name": tool_name,
+                        "target": target,
+                        "data": value,
+                        "data_keys": list(value.keys()) if isinstance(value, dict) else [],
+                        "data_size": len(value) if isinstance(value, dict) else 0
+                    }
+                    tool_outputs.append(tool_output)
+            
+            # Context summary'den de tool bilgilerini ekle
+            if "context_summary" in scan_results:
+                context = scan_results["context_summary"]
+                for key, value in context.items():
+                    if key.startswith("tool_") and isinstance(value, dict):
+                        tool_name = key[5:]
+                        
+                        tool_output = {
+                            "tool_name": tool_name,
+                            "target": target,
+                            "data": value,
+                            "data_keys": list(value.keys()) if isinstance(value, dict) else [],
+                            "data_size": len(value) if isinstance(value, dict) else 0
+                        }
+                        tool_outputs.append(tool_output)
+            
+            # Execution summary'den tool bilgilerini ekle
+            if "execution_summary" in scan_results:
+                exec_summary = scan_results["execution_summary"]
+                tool_outputs.append({
+                    "execution_info": exec_summary,
+                    "tools_executed": exec_summary.get("tools_executed", []),
+                    "successful_tools": exec_summary.get("successful_tools", [])
+                })
+            
+            # Bulguları da ekle
+            if "findings" in scan_results and scan_results["findings"]:
+                tool_outputs.append({
+                    "findings": scan_results["findings"],
+                    "findings_count": len(scan_results["findings"])
+                })
+            
+            # JSON formatında döndür
+            if tool_outputs:
+                logger.info(f"📊 {len(tool_outputs)} tool çıktısı AI'ya hazırlandı")
+                return json.dumps(tool_outputs, indent=2, ensure_ascii=False)
+            else:
+                logger.warning("⚠️ Hiç tool çıktısı bulunamadı")
+                return "No tool outputs"
+                
+        except Exception as e:
+            logger.error(f"Tool outputs hazırlama hatası: {e}")
+            return "No tool outputs"
     
     def _prepare_json_findings_for_ai(self, scan_results: Dict[str, Any]) -> str:
         """

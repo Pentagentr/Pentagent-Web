@@ -1287,158 +1287,219 @@ Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu haz�
             # ÖNEMLİ: TÜM TOOL ÇIKTILARINI KAYDET
             self._save_tool_output_to_file(tool_name, result)
             
-            # Tool'a göre bilgi çıkar ve JSON serializable hale getir
-            if tool_name == "enum_port_scanner":
-                if "open_ports" in data:
-                    # Set'i list'e çevir
-                    ports = data["open_ports"]
-                    if isinstance(ports, set):
-                        ports = list(ports)
-                    self.discovered_information["open_ports"] = ports
-                if "services" in data:
-                    services = data["services"]
-                    if isinstance(services, set):
-                        services = list(services)
-                    self.discovered_information["services"] = services
-                    
-            elif tool_name == "recon_whois_lookup":
-                if "domain_info" in data:
-                    self.discovered_information["domain_info"] = data["domain_info"]
-                    
-            elif tool_name in ["enum_tech_detector"]:
-                if "technologies" in data:
-                    technologies = data["technologies"]
-                    if isinstance(technologies, set):
-                        technologies = list(technologies)
-                    self.discovered_information["technologies"] = technologies
+            # TÜM TOOL ÇIKTILARINI CONTEXT'E EKLE
+            self._add_all_tool_data_to_context(tool_name, data)
             
-            elif tool_name == "enum_web_crawler":
-                # Web crawler'dan parametreleri çıkar
-                if "parameters" in data:
-                    parameters = data["parameters"]
-                    if isinstance(parameters, (set, list)):
-                        parameters = list(parameters)
-                        self.discovered_information["parameters"] = parameters
-                        logger.info(f"✨ Web crawler'dan {len(parameters)} parametre keşfedildi: {parameters[:5]}")
-                
-                # Form'ları da kaydet
-                if "forms" in data:
-                    self.discovered_information["forms"] = data["forms"]
-                
-                # Endpoint'leri kaydet
-                if "endpoints" in data:
-                    self.discovered_information["endpoints"] = data["endpoints"]
-                
-                # Sayfa sayısını kaydet
-                if "pages" in data:
-                    self.discovered_information["pages"] = data["pages"]
-                
-                # Teknoloji bilgilerini kaydet
-                if "technologies" in data:
-                    self.discovered_information["technologies"] = data["technologies"]
-                
-                # Web crawler bulgularını DETAYLI BULGU olarak ekle
-                params = data.get('parameters', [])
-                forms = data.get('forms', [])
-                endpoints = data.get('endpoints', [])
-                pages = data.get('pages', [])
-                technologies = data.get('technologies', [])
+            # TÜM TOOL ÇIKTILARINDAN BULGU OLUŞTUR
+            self._create_findings_from_all_tool_outputs(tool_name, data)
+            
+            # Genel bilgi toplama
+            self.discovered_information["last_successful_tool"] = tool_name
+            self.discovered_information["total_tools_executed"] = len(self.discovered_information.get("vulnerabilities", []))
+    
+    def _add_all_tool_data_to_context(self, tool_name: str, data: Dict[str, Any]):
+        """TÜM TOOL ÇIKTILARINI CONTEXT'E EKLE - GENEL SİSTEM"""
+        try:
+            # Data'yı JSON serializable hale getir
+            serializable_data = self._make_json_serializable(data)
+            
+            # Tool çıktısını context'e ekle
+            self.discovered_information[f"tool_{tool_name}"] = serializable_data
+            
+            # Özel alanları da ayrı ayrı ekle (rapor için)
+            if isinstance(data, dict):
+                for key, value in data.items():
+                    if isinstance(value, (list, dict, str, int, float, bool)):
+                        # Set'leri list'e çevir
+                        if isinstance(value, set):
+                            value = list(value)
+                        
+                        # Önemli alanları ayrı ayrı kaydet
+                        if key in ["open_ports", "services", "technologies", "parameters", "forms", "endpoints", "pages", "vulnerabilities", "findings"]:
+                            self.discovered_information[key] = value
+                            
+            logger.info(f"✅ {tool_name} çıktısı context'e eklendi: {len(data) if isinstance(data, dict) else 'N/A'} veri noktası")
+            
+        except Exception as e:
+            logger.error(f"Tool data context'e ekleme hatası ({tool_name}): {e}")
+    
+    def _create_findings_from_all_tool_outputs(self, tool_name: str, data: Dict[str, Any]):
+        """TÜM TOOL ÇIKTILARINDAN BULGU OLUŞTUR - GENEL SİSTEM"""
+        try:
+            if not data or not isinstance(data, dict):
+                return
+            
+            # Tool'a özel bulgu oluştur
+            finding = self._create_tool_specific_finding(tool_name, data)
+            if finding:
+                self._add_finding(finding)
+            
+            # Data içindeki özel bulguları da ekle
+            self._extract_special_findings_from_data(tool_name, data)
+            
+        except Exception as e:
+            logger.error(f"Tool findings oluşturma hatası ({tool_name}): {e}")
+    
+    def _create_tool_specific_finding(self, tool_name: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Tool'a özel bulgu oluştur"""
+        try:
+            # Tool tipine göre bulgu oluştur
+            if "port" in tool_name.lower():
+                open_ports = data.get("open_ports", [])
+                if open_ports:
+                    return {
+                        "title": f"Port Scan Results - {len(open_ports)} Open Ports",
+                        "severity": "medium",
+                        "description": f"Port taraması ile {len(open_ports)} açık port tespit edildi: {', '.join(map(str, open_ports[:10]))}",
+                        "evidence": f"Open ports: {open_ports[:10]}",
+                        "target": self.current_target,
+                        "technology": "Network",
+                        "tool_source": tool_name
+                    }
+            
+            elif "tech" in tool_name.lower():
+                technologies = data.get("technologies", [])
+                if technologies:
+                    tech_str = ", ".join(technologies[:5])
+                    return {
+                        "title": f"Technology Detection - {len(technologies)} Technologies",
+                        "severity": "medium",
+                        "description": f"Teknoloji tespiti ile {len(technologies)} teknoloji bulundu: {tech_str}",
+                        "evidence": f"Technologies: {tech_str}",
+                        "target": self.current_target,
+                        "technology": "Technology Stack",
+                        "tool_source": tool_name
+                    }
+            
+            elif "web_crawler" in tool_name.lower():
+                params = data.get("parameters", [])
+                forms = data.get("forms", [])
+                endpoints = data.get("endpoints", [])
+                pages = data.get("pages", [])
                 
                 if params or forms or endpoints or pages:
-                    # Ana web uygulaması bulgusu
-                    finding = {
-                        "title": "Web Application Structure Discovered",
+                    return {
+                        "title": f"Web Application Discovery - {len(pages)} Pages, {len(params)} Parameters",
                         "severity": "medium",
-                        "description": f"Web uygulamasında {len(pages)} sayfa, {len(params)} parametre, {len(forms)} form ve {len(endpoints)} endpoint tespit edildi",
-                        "evidence": f"Sayfalar: {len(pages)}, Parametreler: {params[:5]}, Formlar: {len(forms)}, Endpoint'ler: {endpoints[:3]}",
+                        "description": f"Web crawler ile {len(pages)} sayfa, {len(params)} parametre, {len(forms)} form ve {len(endpoints)} endpoint keşfedildi",
+                        "evidence": f"Pages: {len(pages)}, Parameters: {params[:5]}, Forms: {len(forms)}, Endpoints: {endpoints[:3]}",
                         "target": self.current_target,
-                        "technology": "Web Application"
+                        "technology": "Web Application",
+                        "tool_source": tool_name
                     }
-                    self._add_finding(finding)
-                
-                # Teknoloji bulgusu ayrı
-                if technologies:
-                    tech_list = ", ".join(technologies[:5])
-                    finding = {
-                        "title": f"Web Technologies Detected: {tech_list}",
-                        "severity": "medium",
-                        "description": f"Web uygulamasında {len(technologies)} teknoloji tespit edildi: {tech_list}",
-                        "evidence": f"Technologies: {tech_list}",
-                        "target": self.current_target,
-                        "technology": tech_list
-                    }
-                    self._add_finding(finding)
             
-            elif tool_name in ["verify_xss", "verify_sqli", "verify_lfi"]:
+            elif any(vuln_type in tool_name.lower() for vuln_type in ["xss", "sqli", "lfi", "verify"]):
                 vulnerabilities = data.get("vulnerabilities", [])
-                if vulnerabilities:
-                    for vuln in vulnerabilities:
+                findings_data = data.get("findings", [])
+                
+                if vulnerabilities or findings_data:
+                    vuln_count = len(vulnerabilities) + len(findings_data)
+                    return {
+                        "title": f"Security Vulnerability Test - {vuln_count} Findings",
+                        "severity": "high",
+                        "description": f"{tool_name} ile {vuln_count} güvenlik açığı tespit edildi",
+                        "evidence": f"Vulnerabilities: {vuln_count} found",
+                        "target": self.current_target,
+                        "technology": "Web Application",
+                        "tool_source": tool_name
+                    }
+            
+            elif "header" in tool_name.lower():
+                missing_headers = data.get("missing_security_headers", [])
+                if missing_headers:
+                    return {
+                        "title": f"Security Headers Analysis - {len(missing_headers)} Missing",
+                        "severity": "medium",
+                        "description": f"HTTP header analizi ile {len(missing_headers)} eksik güvenlik header'ı tespit edildi",
+                        "evidence": f"Missing headers: {missing_headers}",
+                        "target": self.current_target,
+                        "technology": "HTTP",
+                        "tool_source": tool_name
+                    }
+            
+            elif "exposed_panels" in tool_name.lower() or "infra" in tool_name.lower():
+                panels = data.get("discovered_panels", [])
+                if panels:
+                    return {
+                        "title": f"Infrastructure Discovery - {len(panels)} Exposed Panels",
+                        "severity": "high",
+                        "description": f"Infrastructure taraması ile {len(panels)} açık admin panel keşfedildi",
+                        "evidence": f"Exposed panels: {panels[:5]}",
+                        "target": self.current_target,
+                        "technology": "Infrastructure",
+                        "tool_source": tool_name
+                    }
+            
+            elif "directory" in tool_name.lower():
+                directories = data.get("directories", [])
+                if directories:
+                    return {
+                        "title": f"Directory Discovery - {len(directories)} Sensitive Directories",
+                        "severity": "medium",
+                        "description": f"Directory bruteforce ile {len(directories)} hassas dizin keşfedildi",
+                        "evidence": f"Directories: {directories[:5]}",
+                        "target": self.current_target,
+                        "technology": "Web Application",
+                        "tool_source": tool_name
+                    }
+            
+            # GENEL TOOL ÇIKTI - TÜM TOOL'LAR İÇİN
+            else:
+                data_keys = list(data.keys()) if isinstance(data, dict) else []
+                if data_keys:
+                    return {
+                        "title": f"{tool_name} Tool Execution - {len(data_keys)} Data Points",
+                        "severity": "info",
+                        "description": f"{tool_name} tool'u başarıyla çalıştırıldı ve {len(data_keys)} veri noktası toplandı",
+                        "evidence": f"Data keys: {data_keys[:5]}",
+                        "target": self.current_target,
+                        "technology": "Tool Output",
+                        "tool_source": tool_name
+                    }
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Tool specific finding oluşturma hatası ({tool_name}): {e}")
+            return None
+    
+    def _extract_special_findings_from_data(self, tool_name: str, data: Dict[str, Any]):
+        """Data içindeki özel bulguları çıkar"""
+        try:
+            # Vulnerability bulguları
+            vulnerabilities = data.get("vulnerabilities", [])
+            if vulnerabilities and isinstance(vulnerabilities, list):
+                for vuln in vulnerabilities:
+                    if isinstance(vuln, dict):
                         finding = {
                             "title": vuln.get("type", f"{tool_name} vulnerability"),
                             "severity": vuln.get("severity", "medium"),
                             "description": vuln.get("description", "Vulnerability detected"),
                             "evidence": vuln.get("evidence", "Proof of concept available"),
                             "target": self.current_target,
-                            "technology": "Web Application"
+                            "technology": "Web Application",
+                            "tool_source": tool_name
                         }
                         self._add_finding(finding)
             
-            elif tool_name == "vuln_http_header_analyzer":
-                missing_headers = data.get("missing_security_headers", [])
-                if missing_headers:
-                    finding = {
-                        "title": "Missing Security Headers",
-                        "severity": "medium",
-                        "description": f"Eksik güvenlik header'ları: {', '.join(missing_headers)}",
-                        "evidence": f"Missing headers: {missing_headers}",
-                        "target": self.current_target,
-                        "technology": "HTTP"
-                    }
-                    self._add_finding(finding)
-            
-            elif tool_name == "infra_exposed_panels_finder":
-                panels = data.get("discovered_panels", [])
-                if panels:
-                    finding = {
-                        "title": "Exposed Admin Panels",
-                        "severity": "high",
-                        "description": f"{len(panels)} admin panel ve management interface keşfedildi",
-                        "evidence": f"Discovered panels: {panels[:3]}",
-                        "target": self.current_target,
-                        "technology": "Infrastructure"
-                    }
-                    self._add_finding(finding)
-            
-            elif tool_name == "enum_directory_bruteforce":
-                directories = data.get("directories", [])
-                if directories:
-                    finding = {
-                        "title": "Sensitive Directories",
-                        "severity": "medium",
-                        "description": f"{len(directories)} hassas dizin keşfedildi",
-                        "evidence": f"Directories: {directories[:5]}",
-                        "target": self.current_target,
-                        "technology": "Web Application"
-                    }
-                    self._add_finding(finding)
-            
-            # GENEL TOOL ÇIKTI KAYDETME - TÜM TOOL'LAR İÇİN
-            else:
-                # Diğer tool'lar için genel bulgu oluştur
-                if data and isinstance(data, dict) and len(data) > 0:
-                    finding = {
-                        "title": f"{tool_name} Tool Results",
-                        "severity": "info",
-                        "description": f"{tool_name} tool'u çalıştırıldı ve {len(data)} veri noktası toplandı",
-                        "evidence": f"Tool: {tool_name}, Data keys: {list(data.keys())[:5]}",
-                        "target": self.current_target,
-                        "technology": "Tool Output"
-                    }
-                    self._add_finding(finding)
-            
-            # Genel bilgi toplama
-            self.discovered_information["last_successful_tool"] = tool_name
-            self.discovered_information["total_tools_executed"] = len(self.discovered_information.get("vulnerabilities", []))
+            # Findings bulguları
+            findings_data = data.get("findings", [])
+            if findings_data and isinstance(findings_data, list):
+                for finding_data in findings_data:
+                    if isinstance(finding_data, dict):
+                        finding = {
+                            "title": finding_data.get("title", f"{tool_name} finding"),
+                            "severity": finding_data.get("severity", "medium"),
+                            "description": finding_data.get("description", "Finding detected"),
+                            "evidence": finding_data.get("evidence", "Evidence available"),
+                            "target": self.current_target,
+                            "technology": "Tool Output",
+                            "tool_source": tool_name
+                        }
+                        self._add_finding(finding)
+                        
+        except Exception as e:
+            logger.error(f"Special findings extraction hatası ({tool_name}): {e}")
     
     def _save_tool_output_to_file(self, tool_name: str, result: Dict[str, Any]):
         """TÜM TOOL ÇIKTILARINI DOSYAYA KAYDET - RAPOR VE LLM İÇİN"""

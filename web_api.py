@@ -815,16 +815,58 @@ async def generate_security_report(request: Dict[str, Any]):
         import os
         os.makedirs("reports", exist_ok=True)
         
-        # Raporu oluştur (sadece tool bulguları)
+        # Rapor oluştur (TÜM TOOL ÇIKTILARI İLE)
         success = await report_gen.generate_report(state, report_path)
         
         if not success:
             raise HTTPException(status_code=500, detail="Rapor oluşturulamadı")
         
-        # Rapor içeriğini oku (TXT)
-        txt_path = f"{report_path}.txt"
-        with open(txt_path, 'r', encoding='utf-8') as f:
-            report_content = f.read()
+        # TÜM TOOL ÇIKTILARINI RAPOR İÇİN HAZIRLA
+        all_tool_outputs = {}
+        if hasattr(state, 'discovered_information'):
+            for key, value in state.discovered_information.items():
+                if key.startswith("tool_"):
+                    tool_name = key[5:]  # "tool_" prefix'ini kaldır
+                    all_tool_outputs[tool_name] = value
+        
+        # Tool outputs dosyasından da çıktıları al
+        try:
+            import json
+            import os
+            from datetime import datetime
+            
+            # Session ID oluştur
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            session_id = f"pentest_{timestamp}"
+            
+            # Tool outputs dosyasını oku
+            output_file = f"tool_outputs/{session_id}_tool_outputs.json"
+            if os.path.exists(output_file):
+                with open(output_file, 'r', encoding='utf-8') as f:
+                    file_outputs = json.load(f)
+                    if "tool_outputs" in file_outputs:
+                        all_tool_outputs.update(file_outputs["tool_outputs"])
+                        logger.info(f"📁 {len(file_outputs['tool_outputs'])} tool çıktısı dosyadan alındı")
+        except Exception as e:
+            logger.warning(f"Tool outputs dosyası okuma hatası: {e}")
+        
+        # Rapor için zenginleştirilmiş veri hazırla
+        enriched_data = {
+            "findings": state.findings,
+            "target": state.current_target,
+            "user_task": state.user_task,
+            "all_tool_outputs": all_tool_outputs,
+            "discovered_information": state.discovered_information,
+            "execution_summary": {
+                "tools_executed": list(all_tool_outputs.keys()),
+                "successful_tools": list(all_tool_outputs.keys()),
+                "total_findings": len(state.findings),
+                "scan_duration": "N/A"
+            }
+        }
+        
+        # Profesyonel rapor oluştur
+        report_content = report_gen.generate_comprehensive_report(enriched_data)
         
         # Risk skoru hesapla (tüm bulgulardan)
         all_findings = state.findings  # Tüm bulguları al
