@@ -933,7 +933,7 @@ async def generate_security_report(request: Dict[str, Any]):
             "report_content": report_content[:5000],  # İlk 5000 karakter
             "formats_available": ["txt", "pdf", "json"],
             "files": {
-                "txt": f"{txt_path}",
+                "txt": f"{report_path}.txt",
                 "pdf": f"{report_path}.pdf",
                 "json": f"{report_path}.json"
             },

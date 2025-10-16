@@ -594,8 +594,12 @@ class RAGService:
             # TÜM TOOL ÇIKTILARINI HAZIRLA - JSON FORMATINDA
             all_tool_outputs = self._prepare_all_tool_outputs_for_ai(scan_results)
             
+            logger.info(f"🔍 RAG Query için hazırlanan tool outputs: {len(all_tool_outputs) if all_tool_outputs else 0} karakter")
+            logger.info(f"📊 Scan results keys: {list(scan_results.keys())}")
+            
             if not all_tool_outputs or all_tool_outputs == "No tool outputs":
                 logger.warning("⚠️ Hiç tool çıktısı yok, generic query kullanılıyor")
+                logger.warning(f"⚠️ Scan results içeriği: {scan_results}")
                 return "web application security vulnerability exploitation"
             
             # LLM'ye TÜM TOOL ÇIKTILARINI ver - KRİTİK: JSON FORMATINDA
