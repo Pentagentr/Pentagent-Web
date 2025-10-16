@@ -229,13 +229,30 @@ class RAGService:
         try:
             logger.info(f"🔄 Reranker başlatılıyor: {len(results)} sonuç sıralanacak")
             
-            # Query ve documents hazırla
-            documents = [f"{r.cve_id}: {r.description[:500]}" for r in results]
+            # Query ve documents hazırla - BAAI/bge-reranker-base için optimize edilmiş format
+            documents = []
+            for r in results:
+                # CVE bilgilerini daha zengin format ile hazırla
+                doc_parts = [
+                    f"CVE: {r.cve_id}",
+                    f"Description: {r.description[:400]}",
+                    f"Severity: {r.severity or 'Unknown'}",
+                    f"CVSS: {r.base_score or 'N/A'}"
+                ]
+                if r.product:
+                    doc_parts.append(f"Product: {r.product}")
+                if r.vendor:
+                    doc_parts.append(f"Vendor: {r.vendor}")
+                
+                documents.append(" | ".join(doc_parts))
             
-            # SENTENCE-TRANSFORMERS RERANKER kullan (cross-encoder)
-            # Daha stabil ve güvenilir model: cross-encoder/ms-marco-MiniLM-L-2-v2
-            reranker_model = "cross-encoder/ms-marco-MiniLM-L-2-v2"
+            logger.info(f"📝 {len(documents)} document BAAI/bge-reranker-base formatında hazırlandı")
+            
+            # RERANKER MODEL - Config'den al (BAAI/bge-reranker-base default)
+            reranker_model = config.RERANKER_MODEL
             inference_url = f"https://api-inference.huggingface.co/models/{reranker_model}"
+            
+            logger.info(f"🎯 Reranker model kullanılıyor: {reranker_model}")
             
             # Token kontrolü
             if not config.HUGGINGFACE_TOKEN:
@@ -250,16 +267,19 @@ class RAGService:
                 "Content-Type": "application/json"
             }
             
-            # Cross-encoder formatı: {"inputs": [["query", "doc1"], ["query", "doc2"], ...]}
-            # Her query-document çifti için skor döndürür
+            # BAAI/bge-reranker-base formatı: {"inputs": [["query", "doc1"], ["query", "doc2"], ...]}
+            # Bu model cross-encoder formatında çalışır, her query-document çifti için skor döndürür
             pairs = [[query, doc] for doc in documents]
             
             payload = {
                 "inputs": pairs,
                 "options": {
-                    "wait_for_model": True
+                    "wait_for_model": True,
+                    "use_cache": False  # Her zaman fresh sonuçlar için
                 }
             }
+            
+            logger.info(f"📤 {len(pairs)} query-document çifti reranker'a gönderiliyor")
             
             # HuggingFace API'ye istek gönder
             async with aiohttp.ClientSession() as session:
@@ -295,9 +315,9 @@ class RAGService:
                             # Rerank score normalize et (0-1 arası)
                             rerank_score = float(score) if isinstance(score, (int, float)) else 0.5
                             
-                            # Rerank score DOMİNANT olmalı (sen fallback istemiyorsun!)
-                            # %80 rerank, %20 orijinal skor
-                            combined_score = (original_score * 0.2) + (rerank_score * 0.8)
+                            # BAAI/bge-reranker-base çok güçlü, rerank score DOMİNANT olmalı
+                            # %90 rerank, %10 orijinal skor (daha agresif)
+                            combined_score = (original_score * 0.1) + (rerank_score * 0.9)
                             
                             reranked.append({
                                 "cve": cve,
