@@ -1495,7 +1495,7 @@ class ReportGenerator:
             return "Rapor içeriği oluşturulamadı"
 
     # Web API için sync metod
-    def generate_comprehensive_report(self, enriched_data: Dict[str, Any]) -> str:
+    def generate_comprehensive_report_sync(self, enriched_data: Dict[str, Any]) -> str:
         """Web API için sync rapor oluşturma"""
         try:
             # Enriched data'dan state oluştur

@@ -894,7 +894,7 @@ async def generate_security_report(request: Dict[str, Any]):
         }
         
         # Profesyonel rapor oluştur - SYNC VERSİYON KULLAN (sadece enriched_data)
-        report_content = report_gen.generate_comprehensive_report(enriched_data)
+        report_content = report_gen.generate_comprehensive_report_sync(enriched_data)
         
         # Risk skoru hesapla (tüm bulgulardan)
         all_findings = state.findings  # Tüm bulguları al
