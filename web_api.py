@@ -899,6 +899,9 @@ async def generate_security_report(request: Dict[str, Any]):
         
         logger.info(f"✅ Rapor başarıyla oluşturuldu: {report_id}")
         
+        # Datetime import'u burada yap
+        from datetime import datetime as dt
+        
         return {
             "success": True,
             "report_id": report_id,
@@ -906,7 +909,7 @@ async def generate_security_report(request: Dict[str, Any]):
             "risk_score": risk_score,
             "vulnerabilities": vulnerabilities,
             "pages": len(report_content.split('\n')) // 50,  # Tahmini sayfa sayısı
-            "createdAt": datetime.now().isoformat(),
+            "createdAt": dt.now().isoformat(),
             "download_url": f"/api/reports/{report_id}/download",
             "report_content": report_content[:5000],  # İlk 5000 karakter
             "formats_available": ["txt", "pdf", "json"],
