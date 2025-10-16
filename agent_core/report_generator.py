@@ -287,34 +287,26 @@ class ReportGenerator:
             return finding
 
     async def _rag_store_scan_results(self, target: str, findings: List[Dict[str, Any]], execution_results: Dict[str, Any]):
-        """RAG'a tarama sonuçlarını kaydet"""
+        """RAG'a tarama sonuçlarını kaydet - Firebase entegrasyonu ile"""
         try:
-            if not self.rag_client:
-                logger.warning("RAG client not available - cannot store scan results")
+            # RAG servisini import et ve kullan
+            from services.rag_service import get_rag_service
+            rag_service = get_rag_service()
+            
+            if not rag_service.is_available():
+                logger.warning("RAG service not available - cannot store scan results")
                 return
             
-            # Tarama sonuçlarını RAG formatına çevir
-            scan_data = {
-                "target": target,
-                "scan_date": datetime.now().isoformat(),
-                "findings": findings,
-                "execution_summary": {
-                    "total_tools_executed": len(execution_results),
-                    "successful_tools": len([r for r in execution_results.values() if r.get("success", False)]),
-                    "risk_level": self._calculate_overall_risk_level({"by_severity": self._count_findings_by_severity(findings)})
-                },
-                "metadata": {
-                    "scan_type": "comprehensive",
-                    "methodology": "OWASP Top 10, PTES, NIST SP 800-115"
-                }
-            }
+            # RAG servisinin store_scan_results metodunu kullan
+            success = rag_service.store_scan_results(target, findings, execution_results)
             
-            # RAG'a kaydet
-            await self.rag_client.store_document(scan_data)
-            logger.info(f"Scan results stored in RAG for target: {target}")
+            if success:
+                logger.info(f"✅ Scan results stored successfully for target: {target}")
+            else:
+                logger.warning(f"⚠️ Failed to store scan results for target: {target}")
             
         except Exception as e:
-            logger.error(f"Failed to store scan results in RAG: {e}")
+            logger.error(f"Failed to store scan results: {e}")
 
     def _count_findings_by_severity(self, findings: List[Dict[str, Any]]) -> Dict[str, int]:
         """Bulguları ciddiyete göre say"""
@@ -1446,6 +1438,81 @@ class ReportGenerator:
             
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(report_data, f, indent=2, ensure_ascii=False)
+
+    def _generate_report_content(self, state: AgentState) -> str:
+        """Rapor içeriğini oluştur"""
+        try:
+            report_parts = []
+            
+            # Başlık
+            report_parts.append("PENTEST GÜVENLİK RAPORU")
+            report_parts.append("=" * 50)
+            report_parts.append(f"Hedef: {state.target}")
+            report_parts.append(f"Tarih: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            report_parts.append("")
+            
+            # Yönetici özeti
+            report_parts.append("1. YÖNETİCİ ÖZETİ")
+            report_parts.append("-" * 30)
+            findings_count = len(state.findings)
+            critical_count = len([f for f in state.findings if f.get('severity') == 'critical'])
+            high_count = len([f for f in state.findings if f.get('severity') == 'high'])
+            
+            report_parts.append(f"Toplam bulgu sayısı: {findings_count}")
+            report_parts.append(f"Kritik seviye: {critical_count}")
+            report_parts.append(f"Yüksek seviye: {high_count}")
+            report_parts.append("")
+            
+            # Detaylı bulgular
+            if state.findings:
+                report_parts.append("2. DETAYLI BULGULAR")
+                report_parts.append("-" * 30)
+                
+                for i, finding in enumerate(state.findings, 1):
+                    report_parts.append(f"{i}. {finding.get('title', 'Bilinmeyen Bulgu')}")
+                    report_parts.append(f"   Severity: {finding.get('severity', 'Unknown')}")
+                    report_parts.append(f"   Açıklama: {finding.get('description', 'Açıklama yok')}")
+                    report_parts.append(f"   Kanıt: {finding.get('evidence', 'Kanıt yok')}")
+                    report_parts.append("")
+            
+            # Tool çıktıları
+            if state.discovered_information:
+                tool_outputs = {k: v for k, v in state.discovered_information.items() if k.startswith('tool_')}
+                if tool_outputs:
+                    report_parts.append("3. TOOL ÇIKTILARI")
+                    report_parts.append("-" * 30)
+                    
+                    for tool_name, tool_data in tool_outputs.items():
+                        clean_name = tool_name.replace('tool_', '')
+                        report_parts.append(f"Tool: {clean_name}")
+                        report_parts.append(f"Çıktı: {str(tool_data)[:500]}...")
+                        report_parts.append("")
+            
+            return "\n".join(report_parts)
+            
+        except Exception as e:
+            logger.error(f"Rapor içeriği oluşturma hatası: {e}")
+            return "Rapor içeriği oluşturulamadı"
+
+    # Web API için sync metod
+    def generate_comprehensive_report(self, enriched_data: Dict[str, Any]) -> str:
+        """Web API için sync rapor oluşturma"""
+        try:
+            # Enriched data'dan state oluştur
+            state = AgentState(
+                target=enriched_data.get("target", "Unknown"),
+                user_task=enriched_data.get("user_task", "Security scan")
+            )
+            state.findings = enriched_data.get("findings", [])
+            state.discovered_information = enriched_data.get("discovered_information", {})
+            
+            # Rapor içeriği oluştur
+            report_content = self._generate_report_content(state)
+            return report_content
+            
+        except Exception as e:
+            logger.error(f"Sync rapor oluşturma hatası: {e}")
+            return "Rapor oluşturulamadı"
 
     # Dynamic orchestrator ile entegrasyon için yeni metod - RAG ENTEGRASYONU
     async def generate_comprehensive_report(self, state: AgentState, final_analysis: Dict[str, Any], execution_results: Dict[str, Any]) -> Dict[str, Any]:

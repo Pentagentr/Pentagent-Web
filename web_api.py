@@ -768,18 +768,24 @@ async def generate_security_report(request: Dict[str, Any]):
                         logger.info(f"🎯 RAG'dan {len(rag_results)} CVE bulundu")
                         # CVE'leri findings'e ekle
                         for i, cve in enumerate(rag_results[:3], 1):
+                            # CVEResult objesini dict'e çevir
+                            if hasattr(cve, 'to_dict'):
+                                cve_dict = cve.to_dict()
+                            else:
+                                cve_dict = cve
+                            
                             finding = {
-                                'title': f"RAG CVE: {cve.get('cve_id', f'CVE-{i}')}",
-                                'severity': _map_cvss_to_severity(cve.get('cvss_score', 5.0)),
-                                'description': cve.get('description', 'Açıklama mevcut değil')[:500],
-                                'cvss_score': cve.get('cvss_score', 'N/A'),
-                                'cve_id': cve.get('cve_id', 'N/A'),
-                                'evidence': f"RAG Query: {optimized_query}\n\n{cve.get('description', 'Açıklama yok')}",
-                                'recommendation_summary': f"Bu CVE ile ilişkili zafiyetleri kontrol edin. CVSS: {cve.get('cvss_score', 'N/A')}",
-                                'business_impact': f"RAG ile tespit edilen bilinen güvenlik açığı. CVSS: {cve.get('cvss_score', 'N/A')}",
+                                'title': f"RAG CVE: {cve_dict.get('cve_id', f'CVE-{i}')}",
+                                'severity': _map_cvss_to_severity(cve_dict.get('base_score', 5.0)),
+                                'description': cve_dict.get('description', 'Açıklama mevcut değil')[:500],
+                                'cvss_score': cve_dict.get('base_score', 'N/A'),
+                                'cve_id': cve_dict.get('cve_id', 'N/A'),
+                                'evidence': f"RAG Query: {optimized_query}\n\n{cve_dict.get('description', 'Açıklama yok')}",
+                                'recommendation_summary': f"Bu CVE ile ilişkili zafiyetleri kontrol edin. CVSS: {cve_dict.get('base_score', 'N/A')}",
+                                'business_impact': f"RAG ile tespit edilen bilinen güvenlik açığı. CVSS: {cve_dict.get('base_score', 'N/A')}",
                                 'exploitability': 'Known CVE',
                                 'target': target,
-                                'technology': cve.get('affected_product') or cve.get('product') or 'Unknown'
+                                'technology': cve_dict.get('product') or 'Unknown'
                             }
                             tool_findings.append(finding)
                     else:
@@ -833,20 +839,28 @@ async def generate_security_report(request: Dict[str, Any]):
         try:
             import json
             import os
+            import glob
             from datetime import datetime
             
-            # Session ID oluştur
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            session_id = f"pentest_{timestamp}"
-            
-            # Tool outputs dosyasını oku
-            output_file = f"tool_outputs/{session_id}_tool_outputs.json"
-            if os.path.exists(output_file):
-                with open(output_file, 'r', encoding='utf-8') as f:
-                    file_outputs = json.load(f)
-                    if "tool_outputs" in file_outputs:
-                        all_tool_outputs.update(file_outputs["tool_outputs"])
-                        logger.info(f"📁 {len(file_outputs['tool_outputs'])} tool çıktısı dosyadan alındı")
+            # En son tool outputs dosyasını bul
+            tool_outputs_dir = "tool_outputs"
+            if os.path.exists(tool_outputs_dir):
+                # En son dosyayı bul
+                pattern = f"{tool_outputs_dir}/*_tool_outputs.json"
+                files = glob.glob(pattern)
+                if files:
+                    # En son dosyayı al (modification time'a göre)
+                    latest_file = max(files, key=os.path.getmtime)
+                    
+                    with open(latest_file, 'r', encoding='utf-8') as f:
+                        file_outputs = json.load(f)
+                        if "tool_outputs" in file_outputs:
+                            all_tool_outputs.update(file_outputs["tool_outputs"])
+                            logger.info(f"📁 {len(file_outputs['tool_outputs'])} tool çıktısı dosyadan alındı: {latest_file}")
+                else:
+                    logger.warning("Tool outputs dosyası bulunamadı")
+            else:
+                logger.warning("Tool outputs dizini bulunamadı")
         except Exception as e:
             logger.warning(f"Tool outputs dosyası okuma hatası: {e}")
         

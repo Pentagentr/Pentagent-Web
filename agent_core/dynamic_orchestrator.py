@@ -1533,14 +1533,15 @@ Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu haz�
                     "tool_outputs": {}
                 }
             
-            # Tool çıktısını ekle
-            all_outputs["tool_outputs"][tool_name] = {
+            # Tool çıktısını ekle - JSON serializable hale getir
+            tool_output = {
                 "timestamp": datetime.now().isoformat(),
                 "success": result.get("success", False),
-                "data": result.get("data", {}),
+                "data": self._make_json_serializable(result.get("data", {})),
                 "ai_summary": result.get("ai_summary", ""),
                 "error": result.get("error", "")
             }
+            all_outputs["tool_outputs"][tool_name] = tool_output
             
             # Dosyayı kaydet
             with open(output_file, 'w', encoding='utf-8') as f:
@@ -1567,13 +1568,16 @@ Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu haz�
         return getattr(self, '_findings', [])
 
     def _make_json_serializable(self, obj):
-        """Objeyi JSON serializable hale getir"""
+        """Objeyi JSON serializable hale getir - CVEResult desteği ile"""
         if isinstance(obj, dict):
             return {key: self._make_json_serializable(value) for key, value in obj.items()}
         elif isinstance(obj, list):
             return [self._make_json_serializable(item) for item in obj]
         elif isinstance(obj, set):
             return list(obj)
+        elif hasattr(obj, 'to_dict') and callable(getattr(obj, 'to_dict')):
+            # CVEResult gibi objeler için to_dict metodunu kullan
+            return self._make_json_serializable(obj.to_dict())
         elif hasattr(obj, '__dict__'):
             return self._make_json_serializable(obj.__dict__)
         else:
@@ -2046,8 +2050,14 @@ Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu haz�
                 
                 if rag_results:
                     logger.info(f"🎯 {len(rag_results)} CVE bulundu")
-                    # CVE'leri context'e ekle
-                    self.discovered_information["rag_cves"] = rag_results[:5]  # Top 5
+                    # CVE'leri context'e ekle - JSON serializable format
+                    cve_list = []
+                    for cve in rag_results[:5]:
+                        if hasattr(cve, 'to_dict'):
+                            cve_list.append(cve.to_dict())
+                        else:
+                            cve_list.append(cve)
+                    self.discovered_information["rag_cves"] = cve_list
                 else:
                     logger.warning("⚠️ RAG'dan CVE bulunamadı")
             else:

@@ -26,6 +26,7 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
     { id: 'yonetici-ozeti', title: 'Yönetici Özeti', icon: FileText },
     { id: 'metodoloji', title: 'Metodoloji', icon: Shield },
     { id: 'detayli-bulgular', title: 'Detaylı Bulgular', icon: Target },
+    { id: 'tool-ciktilari', title: 'Tool Çıktıları', icon: Database },
     { id: 'oneriler', title: 'Öneriler', icon: CheckCircle }
   ];
 
@@ -394,11 +395,97 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
     );
   };
 
+  // 5. TOOL ÇIKTILARI
+  const renderToolCiktilari = () => {
+    const toolOutputs = report.structured_data?.all_tool_outputs || {};
+    const toolKeys = Object.keys(toolOutputs);
+    
+    if (toolKeys.length === 0) {
+      return (
+        <div className="text-center py-12">
+          <Database className="w-12 h-12 text-text-tertiary mx-auto mb-4" />
+          <p className="text-text-secondary">Tool çıktısı bulunamadı</p>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="space-y-6">
+        <div className="prose prose-invert max-w-none">
+          <p className="text-text-secondary leading-relaxed">
+            Tarama sırasında çalıştırılan araçların detaylı çıktıları aşağıda listelenmiştir. 
+            Bu çıktılar güvenlik bulgularının teknik detaylarını içerir.
+          </p>
+        </div>
+        
+        {toolKeys.map((toolName, index) => {
+          const toolOutput = toolOutputs[toolName];
+          const isSuccess = toolOutput?.success || toolOutput?.data;
+          
+          return (
+            <div key={index} className="bg-obsidian-900/50 border border-platinum-500/10 rounded-lg p-5">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                    isSuccess ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
+                  }`}>
+                    <Database className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-text-primary">{toolName}</h4>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className={`px-2 py-1 rounded ${
+                        isSuccess ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                      }`}>
+                        {isSuccess ? 'Başarılı' : 'Başarısız'}
+                      </span>
+                      {toolOutput?.timestamp && (
+                        <span className="text-text-tertiary">
+                          {new Date(toolOutput.timestamp).toLocaleString('tr-TR')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {toolOutput?.ai_summary && (
+                <div className="mb-4 p-3 bg-obsidian-950/50 rounded border border-platinum-500/5">
+                  <h5 className="text-sm font-medium text-text-primary mb-2">AI Özeti</h5>
+                  <p className="text-text-secondary text-sm">{toolOutput.ai_summary}</p>
+                </div>
+              )}
+              
+              {toolOutput?.data && (
+                <div className="space-y-3">
+                  <h5 className="text-sm font-medium text-text-primary">Detaylı Çıktı</h5>
+                  <div className="bg-obsidian-950/50 rounded border border-platinum-500/5 p-3">
+                    <pre className="text-xs text-text-secondary whitespace-pre-wrap overflow-x-auto">
+                      {JSON.stringify(toolOutput.data, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              )}
+              
+              {toolOutput?.error && (
+                <div className="p-3 bg-rose-500/5 border border-rose-500/20 rounded">
+                  <h5 className="text-sm font-medium text-rose-400 mb-1">Hata</h5>
+                  <p className="text-rose-300 text-sm">{toolOutput.error}</p>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const renderCurrentSection = () => {
     switch (currentSection) {
       case 'yonetici-ozeti': return renderYoneticiOzeti();
       case 'metodoloji': return renderMetodoloji();
       case 'detayli-bulgular': return renderDetayliBulgular();
+      case 'tool-ciktilari': return renderToolCiktilari();
       case 'oneriler': return renderOneriler();
       default: return <div className="text-center py-12 text-text-secondary">Yükleniyor...</div>;
     }

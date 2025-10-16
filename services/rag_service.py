@@ -13,6 +13,7 @@ import asyncio
 import aiohttp
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
+from datetime import datetime
 from model_wrapper import UnifiedLLM
 from config import config
 
@@ -69,6 +70,22 @@ class CVEResult:
             "exploitability_score": self.exploitability_score,
             "impact_score": self.impact_score
         }
+    
+    def get(self, key: str, default=None):
+        """Dict-like get method for compatibility"""
+        return getattr(self, key, default)
+    
+    def __iter__(self):
+        """Iterate over key-value pairs for JSON serialization"""
+        return iter(self.to_dict().items())
+    
+    def keys(self):
+        """Return keys for JSON serialization"""
+        return self.to_dict().keys()
+    
+    def values(self):
+        """Return values for JSON serialization"""
+        return self.to_dict().values()
 
 
 class RAGService:
@@ -318,7 +335,7 @@ class RAGService:
     async def search(self, query: str, limit: int = 5, severity: Optional[str] = None) -> List[CVEResult]:
         """
         Async search metodu - web_api.py için.
-        Reranker ZORUNLU kullanılır.
+        Reranker MUTLAKA aktif.
         """
         return self.search_cve(query, limit, severity, use_reranker=True)
     
@@ -353,11 +370,21 @@ class RAGService:
         try:
             logger.info(f"CVE araması yapılıyor: '{query}' (limit={limit}, severity={severity})")
             
-            # Reranker ZORUNLU - her zaman True
+            # Reranker MUTLAKA aktif - HuggingFace token kontrolü
             reranker_enabled = True if use_reranker is None else use_reranker
+            
+            # HuggingFace token kontrolü - yetki yoksa uyarı ver ama devam et
+            if reranker_enabled and not self._has_valid_hf_token():
+                logger.error("❌ HUGGINGFACE TOKEN YETKİSİ YOK!")
+                logger.error("💡 Çözüm: HuggingFace hesabınızda 'Inference API' yetkisi olmalı")
+                logger.error("🔗 https://huggingface.co/settings/tokens adresinden token oluşturun")
+                # Reranker'ı devre dışı bırakma, sadece uyarı ver
             # 20 sparse vektör için fetch_limit = 20
             fetch_limit = 20 if reranker_enabled else limit
-            logger.info(f"🎯 Reranker ZORUNLU - {fetch_limit} sonuç çekilecek, reranking sonrası {limit} döndürülecek")
+            if reranker_enabled:
+                logger.info(f"🎯 Reranker aktif - {fetch_limit} sonuç çekilecek, reranking sonrası {limit} döndürülecek")
+            else:
+                logger.info(f"🎯 Reranker devre dışı - {limit} sonuç döndürülecek")
             
             # Severity filtresi varsa
             if severity:
@@ -1120,6 +1147,119 @@ CVE Query:"""
         
         return "web security vulnerability"
     
+    def store_scan_results(self, target: str, findings: List[Dict[str, Any]], execution_results: Dict[str, Any]):
+        """
+        Tarama sonuçlarını RAG'a kaydet - Firebase entegrasyonu ile.
+        
+        Args:
+            target: Hedef sistem
+            findings: Bulgular listesi
+            execution_results: Tool execution sonuçları
+        """
+        try:
+            if not self.is_available():
+                logger.warning("RAG servisi kullanılamıyor - scan results kaydedilemiyor")
+                return False
+            
+            # Tarama sonuçlarını RAG formatına çevir
+            scan_data = {
+                "target": target,
+                "scan_date": datetime.now().isoformat(),
+                "findings": findings,
+                "execution_summary": {
+                    "total_tools_executed": len(execution_results),
+                    "successful_tools": len([r for r in execution_results.values() if r.get("success", False)]),
+                    "risk_level": self._calculate_overall_risk_level(findings)
+                },
+                "metadata": {
+                    "scan_type": "comprehensive",
+                    "methodology": "OWASP Top 10, PTES, NIST SP 800-115"
+                }
+            }
+            
+            # Firebase'e kaydet (mevcut Firebase bağlantısı kullan)
+            try:
+                from config import firebase_db
+                if firebase_db:
+                    scan_ref = firebase_db.collection('scan_results').document()
+                    scan_ref.set(scan_data)
+                    logger.info(f"✅ Scan results Firebase'e kaydedildi: {target}")
+            except Exception as e:
+                logger.error(f"Firebase kayıt hatası: {e}")
+            
+            # RAG engine'e de kaydet (opsiyonel)
+            try:
+                if hasattr(self._engine, 'store_document'):
+                    self._engine.store_document(scan_data)
+                    logger.info(f"✅ Scan results RAG'a kaydedildi: {target}")
+            except Exception as e:
+                logger.warning(f"RAG engine kayıt hatası: {e}")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to store scan results: {e}")
+            return False
+    
+    def _calculate_overall_risk_level(self, findings: List[Dict[str, Any]]) -> str:
+        """Bulgulara göre genel risk seviyesini hesapla"""
+        if not findings:
+            return "LOW"
+        
+        severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+        for finding in findings:
+            severity = finding.get("severity", "low").lower()
+            if severity in severity_counts:
+                severity_counts[severity] += 1
+        
+        if severity_counts["critical"] > 0:
+            return "CRITICAL"
+        elif severity_counts["high"] > 0:
+            return "HIGH"
+        elif severity_counts["medium"] > 0:
+            return "MEDIUM"
+        else:
+            return "LOW"
+
+    def _has_valid_hf_token(self) -> bool:
+        """HuggingFace token'ının geçerli olup olmadığını kontrol et"""
+        try:
+            hf_token = os.getenv('HUGGINGFACE_TOKEN')
+            if not hf_token:
+                logger.error("❌ HUGGINGFACE_TOKEN environment variable yok!")
+                return False
+            
+            # Token'ın Inference API yetkisi var mı kontrol et
+            import requests
+            headers = {"Authorization": f"Bearer {hf_token}"}
+            response = requests.get("https://huggingface.co/api/whoami", headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                user_data = response.json()
+                user_name = user_data.get("name", "unknown")
+                logger.info(f"✅ HuggingFace token geçerli - Kullanıcı: {user_name}")
+                
+                # Inference API yetkisi kontrolü
+                permissions = user_data.get("permissions", [])
+                if "inference" in permissions:
+                    logger.info("✅ Inference API yetkisi mevcut")
+                    return True
+                else:
+                    logger.error(f"❌ Inference API yetkisi yok! Mevcut yetkiler: {permissions}")
+                    logger.error("💡 HuggingFace token'ınızı 'Inference API' yetkisi ile yeniden oluşturun")
+                    return False
+            else:
+                logger.error(f"❌ HuggingFace token geçersiz! Status: {response.status_code}")
+                if response.status_code == 401:
+                    logger.error("💡 Token süresi dolmuş veya geçersiz")
+                elif response.status_code == 403:
+                    logger.error("💡 Token yetkisi yetersiz")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ HuggingFace token kontrol hatası: {e}")
+            return False
+
     def get_stats(self) -> Dict[str, Any]:
         """
         RAG servis istatistikleri.
