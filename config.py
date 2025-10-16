@@ -61,8 +61,8 @@ class Config:
         self.HUGGINGFACE_TOKEN = os.getenv('HUGGINGFACE_TOKEN', '')
         self.HF_MODEL_URL = os.getenv('HF_MODEL_URL', 'https://api-inference.huggingface.co/models/meta-llama/Llama-3.2-3B-Instruct')
         
-        # Reranker Configuration (BAAI/bge-reranker-base)
-        self.USE_RERANKER = os.getenv('USE_RERANKER', 'true').lower() == 'true'
+        # Reranker Configuration (BAAI/bge-reranker-base) - DISABLED DUE TO PERMISSIONS
+        self.USE_RERANKER = os.getenv('USE_RERANKER', 'false').lower() == 'true'
         self.RERANKER_MODEL = os.getenv('RERANKER_MODEL', 'BAAI/bge-reranker-base')
         self.RERANKER_API_URL = f'https://api-inference.huggingface.co/models/{self.RERANKER_MODEL}'
         self.RERANKER_TOP_K = int(os.getenv('RERANKER_TOP_K', '5'))  # Rerank için kaç sonuç alınacak
