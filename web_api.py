@@ -915,6 +915,8 @@ async def generate_security_report(request: Dict[str, Any]):
         if structured_report:
             structured_report["all_tool_outputs"] = all_tool_outputs
             structured_report["execution_summary"] = enriched_data["execution_summary"]
+            structured_report["findings"] = state.findings  # Bulguları ekle
+            structured_report["cve_results"] = cve_findings  # CVE'leri ekle
         
         logger.info(f"✅ Rapor başarıyla oluşturuldu: {report_id}")
         

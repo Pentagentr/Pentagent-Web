@@ -1439,16 +1439,17 @@ class ReportGenerator:
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(report_data, f, indent=2, ensure_ascii=False)
 
-    def _generate_report_content(self, state: AgentState) -> str:
-        """Rapor içeriğini oluştur"""
+    def _generate_report_content(self, state: AgentState, cve_results=None, risk_score=None) -> str:
+        """Rapor içeriğini oluştur - CVE'ler ve risk skoru ile"""
         try:
             report_parts = []
             
             # Başlık
-            report_parts.append("PENTEST GÜVENLİK RAPORU")
-            report_parts.append("=" * 50)
-            report_parts.append(f"Hedef: {state.target}")
-            report_parts.append(f"Tarih: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            report_parts.append("# PENTEST GÜVENLİK RAPORU")
+            report_parts.append("")
+            report_parts.append(f"**Hedef:** {state.target}")
+            report_parts.append(f"**Tarih:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            report_parts.append(f"**Risk Skoru:** {risk_score or 'N/A'}")
             report_parts.append("")
             
             # Yönetici özeti
@@ -1488,6 +1489,40 @@ class ReportGenerator:
                         report_parts.append(f"Çıktı: {str(tool_data)[:500]}...")
                         report_parts.append("")
             
+            # CVE bölümü ekle
+            if cve_results:
+                report_parts.append("## 3. CVE ANALİZİ")
+                report_parts.append("-" * 30)
+                report_parts.append("")
+                
+                for i, cve in enumerate(cve_results[:10], 1):  # Top 10 CVE
+                    if isinstance(cve, dict):
+                        cve_id = cve.get('cve_id', 'N/A')
+                        description = cve.get('description', 'N/A')[:200]
+                        severity = cve.get('severity', 'N/A')
+                        cvss = cve.get('base_score', 'N/A')
+                        
+                        report_parts.append(f"### {i}. {cve_id}")
+                        report_parts.append(f"**Severity:** {severity}")
+                        report_parts.append(f"**CVSS:** {cvss}")
+                        report_parts.append(f"**Description:** {description}")
+                        report_parts.append("")
+            
+            # Tool çıktıları bölümü
+            if hasattr(state, 'discovered_information') and state.discovered_information:
+                report_parts.append("## 4. TOOL ÇIKTILARI")
+                report_parts.append("-" * 30)
+                report_parts.append("")
+                
+                for tool_name, tool_data in state.discovered_information.items():
+                    if tool_name.startswith('tool_') and tool_data:
+                        clean_name = tool_name[5:]  # "tool_" prefix'ini kaldır
+                        report_parts.append(f"### {clean_name.upper()}")
+                        report_parts.append(f"```json")
+                        report_parts.append(f"{str(tool_data)[:500]}...")
+                        report_parts.append(f"```")
+                        report_parts.append("")
+            
             return "\n".join(report_parts)
             
         except Exception as e:
@@ -1506,8 +1541,12 @@ class ReportGenerator:
             state.findings = enriched_data.get("findings", [])
             state.discovered_information = enriched_data.get("discovered_information", {})
             
-            # Rapor içeriği oluştur
-            report_content = self._generate_report_content(state)
+            # CVE'leri ve risk skorunu al
+            cve_results = enriched_data.get("cve_results", [])
+            risk_score = self._calculate_risk_score(state.findings)
+            
+            # Rapor içeriği oluştur - CVE'ler ve risk skoru ile
+            report_content = self._generate_report_content(state, cve_results, risk_score)
             return report_content
             
         except Exception as e:
