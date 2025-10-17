@@ -1272,13 +1272,6 @@ async def generate_security_report(request: Dict[str, Any]):
         elif risk_score == 0 and len(all_findings) == 0:
             risk_score = 5
         
-        # Zafiyet sayıları
-        vulnerabilities = {
-            "critical": len([f for f in state.findings if f.get('severity') == 'critical']),
-            "high": len([f for f in state.findings if f.get('severity') == 'high']),
-            "medium": len([f for f in state.findings if f.get('severity') == 'medium']),
-            "low": len([f for f in state.findings if f.get('severity') == 'low']),
-        }
         
         # Yapılandırılmış rapor verisini al (tool bulguları + CVE tablosu + detaylı çıktılar)
         structured_report = report_gen.get_structured_report_data_with_cves(state, cve_findings)

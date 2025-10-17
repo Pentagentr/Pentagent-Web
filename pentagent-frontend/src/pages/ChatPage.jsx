@@ -14,6 +14,11 @@ const ChatPage = () => {
     setCurrentConversationId(newConvId);
   };
 
+  const handleScanSelect = (scan) => {
+    // Tarama seçildiğinde reports sayfasına yönlendir
+    window.location.href = `/reports?scanId=${scan.id}`;
+  };
+
   return (
     <div className="h-screen bg-obsidian-950 flex flex-col overflow-hidden">
       {/* Navbar - Sabit */}
@@ -26,6 +31,7 @@ const ChatPage = () => {
           currentConversationId={currentConversationId}
           onConversationSelect={handleConversationSelect}
           onNewChat={handleNewChat}
+          onScanSelect={handleScanSelect}
         />
         
         {/* Chat Interface - Sağ */}

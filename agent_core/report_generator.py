@@ -1939,27 +1939,35 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
 ---
 *Rapor Tarihi: {datetime.now().strftime('%d/%m/%Y %H:%M')}*
 """
+    
+    def generate_comprehensive_report_sync(self, enriched_data: Dict[str, Any]) -> str:
         """Web API için sync rapor oluşturma"""
         try:
             # Enriched data'dan state oluştur
             state = AgentState(
                 target=enriched_data.get("target", "Unknown"),
-                user_task=enriched_data.get("user_task", "Security scan")
+                user_task=enriched_data.get("user_task", "Güvenlik raporu oluştur")
             )
             state.findings = enriched_data.get("findings", [])
             state.discovered_information = enriched_data.get("discovered_information", {})
             
-            # CVE'leri ve risk skorunu al
+            # Tool çıktılarını ekle
+            all_tool_outputs = enriched_data.get("all_tool_outputs", {})
             cve_results = enriched_data.get("cve_results", [])
-            risk_score = self._calculate_risk_score(state.findings)
             
-            # Rapor içeriği oluştur - CVE'ler ve risk skoru ile
-            report_content = self._generate_report_content(state, cve_results, risk_score)
-            return report_content
+            # LLM ile gelişmiş rapor oluştur
+            llm_report = self.generate_llm_enhanced_report(
+                findings=state.findings,
+                target=state.target,
+                cve_results=cve_results,
+                tool_outputs=all_tool_outputs
+            )
+            
+            return llm_report
             
         except Exception as e:
             logger.error(f"Sync rapor oluşturma hatası: {e}")
-            return "Rapor oluşturulamadı"
+            return f"Rapor oluşturulamadı: {str(e)}"
 
     # Dynamic orchestrator ile entegrasyon için yeni metod - RAG ENTEGRASYONU
     async def generate_comprehensive_report_async(self, state: AgentState, final_analysis: Dict[str, Any], execution_results: Dict[str, Any]) -> Dict[str, Any]:

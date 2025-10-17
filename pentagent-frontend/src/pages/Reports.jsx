@@ -222,7 +222,7 @@ const Reports = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {reports.map((report) => (
+                {reports.map((report) => (
                 <div
                   key={report.id}
                   className="bg-obsidian-900/50 border border-platinum-500/10 rounded-lg p-5 hover:border-platinum-500/30 transition-all duration-300 cursor-pointer group"
@@ -287,9 +287,10 @@ const Reports = () => {
                     <Download className="w-4 h-4 text-platinum-500 group-hover:text-platinum-400 transition-colors" />
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
