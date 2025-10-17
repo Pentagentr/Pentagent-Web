@@ -85,7 +85,26 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
     // Veriyi hem structured_data'dan hem de direkt report'tan al
     const executiveData = report.structured_data?.executive_summary || {};
     const riskScore = report.risk_score || executiveData.risk_skoru || 0;
-    const vulnerabilities = report.vulnerabilities || {};
+    
+    // Debug: Vulnerabilities objesini kontrol et
+    console.log('🔍 Report vulnerabilities:', report.vulnerabilities);
+    console.log('🔍 Report structured_data:', report.structured_data);
+    
+    // Vulnerabilities objesini oluştur
+    let vulnerabilities = report.vulnerabilities || {};
+    
+    // Eğer vulnerabilities yoksa, structured_data'dan oluştur
+    if (!vulnerabilities || Object.keys(vulnerabilities).length === 0) {
+      const findings = report.structured_data?.detailed_findings || report.structured_data?.findings || [];
+      vulnerabilities = {
+        'critical': findings.filter(f => f.severity === 'critical').length,
+        'high': findings.filter(f => f.severity === 'high').length,
+        'medium': findings.filter(f => f.severity === 'medium').length,
+        'low': findings.filter(f => f.severity === 'low').length,
+        'info': findings.filter(f => f.severity === 'info').length
+      };
+      console.log('🔧 Vulnerabilities objesi oluşturuldu:', vulnerabilities);
+    }
     
     // Genel değerlendirme metni
     const genelDegerlendirme = executiveData.genel_degerlendirme || 
