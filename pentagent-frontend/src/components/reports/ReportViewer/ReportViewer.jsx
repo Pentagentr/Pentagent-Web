@@ -591,18 +591,86 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
                   
                   {cve.references && cve.references.length > 0 && (
                     <div>
-                      <div className="text-xs text-text-tertiary mb-1">Referanslar</div>
+                      <div className="text-xs text-text-tertiary mb-1">Referanslar ({cve.references.length})</div>
                       <div className="space-y-1">
-                        {cve.references.slice(0, 5).map((ref, refIndex) => (
+                        {cve.references.slice(0, 10).map((ref, refIndex) => (
                           <a
                             key={refIndex}
                             href={ref}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-xs text-platinum-400 hover:text-platinum-300 underline block truncate"
+                            title={ref}
                           >
                             {ref}
                           </a>
+                        ))}
+                        {cve.references.length > 10 && (
+                          <div className="text-xs text-text-tertiary">
+                            ... ve {cve.references.length - 10} referans daha
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* CVE Exploitability */}
+                  {cve.exploitability && (
+                    <div>
+                      <div className="text-xs text-text-tertiary mb-1">Exploitability</div>
+                      <div className="bg-obsidian-950 p-2 rounded text-xs">
+                        <div className="grid grid-cols-2 gap-2">
+                          {Object.entries(cve.exploitability).map(([key, value]) => (
+                            <div key={key} className="flex justify-between">
+                              <span className="text-text-tertiary">{key}:</span>
+                              <span className="text-text-primary">{value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* CVE Impact */}
+                  {cve.impact && (
+                    <div>
+                      <div className="text-xs text-text-tertiary mb-1">Impact</div>
+                      <div className="bg-obsidian-950 p-2 rounded text-xs">
+                        <div className="grid grid-cols-2 gap-2">
+                          {Object.entries(cve.impact).map(([key, value]) => (
+                            <div key={key} className="flex justify-between">
+                              <span className="text-text-tertiary">{key}:</span>
+                              <span className="text-text-primary">{value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* CVE Versions */}
+                  {cve.versions && cve.versions.length > 0 && (
+                    <div>
+                      <div className="text-xs text-text-tertiary mb-1">Etkilenen Versiyonlar</div>
+                      <div className="space-y-1">
+                        {cve.versions.map((version, verIndex) => (
+                          <div key={verIndex} className="text-xs text-text-secondary bg-obsidian-950 p-2 rounded">
+                            {version}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* CVE Solutions */}
+                  {cve.solutions && cve.solutions.length > 0 && (
+                    <div>
+                      <div className="text-xs text-text-tertiary mb-1">Çözüm Önerileri</div>
+                      <div className="space-y-2">
+                        {cve.solutions.map((solution, solIndex) => (
+                          <div key={solIndex} className="text-xs text-text-secondary bg-emerald-500/5 border border-emerald-500/20 p-2 rounded">
+                            {solution}
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -948,10 +1016,10 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex bg-obsidian-950">
+    <div className="fixed inset-0 z-50 flex bg-obsidian-950 overflow-hidden">
       {/* Sidebar */}
-      <div className="w-64 bg-obsidian-900 border-r border-platinum-500/10 flex flex-col">
-        <div className="p-4 border-b border-platinum-500/10">
+      <div className="w-64 bg-obsidian-900 border-r border-platinum-500/10 flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-platinum-500/10 flex-shrink-0">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-text-primary">Rapor</h2>
             <button

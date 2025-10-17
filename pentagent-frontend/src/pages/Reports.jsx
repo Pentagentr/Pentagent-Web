@@ -191,36 +191,37 @@ const Reports = () => {
     <div className="min-h-screen bg-obsidian-950 flex flex-col">
       <AppNavbar />
       
-      <div className="flex-1 p-6">
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="mb-8">
-            <div className="flex items-center gap-3 mb-2">
-              <Shield className="w-6 h-6 text-platinum-500" />
-              <h1 className="text-2xl font-bold text-text-primary">Güvenlik Raporları</h1>
-            </div>
-            <p className="text-text-secondary text-sm">
-              Geçmiş penetrasyon testi raporlarınızı görüntüleyin ve indirin
-            </p>
-          </div>
-
-          {/* Reports List */}
-          {reports.length === 0 ? (
-            <div className="text-center py-16">
-              <FileText className="w-16 h-16 text-text-tertiary mx-auto mb-4 opacity-50" />
-              <h3 className="text-lg font-medium text-text-primary mb-2">Henüz Rapor Yok</h3>
-              <p className="text-text-secondary mb-6">
-                Pentest sayfasından tarama yapın ve rapor oluşturun
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-6">
+          <div className="max-w-7xl mx-auto">
+            {/* Header */}
+            <div className="mb-8">
+              <div className="flex items-center gap-3 mb-2">
+                <Shield className="w-6 h-6 text-platinum-500" />
+                <h1 className="text-2xl font-bold text-text-primary">Güvenlik Raporları</h1>
+              </div>
+              <p className="text-text-secondary text-sm">
+                Geçmiş penetrasyon testi raporlarınızı görüntüleyin ve indirin
               </p>
-              <button
-                onClick={() => navigate('/chat')}
-                className="px-6 py-2 bg-platinum-500/10 hover:bg-platinum-500/20 text-platinum-400 rounded-lg transition-all duration-300"
-              >
-                Tarama Yap
-              </button>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+            {/* Reports List */}
+            {reports.length === 0 ? (
+              <div className="text-center py-16">
+                <FileText className="w-16 h-16 text-text-tertiary mx-auto mb-4 opacity-50" />
+                <h3 className="text-lg font-medium text-text-primary mb-2">Henüz Rapor Yok</h3>
+                <p className="text-text-secondary mb-6">
+                  Pentest sayfasından tarama yapın ve rapor oluşturun
+                </p>
+                <button
+                  onClick={() => navigate('/chat')}
+                  className="px-6 py-2 bg-platinum-500/10 hover:bg-platinum-500/20 text-platinum-400 rounded-lg transition-all duration-300"
+                >
+                  Tarama Yap
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {reports.map((report) => (
                 <div
                   key={report.id}
