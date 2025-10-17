@@ -568,9 +568,81 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
               {toolOutput?.data && (
                 <div className="space-y-3">
                   <h5 className="text-sm font-medium text-text-primary">Detaylı Çıktı</h5>
+                  
+                  {/* Teknoloji Bilgileri */}
+                  {toolOutput.data.technologies && toolOutput.data.technologies.length > 0 && (
+                    <div>
+                      <div className="text-xs text-text-tertiary mb-1">Tespit Edilen Teknolojiler</div>
+                      <div className="flex flex-wrap gap-1">
+                        {toolOutput.data.technologies.slice(0, 10).map((tech, techIndex) => (
+                          <span key={techIndex} className="px-2 py-1 bg-platinum-500/10 text-platinum-400 rounded text-xs">
+                            {tech}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Zafiyetler */}
+                  {toolOutput.data.vulnerabilities && toolOutput.data.vulnerabilities.length > 0 && (
+                    <div>
+                      <div className="text-xs text-text-tertiary mb-1">Tespit Edilen Zafiyetler</div>
+                      <div className="space-y-2">
+                        {toolOutput.data.vulnerabilities.slice(0, 5).map((vuln, vulnIndex) => (
+                          <div key={vulnIndex} className="bg-obsidian-950 p-3 rounded">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-medium text-text-primary">
+                                {vuln.type || vuln.title || 'Zafiyet'}
+                              </span>
+                              {vuln.severity && (
+                                <span className={`px-2 py-1 rounded text-xs ${getSeverityColor(vuln.severity)}`}>
+                                  {getSeverityText(vuln.severity)}
+                                </span>
+                              )}
+                            </div>
+                            {vuln.description && (
+                              <p className="text-xs text-text-secondary">{vuln.description}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Açık Portlar */}
+                  {toolOutput.data.open_ports && toolOutput.data.open_ports.length > 0 && (
+                    <div>
+                      <div className="text-xs text-text-tertiary mb-1">Açık Portlar</div>
+                      <div className="flex flex-wrap gap-1">
+                        {toolOutput.data.open_ports.slice(0, 10).map((port, portIndex) => (
+                          <span key={portIndex} className="px-2 py-1 bg-amber-500/10 text-amber-400 rounded text-xs">
+                            {port}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Eksik Güvenlik Başlıkları */}
+                  {toolOutput.data.missing_security_headers && toolOutput.data.missing_security_headers.length > 0 && (
+                    <div>
+                      <div className="text-xs text-text-tertiary mb-1">Eksik Güvenlik Başlıkları</div>
+                      <div className="flex flex-wrap gap-1">
+                        {toolOutput.data.missing_security_headers.slice(0, 5).map((header, headerIndex) => (
+                          <span key={headerIndex} className="px-2 py-1 bg-rose-500/10 text-rose-400 rounded text-xs">
+                            {header}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Ham JSON Çıktı */}
                   <div className="bg-obsidian-950/50 rounded border border-platinum-500/5 p-3">
+                    <div className="text-xs text-text-tertiary mb-1">Ham JSON Çıktı</div>
                     <pre className="text-xs text-text-secondary whitespace-pre-wrap overflow-x-auto">
-                      {JSON.stringify(toolOutput.data, null, 2)}
+                      {JSON.stringify(toolOutput.data, null, 2).substring(0, 2000)}
+                      {JSON.stringify(toolOutput.data, null, 2).length > 2000 && '...'}
                     </pre>
                   </div>
                 </div>
