@@ -1276,12 +1276,32 @@ async def generate_security_report(request: Dict[str, Any]):
         # Yapılandırılmış rapor verisini al (tool bulguları + CVE tablosu + detaylı çıktılar)
         structured_report = report_gen.get_structured_report_data_with_cves(state, cve_findings)
         
+        # Executive summary oluştur
+        critical_findings = [f for f in state.findings if f.get('severity') == 'critical']
+        high_findings = [f for f in state.findings if f.get('severity') == 'high']
+        medium_findings = [f for f in state.findings if f.get('severity') == 'medium']
+        low_findings = [f for f in state.findings if f.get('severity') == 'low']
+        
+        executive_summary = {
+            "risk_skoru": risk_score,
+            "genel_degerlendirme": f"{target} sistemine yönelik penetrasyon testi tamamlanmıştır. Toplam {len(state.findings)} güvenlik bulgusu tespit edilmiştir.",
+            "kritik_bulgular": critical_findings[:3],  # İlk 3 kritik bulgu
+            "toplam_bulgu": len(state.findings),
+            "bulgu_dagilimi": {
+                "kritik": len(critical_findings),
+                "yuksek": len(high_findings),
+                "orta": len(medium_findings),
+                "dusuk": len(low_findings)
+            }
+        }
+        
         # Structured report'a tool çıktılarını da ekle
         if structured_report:
             structured_report["all_tool_outputs"] = all_tool_outputs
             structured_report["execution_summary"] = enriched_data["execution_summary"]
             structured_report["findings"] = state.findings  # Bulguları ekle
             structured_report["cve_results"] = cve_findings  # CVE'leri ekle
+            structured_report["executive_summary"] = executive_summary  # Executive summary ekle
             
             # Frontend'in beklediği detailed_findings formatına çevir
             detailed_findings = []

@@ -436,6 +436,8 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
 
   // 4. CVE DETAYLARI
   const renderCveDetaylari = () => {
+    const [expandedCve, setExpandedCve] = useState(null);
+    
     // CVE'leri farklı yerlerden al
     const cveReferences = report.structured_data?.cve_references || [];
     const cveResults = report.structured_data?.cve_results || report.cve_results || [];
@@ -479,7 +481,11 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
           
           <div className="grid gap-4">
             {uniqueCves.map((cve, index) => (
-              <div key={index} className="bg-obsidian-900/50 border border-platinum-500/10 rounded-lg p-5">
+              <div 
+                key={index} 
+                className="bg-obsidian-900/50 border border-platinum-500/10 rounded-lg p-5 cursor-pointer hover:border-platinum-500/30 transition-all duration-200"
+                onClick={() => setExpandedCve(expandedCve === index ? null : index)}
+              >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-2">
@@ -704,6 +710,96 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
                     </pre>
                   </div>
                 </div>
+                
+                {/* Genişletilmiş Detaylar */}
+                {expandedCve === index && (
+                  <div className="mt-4 pt-4 border-t border-platinum-500/10">
+                    <div className="space-y-4">
+                      {/* Exploitability Detayları */}
+                      {cve.exploitability && (
+                        <div>
+                          <div className="text-xs text-text-tertiary mb-2">Exploitability</div>
+                          <div className="bg-obsidian-950/50 p-3 rounded text-xs">
+                            <div className="grid grid-cols-2 gap-2">
+                              {Object.entries(cve.exploitability).map(([key, value]) => (
+                                <div key={key} className="flex justify-between">
+                                  <span className="text-text-tertiary">{key}:</span>
+                                  <span className="text-text-primary">{value}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Impact Detayları */}
+                      {cve.impact && (
+                        <div>
+                          <div className="text-xs text-text-tertiary mb-2">Impact</div>
+                          <div className="bg-obsidian-950/50 p-3 rounded text-xs">
+                            <div className="grid grid-cols-2 gap-2">
+                              {Object.entries(cve.impact).map(([key, value]) => (
+                                <div key={key} className="flex justify-between">
+                                  <span className="text-text-tertiary">{key}:</span>
+                                  <span className="text-text-primary">{value}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Versions Detayları */}
+                      {cve.versions && cve.versions.length > 0 && (
+                        <div>
+                          <div className="text-xs text-text-tertiary mb-2">Etkilenen Versiyonlar</div>
+                          <div className="bg-obsidian-950/50 p-3 rounded text-xs">
+                            {cve.versions.map((version, vIndex) => (
+                              <div key={vIndex} className="text-text-primary mb-1">
+                                {version}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Solutions */}
+                      {cve.solutions && cve.solutions.length > 0 && (
+                        <div>
+                          <div className="text-xs text-text-tertiary mb-2">Çözüm Önerileri</div>
+                          <div className="bg-obsidian-950/50 p-3 rounded text-xs">
+                            {cve.solutions.map((solution, sIndex) => (
+                              <div key={sIndex} className="text-text-primary mb-2 p-2 bg-emerald-500/10 rounded border border-emerald-500/20">
+                                {solution}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Tüm Referanslar */}
+                      {cve.references && cve.references.length > 10 && (
+                        <div>
+                          <div className="text-xs text-text-tertiary mb-2">Tüm Referanslar ({cve.references.length})</div>
+                          <div className="bg-obsidian-950/50 p-3 rounded text-xs max-h-40 overflow-y-auto">
+                            {cve.references.map((ref, refIndex) => (
+                              <a
+                                key={refIndex}
+                                href={ref}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-platinum-400 hover:text-platinum-300 underline block mb-1 truncate"
+                                title={ref}
+                              >
+                                {ref}
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
