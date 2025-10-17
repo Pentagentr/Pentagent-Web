@@ -49,11 +49,60 @@ class ReportGenerator:
     # ==========================================================================
 
     def _calculate_risk_score(self, findings: List[Dict[str, Any]]) -> int:
-        """Bulgulara dayalı olarak 100 üzerinden bir risk skoru hesaplar."""
-        if not findings: return 0
-        severity_weights = {"critical": 25, "high": 15, "medium": 5, "low": 1, "info": 0.5}
-        score = sum(severity_weights.get(f.get("severity", "low"), 1) for f in findings)
-        return min(int(score), 100)
+        """Bulgulara dayalı olarak 100 üzerinden dinamik risk skoru hesaplar."""
+        if not findings:
+            return 0
+        
+        total_score = 0
+        weighted_count = 0
+        
+        for finding in findings:
+            severity = finding.get('severity', 'low').lower()
+            cvss_score = finding.get('cvss_score')
+            
+            # Severity bazlı temel skor
+            severity_weights = {
+                'critical': 80, 'high': 60, 'medium': 40, 'low': 20, 'info': 5
+            }
+            base_score = severity_weights.get(severity, 20)
+            
+            # CVSS skoru varsa ve geçerliyse, daha yüksek skor kullan
+            if cvss_score and cvss_score != 'N/A':
+                try:
+                    cvss_float = float(cvss_score)
+                    cvss_weighted = cvss_float * 8  # CVSS 10 üzerinden 80'e çevir
+                    base_score = max(base_score, cvss_weighted)
+                except (ValueError, TypeError):
+                    pass
+            
+            # CVE ID varsa ekstra puan
+            if finding.get('cve_id') and finding.get('cve_id') != 'N/A':
+                base_score += 5
+            
+            # Exploitability yüksekse ekstra puan
+            if finding.get('exploit_available') or finding.get('exploitability') == 'high':
+                base_score += 8
+            
+            # Kritik component'ler için ekstra puan
+            component = finding.get('affected_component', '').lower()
+            critical_components = ['login', 'auth', 'admin', 'api', 'database', 'root', 'sudo']
+            if any(comp in component for comp in critical_components):
+                base_score += 5
+            
+            total_score += base_score
+            weighted_count += 1
+        
+        if weighted_count > 0:
+            # Ortalama skor hesapla
+            avg_score = total_score / weighted_count
+            
+            # Bulgu sayısına göre çarpan uygula (daha fazla bulgu = daha yüksek risk)
+            count_multiplier = min(1.0 + (len(findings) - 1) * 0.05, 1.5)
+            
+            final_score = avg_score * count_multiplier
+            return min(int(final_score), 100)
+        
+        return 0
 
     def _get_owasp_reference(self, finding: Dict[str, Any]) -> str:
         """Bulgu başlığına göre ilgili OWASP Top 10 referansını döndürür."""
@@ -146,18 +195,29 @@ class ReportGenerator:
         return categories
     
     def _calculate_overall_risk_level(self, findings_summary: Dict[str, Any]) -> str:
-        """Genel risk seviyesini hesaplar"""
+        """Genel risk seviyesini dinamik olarak hesaplar"""
         critical = findings_summary.get('by_severity', {}).get('critical', 0)
         high = findings_summary.get('by_severity', {}).get('high', 0)
+        medium = findings_summary.get('by_severity', {}).get('medium', 0)
+        low = findings_summary.get('by_severity', {}).get('low', 0)
         
         if critical > 0:
             return "CRITICAL"
-        elif high > 2:
+        if high >= 5:
             return "HIGH"
-        elif high > 0:
+        elif high >= 2:
+            return "MEDIUM-HIGH"
+        elif high >= 1:
             return "MEDIUM"
-        else:
+        if medium >= 10:
+            return "MEDIUM"
+        elif medium >= 5:
+            return "LOW-MEDIUM"
+        elif medium >= 1:
             return "LOW"
+        if low > 0:
+            return "LOW"
+        return "MINIMAL"
 
     # ==========================================================================
     # RAG ENTEGRASYONU - CVE/CVSS VE TARAMA SONUÇLARI

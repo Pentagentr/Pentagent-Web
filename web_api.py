@@ -1147,11 +1147,26 @@ async def generate_security_report(request: Dict[str, Any]):
         all_findings = state.findings  # Tüm bulguları al
         risk_score = report_gen._calculate_risk_score(all_findings)
         
-        # EĞER HİÇ BULGU YOKSA - minimum risk skoru ver
+        # Risk skoru 0 ise ve bulgular varsa, minimum skor ver
         if risk_score == 0 and len(all_findings) > 0:
-            risk_score = 10  # Minimum risk skoru
+            severity_counts = {
+                'critical': len([f for f in all_findings if f.get('severity') == 'critical']),
+                'high': len([f for f in all_findings if f.get('severity') == 'high']),
+                'medium': len([f for f in all_findings if f.get('severity') == 'medium']),
+                'low': len([f for f in all_findings if f.get('severity') == 'low'])
+            }
+            if severity_counts['critical'] > 0:
+                risk_score = 85
+            elif severity_counts['high'] > 0:
+                risk_score = 65
+            elif severity_counts['medium'] > 0:
+                risk_score = 45
+            elif severity_counts['low'] > 0:
+                risk_score = 25
+            else:
+                risk_score = 15
         elif risk_score == 0 and len(all_findings) == 0:
-            risk_score = 5  # Hiç bulgu yoksa çok düşük risk
+            risk_score = 5
         
         # Zafiyet sayıları
         vulnerabilities = {
