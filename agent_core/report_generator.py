@@ -1991,7 +1991,7 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
             state.discovered_information = enriched_data.get("discovered_information", {})
             
             # Tool çıktılarını ekle
-            all_tool_outputs = enriched_data.get("all_tool_outputs", {})
+            tool_outputs = enriched_data.get("all_tool_outputs", {})
             cve_results = enriched_data.get("cve_results", [])
             
             # LLM ile gelişmiş rapor oluştur
@@ -1999,7 +1999,7 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
                 findings=state.findings,
                 target=state.target,
                 cve_results=cve_results,
-                tool_outputs=all_tool_outputs
+                tool_outputs=tool_outputs
             )
             
             return llm_report

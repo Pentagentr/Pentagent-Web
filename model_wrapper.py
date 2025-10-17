@@ -75,12 +75,27 @@ class UnifiedLLM:
         import asyncio
 
         def _call():
-            return self._groq_client.chat.completions.create(
-                model=self.model_name,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
+            try:
+                return self._groq_client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            except Exception as e:
+                logger.error(f"Groq API call failed: {e}")
+                # Rate limit durumunda basit yanıt döndür
+                if "rate_limit" in str(e).lower() or "429" in str(e):
+                    logger.warning("Rate limit reached, using fallback response")
+                    class FallbackResponse:
+                        def __init__(self):
+                            self.choices = [type('Choice', (), {
+                                'message': type('Message', (), {
+                                    'content': "Rate limit nedeniyle LLM yanıtı oluşturulamadı. Lütfen daha sonra tekrar deneyin."
+                                })()
+                            })()]
+                    return FallbackResponse()
+                raise
 
         response = await asyncio.get_event_loop().run_in_executor(None, _call)
 
