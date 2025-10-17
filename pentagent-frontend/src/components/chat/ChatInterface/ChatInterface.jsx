@@ -15,6 +15,7 @@ import {
 import Button from '../../common/Button';
 import ChatArea from '../ChatArea';
 import ContextPanel from '../ContextPanel';
+import ChatSidebar from '../ChatSidebar/ChatSidebar';
 import PentagentAPI from '../../../services/pentagentAPI';
 
 const ChatInterface = () => {
@@ -29,6 +30,11 @@ const ChatInterface = () => {
   const [scanResults, setScanResults] = useState(null);
   
   const apiRef = useRef(new PentagentAPI());
+
+  const handleScanSelect = (scan) => {
+    // Tarama seçildiğinde reports sayfasına yönlendir
+    window.location.href = `/reports?scanId=${scan.id}`;
+  };
 
   // WebSocket mesaj handler
   const handleWebSocketMessage = (data) => {
@@ -323,6 +329,14 @@ const ChatInterface = () => {
 
   return (
     <div className="h-full bg-obsidian-950 flex overflow-hidden pt-0">
+      {/* Chat Sidebar */}
+      <ChatSidebar 
+        currentConversationId={activeConversation}
+        onConversationSelect={setActiveConversation}
+        onNewChat={() => setActiveConversation(null)}
+        onScanSelect={handleScanSelect}
+      />
+      
       {/* Main Chat Area */}
       <div className={
         `${contextOpen

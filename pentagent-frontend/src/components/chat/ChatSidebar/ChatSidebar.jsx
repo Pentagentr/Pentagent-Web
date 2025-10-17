@@ -47,6 +47,22 @@ const ChatSidebar = ({ currentConversationId, onConversationSelect, onNewChat, o
     return () => unsubscribe();
   }, [currentUser]);
 
+  // Firestore'dan geçmiş taramaları çek
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const fetchScanHistory = async () => {
+      try {
+        const scanHistory = await scanHistoryService.getUserScans(currentUser.uid);
+        setScanHistory(scanHistory);
+      } catch (error) {
+        console.error('Geçmiş taramalar yüklenemedi:', error);
+      }
+    };
+
+    fetchScanHistory();
+  }, [currentUser]);
+
   // Yeni konuşma oluştur
   const handleNewChat = async () => {
     if (!currentUser) return;
@@ -124,13 +140,48 @@ const ChatSidebar = ({ currentConversationId, onConversationSelect, onNewChat, o
 
       {/* Konuşma Listesi */}
       <div className="flex-1 overflow-y-auto py-2 px-2 space-y-1 scrollbar-thin scrollbar-thumb-purple-500/20 scrollbar-track-transparent">
-        {conversations.length === 0 ? (
+        {conversations.length === 0 && scanHistory.length === 0 ? (
           <div className="text-center py-8 px-4">
             <MessageSquare size={32} className="mx-auto text-platinum-600 mb-2" />
             <p className="text-xs text-platinum-tertiary">No conversations yet</p>
           </div>
         ) : (
-          conversations.map((conv) => (
+          <>
+            {/* Geçmiş Taramalar */}
+            {scanHistory.length > 0 && (
+              <div className="mb-4">
+                <div className="px-3 py-2 text-xs font-medium text-platinum-400 border-b border-platinum-500/10 mb-2">
+                  Recent Scans
+                </div>
+                {scanHistory.slice(0, 5).map((scan) => (
+                  <div
+                    key={scan.id}
+                    onClick={() => onScanSelect && onScanSelect(scan)}
+                    className="group relative px-3 py-2 rounded-lg cursor-pointer transition-all duration-200 hover:bg-obsidian-850 border border-transparent"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Shield size={14} className="text-emerald-400 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-platinum truncate">
+                          {scan.target}
+                        </div>
+                        <div className="text-xs text-platinum-tertiary">
+                          {scan.findingsCount || 0} findings • {scan.riskLevel || 'unknown'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {/* Konuşmalar */}
+            {conversations.length > 0 && (
+              <div>
+                <div className="px-3 py-2 text-xs font-medium text-platinum-400 border-b border-platinum-500/10 mb-2">
+                  Conversations
+                </div>
+                {conversations.map((conv) => (
             <div
               key={conv.id}
               onClick={() => !editingId && onConversationSelect(conv.id)}
@@ -203,7 +254,10 @@ const ChatSidebar = ({ currentConversationId, onConversationSelect, onNewChat, o
                 </>
               )}
             </div>
-          ))
+          ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 
