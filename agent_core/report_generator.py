@@ -49,60 +49,99 @@ class ReportGenerator:
     # ==========================================================================
 
     def _calculate_risk_score(self, findings: List[Dict[str, Any]]) -> int:
-        """Bulgulara dayalı olarak 100 üzerinden dinamik risk skoru hesaplar."""
+        """Bulgulara dayalı olarak 100 üzerinden dinamik risk skoru hesaplar - Bulgu sayısı ve türüne göre."""
         if not findings:
             return 0
         
-        total_score = 0
-        weighted_count = 0
+        # Bulgu sayısına göre temel skor
+        total_findings = len(findings)
+        base_score = 0
         
+        # Bulgu sayısı kategorileri
+        if total_findings >= 50:
+            base_score = 80  # Çok fazla bulgu = yüksek risk
+        elif total_findings >= 30:
+            base_score = 65  # Fazla bulgu = orta-yüksek risk
+        elif total_findings >= 20:
+            base_score = 50  # Orta bulgu = orta risk
+        elif total_findings >= 10:
+            base_score = 35  # Az bulgu = düşük-orta risk
+        elif total_findings >= 5:
+            base_score = 25  # Çok az bulgu = düşük risk
+        else:
+            base_score = 15  # Minimal bulgu = minimal risk
+        
+        # Severity dağılımına göre bonus
+        severity_counts = {
+            'critical': len([f for f in findings if f.get('severity') == 'critical']),
+            'high': len([f for f in findings if f.get('severity') == 'high']),
+            'medium': len([f for f in findings if f.get('severity') == 'medium']),
+            'low': len([f for f in findings if f.get('severity') == 'low']),
+            'info': len([f for f in findings if f.get('severity') == 'info'])
+        }
+        
+        # Kritik bulgular varsa skor artır
+        if severity_counts['critical'] > 0:
+            base_score += min(severity_counts['critical'] * 5, 20)  # Kritik bulgu başına +5, max +20
+        
+        # Yüksek bulgular varsa skor artır
+        if severity_counts['high'] > 0:
+            base_score += min(severity_counts['high'] * 3, 15)  # Yüksek bulgu başına +3, max +15
+        
+        # Bulgu türlerine göre bonus
+        finding_types = {}
         for finding in findings:
-            severity = finding.get('severity', 'low').lower()
+            title = finding.get('title', '').lower()
+            if 'endpoint' in title or 'api' in title:
+                finding_types['endpoints'] = finding_types.get('endpoints', 0) + 1
+            elif 'page' in title or 'crawler' in title or 'directory' in title:
+                finding_types['pages'] = finding_types.get('pages', 0) + 1
+            elif 'vulnerability' in title or 'exploit' in title:
+                finding_types['vulnerabilities'] = finding_types.get('vulnerabilities', 0) + 1
+            elif 'port' in title or 'service' in title:
+                finding_types['services'] = finding_types.get('services', 0) + 1
+        
+        # Çok fazla endpoint varsa risk artır
+        if finding_types.get('endpoints', 0) >= 20:
+            base_score += 15
+        elif finding_types.get('endpoints', 0) >= 10:
+            base_score += 10
+        
+        # Çok fazla sayfa varsa risk artır
+        if finding_types.get('pages', 0) >= 30:
+            base_score += 10
+        elif finding_types.get('pages', 0) >= 15:
+            base_score += 5
+        
+        # Zafiyet varsa risk artır
+        if finding_types.get('vulnerabilities', 0) > 0:
+            base_score += min(finding_types['vulnerabilities'] * 8, 25)
+        
+        # Çok fazla servis varsa risk artır
+        if finding_types.get('services', 0) >= 15:
+            base_score += 8
+        
+        # CVE'li bulgular varsa ekstra bonus
+        cve_count = len([f for f in findings if f.get('cve_id') and f.get('cve_id') != 'N/A'])
+        if cve_count > 0:
+            base_score += min(cve_count * 5, 20)
+        
+        # CVSS skorlarına göre bonus
+        high_cvss_count = 0
+        for finding in findings:
             cvss_score = finding.get('cvss_score')
-            
-            # Severity bazlı temel skor
-            severity_weights = {
-                'critical': 80, 'high': 60, 'medium': 40, 'low': 20, 'info': 5
-            }
-            base_score = severity_weights.get(severity, 20)
-            
-            # CVSS skoru varsa ve geçerliyse, daha yüksek skor kullan
             if cvss_score and cvss_score != 'N/A':
                 try:
                     cvss_float = float(cvss_score)
-                    cvss_weighted = cvss_float * 8  # CVSS 10 üzerinden 80'e çevir
-                    base_score = max(base_score, cvss_weighted)
-                except (ValueError, TypeError):
+                    if cvss_float >= 7.0:
+                        high_cvss_count += 1
+                except:
                     pass
-            
-            # CVE ID varsa ekstra puan
-            if finding.get('cve_id') and finding.get('cve_id') != 'N/A':
-                base_score += 5
-            
-            # Exploitability yüksekse ekstra puan
-            if finding.get('exploit_available') or finding.get('exploitability') == 'high':
-                base_score += 8
-            
-            # Kritik component'ler için ekstra puan
-            component = finding.get('affected_component', '').lower()
-            critical_components = ['login', 'auth', 'admin', 'api', 'database', 'root', 'sudo']
-            if any(comp in component for comp in critical_components):
-                base_score += 5
-            
-            total_score += base_score
-            weighted_count += 1
         
-        if weighted_count > 0:
-            # Ortalama skor hesapla
-            avg_score = total_score / weighted_count
-            
-            # Bulgu sayısına göre çarpan uygula (daha fazla bulgu = daha yüksek risk)
-            count_multiplier = min(1.0 + (len(findings) - 1) * 0.05, 1.5)
-            
-            final_score = avg_score * count_multiplier
-            return min(int(final_score), 100)
+        if high_cvss_count > 0:
+            base_score += min(high_cvss_count * 3, 15)
         
-        return 0
+        return min(int(base_score), 100)
 
     def _get_owasp_reference(self, finding: Dict[str, Any]) -> str:
         """Bulgu başlığına göre ilgili OWASP Top 10 referansını döndürür."""

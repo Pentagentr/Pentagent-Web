@@ -19,6 +19,7 @@ import {
 const ReportViewer = ({ report, isOpen, onClose }) => {
   const [currentSection, setCurrentSection] = useState('yonetici-ozeti');
   const [downloading, setDownloading] = useState(false);
+  const [expandedCve, setExpandedCve] = useState(null);
 
   if (!isOpen || !report) return null;
 
@@ -436,8 +437,6 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
 
   // 4. CVE DETAYLARI
   const renderCveDetaylari = () => {
-    const [expandedCve, setExpandedCve] = useState(null);
-    
     // CVE'leri farklı yerlerden al
     const cveReferences = report.structured_data?.cve_references || [];
     const cveResults = report.structured_data?.cve_results || report.cve_results || [];
