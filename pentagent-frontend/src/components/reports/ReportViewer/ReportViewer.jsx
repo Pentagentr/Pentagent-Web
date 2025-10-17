@@ -25,7 +25,6 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
   const sections = [
     { id: 'yonetici-ozeti', title: 'Yönetici Özeti', icon: FileText },
     { id: 'metodoloji', title: 'Metodoloji', icon: Shield },
-    { id: 'detayli-bulgular', title: 'Detaylı Bulgular', icon: Target },
     { id: 'cve-detaylari', title: 'CVE Detayları', icon: Database },
     { id: 'tool-ciktilari', title: 'Tool Çıktıları', icon: Database },
     { id: 'oneriler', title: 'Öneriler', icon: CheckCircle }
@@ -417,9 +416,22 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
 
   // 4. CVE DETAYLARI
   const renderCveDetaylari = () => {
-    const cveReferences = report.structured_data?.cve_references || report.cve_results || [];
+    // CVE'leri farklı yerlerden al
+    const cveReferences = report.structured_data?.cve_references || [];
+    const cveResults = report.structured_data?.cve_results || report.cve_results || [];
     
-    if (cveReferences.length === 0) {
+    // CVE'leri birleştir ve benzersiz yap
+    const allCves = [...cveReferences, ...cveResults];
+    const uniqueCves = allCves.filter((cve, index, self) => 
+      index === self.findIndex(c => c.cve_id === cve.cve_id)
+    );
+    
+    console.log('🔍 CVE References:', cveReferences); // Debug
+    console.log('🔍 CVE Results:', cveResults); // Debug
+    console.log('🔍 All CVE:', uniqueCves); // Debug
+    console.log('🔍 Report:', report); // Debug
+    
+    if (uniqueCves.length === 0) {
       return (
         <div className="text-center py-12">
           <Database className="w-12 h-12 text-platinum-500 mx-auto mb-3" />
@@ -427,6 +439,12 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
           <p className="text-text-tertiary text-xs mt-2">
             RAG servisi henüz CVE verilerini yüklememiş olabilir. Lütfen tarama tamamlandıktan sonra tekrar deneyin.
           </p>
+          <div className="mt-4 bg-obsidian-950/50 rounded border border-platinum-500/5 p-3">
+            <div className="text-xs text-text-tertiary mb-1">Debug: Report Data</div>
+            <pre className="text-xs text-text-secondary whitespace-pre-wrap overflow-x-auto">
+              {JSON.stringify(report, null, 2).substring(0, 1000)}...
+            </pre>
+          </div>
         </div>
       );
     }
@@ -436,11 +454,11 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
         <div className="space-y-4">
           <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
             <Database className="w-4 h-4 text-platinum-400" />
-            Tespit Edilen CVE Referansları ({cveReferences.length})
+            Tespit Edilen CVE Referansları ({uniqueCves.length})
           </h3>
           
           <div className="grid gap-4">
-            {cveReferences.map((cve, index) => (
+            {uniqueCves.map((cve, index) => (
               <div key={index} className="bg-obsidian-900/50 border border-platinum-500/10 rounded-lg p-5">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1 min-w-0">
@@ -575,7 +593,7 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
                     <div>
                       <div className="text-xs text-text-tertiary mb-1">Referanslar</div>
                       <div className="space-y-1">
-                        {cve.references.slice(0, 3).map((ref, refIndex) => (
+                        {cve.references.slice(0, 5).map((ref, refIndex) => (
                           <a
                             key={refIndex}
                             href={ref}
@@ -589,6 +607,14 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
                       </div>
                     </div>
                   )}
+                  
+                  {/* Ham CVE Verisi - Debug için */}
+                  <div className="mt-4 bg-obsidian-950/50 rounded border border-platinum-500/5 p-3">
+                    <div className="text-xs text-text-tertiary mb-1">Ham CVE Verisi</div>
+                    <pre className="text-xs text-text-secondary whitespace-pre-wrap overflow-x-auto">
+                      {JSON.stringify(cve, null, 2)}
+                    </pre>
+                  </div>
                 </div>
               </div>
             ))}
@@ -732,16 +758,168 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
                     </div>
                   )}
                   
-                  {/* Ham JSON Çıktı - Sadece Debug için */}
-                  {process.env.NODE_ENV === 'development' && (
-                    <div className="bg-obsidian-950/50 rounded border border-platinum-500/5 p-3">
-                      <div className="text-xs text-text-tertiary mb-1">Debug: Ham JSON Çıktı</div>
-                      <pre className="text-xs text-text-secondary whitespace-pre-wrap overflow-x-auto">
-                        {JSON.stringify(toolOutput.data, null, 2).substring(0, 1000)}
-                        {JSON.stringify(toolOutput.data, null, 2).length > 1000 && '...'}
-                      </pre>
+                  {/* Subdomain Bilgileri */}
+                  {toolOutput.data.subdomains && toolOutput.data.subdomains.length > 0 && (
+                    <div>
+                      <div className="text-xs text-text-tertiary mb-1">Tespit Edilen Subdomainler</div>
+                      <div className="space-y-2">
+                        {toolOutput.data.subdomains.slice(0, 5).map((subdomain, subIndex) => (
+                          <div key={subIndex} className="bg-obsidian-950 p-3 rounded">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-medium text-text-primary">
+                                {subdomain.subdomain || subdomain}
+                              </span>
+                              {subdomain.status_code && (
+                                <span className="px-2 py-1 bg-emerald-500/10 text-emerald-400 rounded text-xs">
+                                  HTTP {subdomain.status_code}
+                                </span>
+                              )}
+                            </div>
+                            {subdomain.url && (
+                              <p className="text-xs text-text-secondary">{subdomain.url}</p>
+                            )}
+                            {subdomain.ip && (
+                              <p className="text-xs text-text-tertiary">IP: {subdomain.ip}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
+                  
+                  {/* XSS Test Sonuçları */}
+                  {toolOutput.data.vulnerabilities && toolOutput.data.vulnerabilities.length > 0 && toolName.includes('xss') && (
+                    <div>
+                      <div className="text-xs text-text-tertiary mb-1">XSS Test Sonuçları</div>
+                      <div className="space-y-2">
+                        {toolOutput.data.vulnerabilities.map((vuln, vulnIndex) => (
+                          <div key={vulnIndex} className="bg-obsidian-950 p-3 rounded">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-medium text-text-primary">
+                                {vuln.type || vuln.title || 'XSS Zafiyeti'}
+                              </span>
+                              {vuln.severity && (
+                                <span className={`px-2 py-1 rounded text-xs ${getSeverityColor(vuln.severity)}`}>
+                                  {getSeverityText(vuln.severity)}
+                                </span>
+                              )}
+                            </div>
+                            {vuln.description && (
+                              <p className="text-xs text-text-secondary">{vuln.description}</p>
+                            )}
+                            {vuln.payload && (
+                              <p className="text-xs text-text-tertiary">Payload: {vuln.payload}</p>
+                            )}
+                            {vuln.evidence && (
+                              <p className="text-xs text-text-tertiary">Evidence: {vuln.evidence}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Directory Bruteforce Sonuçları */}
+                  {toolOutput.data.directories && toolOutput.data.directories.length > 0 && (
+                    <div>
+                      <div className="text-xs text-text-tertiary mb-1">Tespit Edilen Dizinler</div>
+                      <div className="flex flex-wrap gap-1">
+                        {toolOutput.data.directories.slice(0, 10).map((dir, dirIndex) => (
+                          <span key={dirIndex} className="px-2 py-1 bg-blue-500/10 text-blue-400 rounded text-xs">
+                            {dir.path || dir}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Web Crawling Sonuçları */}
+                  {toolOutput.data.pages && toolOutput.data.pages.length > 0 && (
+                    <div>
+                      <div className="text-xs text-text-tertiary mb-1">Tespit Edilen Sayfalar</div>
+                      <div className="space-y-1">
+                        {toolOutput.data.pages.slice(0, 5).map((page, pageIndex) => (
+                          <div key={pageIndex} className="bg-obsidian-950 p-2 rounded">
+                            <div className="text-xs text-text-primary">{page.url || page}</div>
+                            {page.title && (
+                              <div className="text-xs text-text-secondary">{page.title}</div>
+                            )}
+                            {page.status_code && (
+                              <span className="px-1 py-0.5 bg-emerald-500/10 text-emerald-400 rounded text-xs">
+                                {page.status_code}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Firewall Tespiti */}
+                  {toolOutput.data.firewall_detected !== undefined && (
+                    <div>
+                      <div className="text-xs text-text-tertiary mb-1">Firewall Tespiti</div>
+                      <div className={`px-3 py-2 rounded ${
+                        toolOutput.data.firewall_detected 
+                          ? 'bg-amber-500/10 text-amber-400' 
+                          : 'bg-emerald-500/10 text-emerald-400'
+                      }`}>
+                        {toolOutput.data.firewall_detected ? 'Firewall Tespit Edildi' : 'Firewall Tespit Edilmedi'}
+                      </div>
+                      {toolOutput.data.firewall_type && (
+                        <div className="text-xs text-text-secondary mt-1">
+                          Tip: {toolOutput.data.firewall_type}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Genel Sonuçlar */}
+                  {toolOutput.data.results && toolOutput.data.results.length > 0 && (
+                    <div>
+                      <div className="text-xs text-text-tertiary mb-1">Sonuçlar</div>
+                      <div className="space-y-2">
+                        {toolOutput.data.results.slice(0, 5).map((result, resultIndex) => (
+                          <div key={resultIndex} className="bg-obsidian-950 p-3 rounded">
+                            <div className="text-xs text-text-primary">
+                              {result.title || result.name || result.type || 'Sonuç'}
+                            </div>
+                            {result.description && (
+                              <div className="text-xs text-text-secondary mt-1">{result.description}</div>
+                            )}
+                            {result.severity && (
+                              <span className={`px-2 py-1 rounded text-xs mt-1 inline-block ${getSeverityColor(result.severity)}`}>
+                                {getSeverityText(result.severity)}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* İstatistikler */}
+                  {toolOutput.data.stats && (
+                    <div>
+                      <div className="text-xs text-text-tertiary mb-1">İstatistikler</div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {Object.entries(toolOutput.data.stats).map(([key, value]) => (
+                          <div key={key} className="bg-obsidian-950 p-2 rounded text-center">
+                            <div className="text-sm font-medium text-text-primary">{value}</div>
+                            <div className="text-xs text-text-tertiary">{key}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Ham JSON Çıktı - Production'da da göster */}
+                    <div className="bg-obsidian-950/50 rounded border border-platinum-500/5 p-3">
+                    <div className="text-xs text-text-tertiary mb-1">Ham Çıktı</div>
+                    <pre className="text-xs text-text-secondary whitespace-pre-wrap overflow-x-auto max-h-40">
+                      {JSON.stringify(toolOutput.data, null, 2)}
+                      </pre>
+                    </div>
                 </div>
               )}
               
@@ -762,7 +940,6 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
     switch (currentSection) {
       case 'yonetici-ozeti': return renderYoneticiOzeti();
       case 'metodoloji': return renderMetodoloji();
-      case 'detayli-bulgular': return renderDetayliBulgular();
       case 'cve-detaylari': return renderCveDetaylari();
       case 'tool-ciktilari': return renderToolCiktilari();
       case 'oneriler': return renderOneriler();
