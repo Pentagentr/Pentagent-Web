@@ -397,7 +397,8 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
 
   // 5. TOOL ÇIKTILARI
   const renderToolCiktilari = () => {
-    const toolOutputs = report.structured_data?.all_tool_outputs || {};
+    // Tool çıktılarını hem structured_data'dan hem de direkt report'tan al
+    const toolOutputs = report.all_tool_outputs || report.structured_data?.all_tool_outputs || {};
     const toolKeys = Object.keys(toolOutputs);
     
     if (toolKeys.length === 0) {
@@ -555,6 +556,24 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
               <>
                 <Download className="w-3.5 h-3.5" />
                 PDF İndir
+              </>
+            )}
+          </button>
+          
+          <button 
+            onClick={() => handleDownload('md')}
+            disabled={downloading}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition-colors text-xs font-medium disabled:opacity-50"
+          >
+            {downloading ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                İndiriliyor...
+              </>
+            ) : (
+              <>
+                <FileText className="w-3.5 h-3.5" />
+                Markdown İndir
               </>
             )}
           </button>

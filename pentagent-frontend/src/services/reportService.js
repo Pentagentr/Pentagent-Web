@@ -28,6 +28,7 @@ export const reportService = {
         vulnerabilities: reportData.vulnerabilities || { critical: 0, high: 0, medium: 0, low: 0 },
         pages: reportData.pages || 0,
         structured_data: reportData.structured_data || null,
+        all_tool_outputs: reportData.all_tool_outputs || null, // Tool çıktılarını ekle
         files: reportData.files || null,
         download_url: reportData.download_url || null,
         createdAt: serverTimestamp(),

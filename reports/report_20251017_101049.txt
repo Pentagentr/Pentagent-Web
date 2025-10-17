@@ -1,0 +1,183 @@
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                                                             │
+│                    PENETRATION TESTING REPORT                              │
+│                                                                             │
+│                           AI-Powered Security Assessment                   │
+│                                                                             │
+│  Target System: test.example.com                                   │
+│  Report Date:  17 October 2025                                    │
+│  Risk Level:   ● MEDIUM RISK LEVEL                             │
+│  Assessment:   Planned remediation required                       │
+│  Test Type:    Comprehensive Security Assessment                          │
+│  Version:      2.0 - RAG Integration                               │
+│  Classification: Company Confidential                               │
+│                                                                             │
+│  Prepared by:   Pentagent AI Security Platform                             │
+│  Contact:       security@pentagent.ai                                      │
+│  Website:       https://pentagent.ai                                       │
+│                                                                             │
+│  This report provides a comprehensive security assessment of              │
+│  test.example.com                                             │
+│  including vulnerability analysis, risk evaluation, and                   │
+│  strategic recommendations for security improvement.                      │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           TABLE OF CONTENTS                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+1. EXECUTIVE SUMMARY
+   • Risk Level and Overall Assessment
+   • Critical Findings Overview
+   • Immediate Action Plan
+
+2. METHODOLOGY AND SCOPE
+   • Testing Methodology
+   • Tools and Techniques Used
+   • Test Scope and Limitations
+
+3. RISK ASSESSMENT MATRIX
+   • CVSS v3.1 Scoring
+   • Business Impact Analysis
+   • Exploitability Assessment
+
+4. FINDINGS SUMMARY
+   • Critical Level Findings
+   • High Level Findings
+   • Medium and Low Level Findings
+
+5. DETAILED TECHNICAL FINDINGS
+   • CVE Information and CVSS Scores
+   • Technical Details and Evidence
+   • Exploit Scenarios
+
+6. CONCLUSIONS AND RECOMMENDATIONS
+   • Strategic Recommendations
+   • Tactical Recommendations
+   • Long-term Improvements
+
+7. APPENDICES
+   • Standards Used
+   • References
+   • Technical Details
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           REPORT CONTENT BEGINS                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+1. YÖNETİCİ ÖZETİ
+--------------------------------------------------
+
+1.1. Genel Değerlendirme
+Bu rapor, test.example.com sistemine yönelik gerçekleştirilen penetrasyon testinin sonuçlarını özetlemektedir. Testler, sistemin genel güvenlik duruşunu ve potansiyel risklerini değerlendirmek amacıyla yapılmıştır. Değerlendirme sonucunda, sistemin güvenlik seviyesi 'MEDIUM' olarak belirlenmiştir.
+
+1.2. Risk Postürü ve Puanlama
+Genel Risk Skoru: 15/100 (MEDIUM)
+[■□□□□□□□□□]
+
+1.3. En Kritik Bulgular ve İş Etkileri
+  • Bulgu: Tespit Edilen Zafiyet
+    İş Etkisi: Bu zafiyet, hassas müşteri verilerinin ifşa olmasına, yetkisiz sistemsel değişikliklere veya servis sürekliliğinin olumsuz etkilenmesine yol açabilir. Bu durum, müşteri güvenini sarsabilir ve orta ölçekli finansal kayıplara neden olabilir.
+
+1.4. Öncelikli Aksiyon Planı
+Aşağıdaki aksiyonların öncelikli olarak alınması tavsiye edilmektedir:
+  1. Zafiyet kapatılmalıdır
+
+2. METODOLOJİ VE KAPSAM
+--------------------------------------------------
+
+Bu güvenlik değerlendirmesi, OWASP Testing Guide, PTES ve NIST SP 800-115 gibi endüstri standartlarına uygun, otomatize edilmiş bir metodoloji ile gerçekleştirilmiştir.
+
+Kapsam: test.example.com
+Test Başlangıç: 17.10.2025 10:10
+
+Kapsam Dışı: Sosyal mühendislik, fiziksel güvenlik ve DoS/DDoS saldırıları bu testin kapsamı dışındadır.
+
+3. RİSK DERECELENDİRME MATRİSİ
+--------------------------------------------------
+
+Risk seviyeleri CVSS v3.1 ve OWASP Risk Rating Metodolojisi'ne göre belirlenmiştir:
+  • KRİTİK (9.0-10.0): Acil müdahale gerektirir. Sistem tamamen ele geçirilebilir.
+  • YÜKSEK (7.0-8.9): Öncelikli olarak giderilmelidir. Veri kaybı/ifşası riski yüksek.
+  • ORTA (4.0-6.9): Makul sürede giderilmelidir. Sınırlı etki potansiyeli.
+  • DÜŞÜK (0.1-3.9): Planlı olarak giderilmelidir. Minimal etki.
+
+4. BULGULAR ÖZETİ
+--------------------------------------------------
+
+4.1. Risk Seviyesine Göre Dağılım:
+  CRITICAL  : 0   [□□□□□□□□□□] 0.0%
+  HIGH      : 1   [■■■■■■■■■■] 100.0%
+  MEDIUM    : 0   [□□□□□□□□□□] 0.0%
+  LOW       : 0   [□□□□□□□□□□] 0.0%
+
+4.2. Kategori Bazında Dağılım (OWASP Top 10):
+Bulgular standart OWASP kategorileriyle eşleştirilememiştir.
+
+5. DETAYLI TEKNİK BULGULAR
+--------------------------------------------------
+
+5.1. Tespit Edilen Zafiyet
+==========================
+[ Risk Seviyesi: HIGH ] [ CVSS v3.1: N/A ] [ OWASP: İlgili Kategori Bulunamadı ]
+
+AÇIKLAMA (Description)
+--------------------------------------------------------------------------------
+SQL injection vulnerability detected
+
+İŞ ETKİSİ (Business Impact)
+--------------------------------------------------------------------------------
+Bu zafiyet, hassas müşteri verilerinin ifşa olmasına, yetkisiz sistemsel değişikliklere veya servis sürekliliğinin olumsuz etkilenmesine yol açabilir. Bu durum, müşteri güvenini sarsabilir ve orta ölçekli finansal kayıplara neden olabilir.
+
+TEKNİK DETAYLAR VE YENİDEN OLUŞTURMA ADIMLARI (Proof of Concept)
+--------------------------------------------------------------------------------
+POST /login with payload: admin OR 1=1--
+
+ÇÖZÜM ÖNERİLERİ (Remediation)
+--------------------------------------------------------------------------------
+Zafiyet kapatılmalıdır
+
+REFERANSLAR (References)
+--------------------------------------------------------------------------------
+• OWASP: https://owasp.org/Top10/#İlgili Kategori Bulunamadı
+________________________________________________________________________________
+
+
+6. SONUÇ VE STRATEJİK ÖNERİLER
+--------------------------------------------------
+
+6.1. Stratejik ve Taktiksel Öneriler
+
+⚠️ KISA VADELİ AKSİYONLAR (1-7 Gün İçinde):
+  • Tespit Edilen Zafiyet: Zafiyet kapatılmalıdır
+
+📈 STRATEJİK İYİLEŞTİRMELER (Orta ve Uzun Vade):
+  • **Genel Güvenlik Sertleştirmesi:** Tespit edilen orta ve düşük seviyeli bulguları planlı bir şekilde giderin ve Web Application Firewall (WAF) kurallarını güncelleyin.
+
+6.2. Sonuç Değerlendirmesi
+
+Bu güvenlik değerlendirmesi, test.example.com sisteminin genel güvenlik durumunu 'MEDIUM' olarak belirlemiştir. Yüksek seviyeli bulgular, önemli veri sızıntısı veya hizmet kesintisi riskleri taşımaktadır ve öncelikli olarak ele alınmalıdır. Raporda detaylandırılan stratejik ve taktiksel önerilerin uygulanması, sistemin siber saldırılara karşı dayanıklılığını önemli ölçüde artıracaktır.
+
+7. EKLER
+--------------------------------------------------
+
+Ek A: Test Kapsamı
+• test.example.com
+
+Ek C: Kullanılan Standartlar
+• OWASP Top 10 2021
+• PTES (Penetration Testing Execution Standard)
+• NIST SP 800-115
+• CVSS v3.1
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           MEDIUM RISK LEVEL                                 │
+│                                                                             │
+│ This system has been identified with medium-level security vulnerabilities.│
+│ Planned remediation can improve the security posture.                      │
+│                                                                             │
+│ PLANNED ACTION: Medium-risk vulnerabilities must be addressed within 2-4w  │
+│ IMPROVEMENT: Security processes must be reviewed                           │
+│ PROTECTION: Existing security measures must be strengthened                │
+└─────────────────────────────────────────────────────────────────────────────┘

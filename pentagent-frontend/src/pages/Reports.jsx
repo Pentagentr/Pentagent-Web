@@ -93,6 +93,7 @@ const Reports = () => {
         vulnerabilities: reportData.vulnerabilities,
         pages: reportData.pages,
         structured_data: reportData.structured_data,
+        all_tool_outputs: reportData.all_tool_outputs, // Tool çıktılarını ekle
         files: reportData.files,
         download_url: reportData.download_url,
         createdAt: reportData.createdAt

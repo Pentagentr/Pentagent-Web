@@ -575,7 +575,8 @@ async def download_report(report_id: str, format: str = "pdf"):
         media_types = {
             "pdf": "application/pdf",
             "txt": "text/plain",
-            "json": "application/json"
+            "json": "application/json",
+            "md": "text/markdown"
         }
         
         media_type = media_types.get(format, "application/octet-stream")
@@ -811,10 +812,10 @@ async def generate_security_report(request: Dict[str, Any]):
             "finding_count": len(tool_findings)
         }
         
-        # ReportGenerator oluştur
-        report_gen = ReportGenerator(rag_client=None, llm_api_key=None)
+        # ReportGenerator oluştur - LLM entegrasyonu ile
+        report_gen = ReportGenerator(rag_client=None, llm_api_key="dummy_key")  # LLM'i aktifleştir
         
-        # Rapor oluştur (PDF, TXT, JSON)
+        # Rapor oluştur (PDF, TXT, JSON, MD)
         from datetime import datetime as dt
         report_id = f"report_{dt.now().strftime('%Y%m%d_%H%M%S')}"
         report_path = f"reports/{report_id}"
@@ -823,8 +824,20 @@ async def generate_security_report(request: Dict[str, Any]):
         import os
         os.makedirs("reports", exist_ok=True)
         
+        # AI ile geliştirilmiş rapor oluştur
+        ai_report_content = await report_gen.generate_ai_enhanced_report(state, scan_results, cve_results)
+        
         # Rapor oluştur (TÜM TOOL ÇIKTILARI İLE)
         success = await report_gen.generate_report(state, report_path)
+        
+        # Markdown raporu da oluştur (AI ile geliştirilmiş)
+        md_path = f"{report_path}.md"
+        try:
+            with open(md_path, 'w', encoding='utf-8') as f:
+                f.write(ai_report_content)
+            logger.info(f"AI ile geliştirilmiş Markdown raporu oluşturuldu: {md_path}")
+        except Exception as e:
+            logger.error(f"Markdown raporu oluşturulamadı: {e}")
         
         if not success:
             raise HTTPException(status_code=500, detail="Rapor oluşturulamadı")
@@ -836,6 +849,22 @@ async def generate_security_report(request: Dict[str, Any]):
                 if key.startswith("tool_"):
                     tool_name = key[5:]  # "tool_" prefix'ini kaldır
                     all_tool_outputs[tool_name] = value
+        
+        # scan_results'tan da tool çıktılarını al
+        if isinstance(scan_results, dict):
+            for key, value in scan_results.items():
+                if key.startswith("tool_") or key in ["execution_results", "tool_outputs"]:
+                    if key.startswith("tool_"):
+                        tool_name = key[5:]
+                        all_tool_outputs[tool_name] = value
+                    elif key == "execution_results" and isinstance(value, list):
+                        # Execution results'tan tool çıktılarını çıkar
+                        for result in value:
+                            if isinstance(result, dict) and "tool" in result:
+                                tool_name = result["tool"]
+                                all_tool_outputs[tool_name] = result
+                    elif key == "tool_outputs" and isinstance(value, dict):
+                        all_tool_outputs.update(value)
         
         # Tool outputs dosyasından da çıktıları al
         try:
@@ -950,14 +979,17 @@ async def generate_security_report(request: Dict[str, Any]):
             "createdAt": dt.now().isoformat(),
             "download_url": f"/api/reports/{report_id}/download",
             "report_content": report_content[:5000],  # İlk 5000 karakter
-            "formats_available": ["txt", "pdf", "json"],
+            "formats_available": ["txt", "pdf", "json", "md"],
             "files": {
                 "txt": f"{report_path}.txt",
                 "pdf": f"{report_path}.pdf",
-                "json": f"{report_path}.json"
+                "json": f"{report_path}.json",
+                "md": f"{report_path}.md"
             },
             # Tüm rapor bölümleri
-            "structured_data": structured_report
+            "structured_data": structured_report,
+            # Tool çıktılarını ekle
+            "all_tool_outputs": all_tool_outputs
         }
         
     except HTTPException:

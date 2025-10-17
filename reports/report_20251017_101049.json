@@ -1,0 +1,32 @@
+{
+  "reportMetadata": {
+    "reportId": "PENTAGENT-20251017101049",
+    "target": "test.example.com",
+    "timestamp": "2025-10-17T10:10:49.403973",
+    "testDurationSeconds": 0
+  },
+  "executiveSummary": {
+    "overallRiskLevel": "MEDIUM",
+    "overallRiskScore": 15,
+    "findingCounts": {
+      "critical": 0,
+      "high": 1,
+      "medium": 0,
+      "low": 0,
+      "info": 0
+    }
+  },
+  "findings": [
+    {
+      "title": "Tespit Edilen Zafiyet",
+      "severity": "HIGH",
+      "cvssScore": "N/A",
+      "cveId": null,
+      "owaspCategory": "İlgili Kategori Bulunamadı",
+      "description": "SQL injection vulnerability detected",
+      "businessImpact": "Bu zafiyet, hassas müşteri verilerinin ifşa olmasına, yetkisiz sistemsel değişikliklere veya servis sürekliliğinin olumsuz etkilenmesine yol açabilir. Bu durum, müşteri güvenini sarsabilir ve orta ölçekli finansal kayıplara neden olabilir.",
+      "proofOfConcept": "POST /login with payload: admin OR 1=1--",
+      "remediation": "Zafiyet kapatılmalıdır"
+    }
+  ]
+}

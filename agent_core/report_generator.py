@@ -1799,10 +1799,224 @@ class ReportGenerator:
         """Public metod - RAG'dan CVE bilgilerini ara"""
         return await self._rag_search_cve_info(vulnerability_type, technology)
 
-    async def search_rag_for_similar_scans(self, target: str, scan_type: str) -> Dict[str, Any]:
-        """Public metod - RAG'dan benzer tarama sonuçlarını ara"""
-        return await self._rag_search_scan_results(target, scan_type)
+    async def generate_ai_enhanced_report(self, state: AgentState, scan_results: Dict[str, Any], cve_results: List[Dict[str, Any]]) -> str:
+        """
+        AI ile geliştirilmiş rapor oluşturur - LLM entegrasyonu ile
+        """
+        try:
+            logger.info("🤖 AI ile geliştirilmiş rapor oluşturuluyor...")
+            
+            # Bulguları hazırla
+            findings_text = ""
+            for i, finding in enumerate(state.findings, 1):
+                findings_text += f"""
+{i}. {finding.get('title', 'Bilinmeyen Bulgu')}
+   Severity: {finding.get('severity', 'Unknown')}
+   Açıklama: {finding.get('description', 'Açıklama yok')}
+   Kanıt: {finding.get('evidence', 'Kanıt yok')}
+   Hedef: {finding.get('target', 'N/A')}
+   Teknoloji: {finding.get('technology', 'N/A')}
+"""
 
-    async def store_scan_in_rag(self, target: str, findings: List[Dict[str, Any]], execution_results: Dict[str, Any]):
-        """Public metod - Tarama sonuçlarını RAG'a kaydet"""
-        await self._rag_store_scan_results(target, findings, execution_results)
+            # CVE bilgilerini hazırla
+            cve_text = ""
+            for i, cve in enumerate(cve_results[:5], 1):  # Top 5 CVE
+                if isinstance(cve, dict):
+                    cve_text += f"""
+{i}. {cve.get('cve_id', 'N/A')}
+   Severity: {cve.get('severity', 'N/A')}
+   CVSS: {cve.get('cvss_score', 'N/A')}
+   Açıklama: {cve.get('description', 'N/A')[:200]}...
+"""
+
+            # Tool çıktılarını hazırla
+            tool_outputs_text = ""
+            if hasattr(state, 'discovered_information'):
+                for key, value in state.discovered_information.items():
+                    if key.startswith("tool_"):
+                        tool_name = key[5:]
+                        tool_outputs_text += f"\n{tool_name}: {str(value)[:300]}...\n"
+
+            # AI prompt oluştur
+            ai_prompt = f"""
+Sen profesyonel bir siber güvenlik uzmanısın. Aşağıdaki penetrasyon testi sonuçlarına dayanarak kapsamlı bir güvenlik raporu oluştur.
+
+HEDEF SİSTEM: {state.target}
+TEST TARİHİ: {state.start_time.strftime('%d.%m.%Y %H:%M') if state.start_time else 'N/A'}
+
+TESPİT EDİLEN ZAFİYETLER:
+{findings_text}
+
+CVE REFERANSLARI:
+{cve_text}
+
+TOOL ÇIKTILARI:
+{tool_outputs_text}
+
+Lütfen aşağıdaki formatda profesyonel bir rapor oluştur:
+
+# PENETRASYON TESTİ RAPORU
+
+## 1. YÖNETİCİ ÖZETİ
+- Genel güvenlik durumu değerlendirmesi
+- Risk seviyesi ve kritik bulgular
+- Acil aksiyon gerektiren konular
+
+## 2. METODOLOJİ VE KAPSAM
+- Kullanılan test metodolojisi
+- Test kapsamı ve sınırları
+- Kullanılan araçlar
+
+## 3. DETAYLI BULGULAR
+- Her zafiyet için detaylı açıklama
+- Teknik kanıtlar ve proof-of-concept
+- İş etkisi analizi
+
+## 4. CVE ANALİZİ
+- İlişkili CVE'lerin detaylı analizi
+- CVSS skorları ve severity değerlendirmesi
+
+## 5. ÖNERİLER VE ÇÖZÜMLER
+- Acil aksiyonlar (0-48 saat)
+- Kısa vadeli çözümler (1-7 gün)
+- Uzun vadeli stratejik öneriler
+
+## 6. SONUÇ
+- Genel değerlendirme
+- Risk matrisi
+- Compliance durumu
+
+Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygun hazırla.
+"""
+
+            # Eğer LLM generator varsa kullan
+            if self.llm_generator:
+                try:
+                    ai_report = await self.llm_generator.generate_report(ai_prompt)
+                    logger.info("✅ AI raporu başarıyla oluşturuldu")
+                    return ai_report
+                except Exception as e:
+                    logger.error(f"❌ LLM rapor oluşturma hatası: {e}")
+            
+            # Fallback: Template-based rapor
+            logger.info("⚠️ LLM kullanılamıyor, template-based rapor oluşturuluyor")
+            return self._generate_fallback_ai_report(state, scan_results, cve_results)
+            
+        except Exception as e:
+            logger.error(f"AI rapor oluşturma hatası: {e}")
+            return self._generate_fallback_ai_report(state, scan_results, cve_results)
+
+    def _generate_fallback_ai_report(self, state: AgentState, scan_results: Dict[str, Any], cve_results: List[Dict[str, Any]]) -> str:
+        """Fallback AI raporu - template-based"""
+        try:
+            report_parts = []
+            
+            # Başlık
+            report_parts.append("# PENETRASYON TESTİ RAPORU")
+            report_parts.append("")
+            report_parts.append(f"**Hedef Sistem:** {state.target}")
+            report_parts.append(f"**Test Tarihi:** {state.start_time.strftime('%d.%m.%Y %H:%M') if state.start_time else 'N/A'}")
+            report_parts.append(f"**Rapor ID:** PENTAGENT-{datetime.now().strftime('%Y%m%d%H%M%S')}")
+            report_parts.append("")
+            report_parts.append("---")
+            report_parts.append("")
+            
+            # Yönetici Özeti
+            report_parts.append("## 1. YÖNETİCİ ÖZETİ")
+            report_parts.append("")
+            findings_count = len(state.findings)
+            critical_count = len([f for f in state.findings if f.get('severity') == 'critical'])
+            high_count = len([f for f in state.findings if f.get('severity') == 'high'])
+            
+            if findings_count == 0:
+                report_parts.append("Bu güvenlik değerlendirmesi sonucunda kritik bir güvenlik açığına rastlanmamıştır. Sistemin genel güvenlik duruşu temel seviyede yeterli görünmektedir.")
+            else:
+                report_parts.append(f"Bu penetrasyon testi sonucunda **{findings_count}** adet güvenlik bulgusu tespit edilmiştir.")
+                if critical_count > 0:
+                    report_parts.append(f"- **{critical_count}** kritik seviyede bulgu")
+                if high_count > 0:
+                    report_parts.append(f"- **{high_count}** yüksek seviyede bulgu")
+                
+                report_parts.append("")
+                report_parts.append("**Risk Seviyesi:** " + ("YÜKSEK" if critical_count > 0 else "ORTA" if high_count > 0 else "DÜŞÜK"))
+            
+            report_parts.append("")
+            
+            # Metodoloji
+            report_parts.append("## 2. METODOLOJİ VE KAPSAM")
+            report_parts.append("")
+            report_parts.append("Bu güvenlik değerlendirmesi, OWASP Testing Guide, PTES ve NIST SP 800-115 gibi endüstri standartlarına uygun, otomatize edilmiş bir metodoloji ile gerçekleştirilmiştir.")
+            report_parts.append("")
+            report_parts.append(f"**Kapsam:** {state.target}")
+            report_parts.append("**Kapsam Dışı:** Sosyal mühendislik, fiziksel güvenlik ve DoS/DDoS saldırıları")
+            report_parts.append("")
+            
+            # Detaylı Bulgular
+            if state.findings:
+                report_parts.append("## 3. DETAYLI BULGULAR")
+                report_parts.append("")
+                
+                for i, finding in enumerate(state.findings, 1):
+                    report_parts.append(f"### {i}. {finding.get('title', 'Bilinmeyen Bulgu')}")
+                    report_parts.append(f"**Severity:** {finding.get('severity', 'Unknown').upper()}")
+                    report_parts.append(f"**Açıklama:** {finding.get('description', 'Açıklama yok')}")
+                    report_parts.append(f"**Kanıt:** {finding.get('evidence', 'Kanıt yok')}")
+                    report_parts.append(f"**Hedef:** {finding.get('target', 'N/A')}")
+                    report_parts.append(f"**Teknoloji:** {finding.get('technology', 'N/A')}")
+                    report_parts.append("")
+            
+            # CVE Analizi
+            if cve_results:
+                report_parts.append("## 4. CVE ANALİZİ")
+                report_parts.append("")
+                
+                for i, cve in enumerate(cve_results[:10], 1):  # Top 10 CVE
+                    if isinstance(cve, dict):
+                        report_parts.append(f"### {i}. {cve.get('cve_id', 'N/A')}")
+                        report_parts.append(f"**Severity:** {cve.get('severity', 'N/A')}")
+                        report_parts.append(f"**CVSS:** {cve.get('cvss_score', 'N/A')}")
+                        report_parts.append(f"**Açıklama:** {cve.get('description', 'N/A')[:200]}...")
+                        report_parts.append("")
+            
+            # Öneriler
+            report_parts.append("## 5. ÖNERİLER VE ÇÖZÜMLER")
+            report_parts.append("")
+            
+            if critical_count > 0:
+                report_parts.append("### Acil Aksiyonlar (0-48 Saat)")
+                report_parts.append("- Kritik seviyedeki bulguların acil olarak giderilmesi")
+                report_parts.append("- Sistemin izole edilmesi veya erişimin kısıtlanması")
+                report_parts.append("- Güvenlik ekibinin 7/24 hazır bulunması")
+                report_parts.append("")
+            
+            if high_count > 0:
+                report_parts.append("### Kısa Vadeli Çözümler (1-7 Gün)")
+                report_parts.append("- Yüksek seviyedeki bulguların öncelikli olarak giderilmesi")
+                report_parts.append("- Güvenlik duvarı kurallarının gözden geçirilmesi")
+                report_parts.append("- Sistem güncellemelerinin uygulanması")
+                report_parts.append("")
+            
+            report_parts.append("### Uzun Vadeli Stratejik Öneriler")
+            report_parts.append("- Düzenli güvenlik testlerinin planlanması")
+            report_parts.append("- Güvenlik farkındalığı eğitimlerinin düzenlenmesi")
+            report_parts.append("- Incident response planının oluşturulması")
+            report_parts.append("")
+            
+            # Sonuç
+            report_parts.append("## 6. SONUÇ")
+            report_parts.append("")
+            if findings_count == 0:
+                report_parts.append("Bu güvenlik değerlendirmesi sonucunda kritik bir güvenlik açığına rastlanmamıştır. Sistemin genel güvenlik duruşu temel seviyede yeterli görünmektedir.")
+            else:
+                report_parts.append(f"Bu penetrasyon testi sonucunda {findings_count} adet güvenlik bulgusu tespit edilmiştir. Bu bulguların öncelikli olarak giderilmesi ve sistemin güvenlik duruşunun iyileştirilmesi önerilmektedir.")
+            
+            report_parts.append("")
+            report_parts.append("---")
+            report_parts.append("")
+            report_parts.append("*Bu rapor Pentagent AI Security Platform tarafından otomatik olarak oluşturulmuştur.*")
+            
+            return "\n".join(report_parts)
+            
+        except Exception as e:
+            logger.error(f"Fallback AI rapor oluşturma hatası: {e}")
+            return "Rapor oluşturulamadı"
