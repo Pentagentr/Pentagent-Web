@@ -1351,6 +1351,10 @@ async def generate_security_report(request: Dict[str, Any]):
                             if isinstance(result, dict) and "tool" in result:
                                 tool_name = result["tool"]
                                 all_tool_outputs[tool_name] = result
+                            elif isinstance(result, str):
+                                # String result'ları atla
+                                logger.warning(f"⚠️ String execution result atlandı: {result[:100]}...")
+                                continue
                     elif key == "tool_outputs" and isinstance(value, dict):
                         all_tool_outputs.update(value)
         

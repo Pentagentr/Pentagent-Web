@@ -1704,8 +1704,11 @@ BULGULAR:
 DETAYLI BULGULAR:
 {self._format_findings_for_llm(findings)}
 
-CVE REFERANSLARI:
+CVE REFANSLARI:
 {self._format_cve_results_for_llm(cve_results) if cve_results else 'CVE referansı bulunamadı'}
+
+KULLANILAN ARAÇLAR VE SONUÇLARI:
+{self._format_tool_outputs_for_llm(tool_outputs) if tool_outputs else 'Araç çıktıları bulunamadı'}
 
 Lütfen aşağıdaki yapıda profesyonel bir rapor oluştur:
 
