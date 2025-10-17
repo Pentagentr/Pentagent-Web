@@ -51,9 +51,9 @@ class ReportGenerator:
     def _calculate_risk_score(self, findings: List[Dict[str, Any]]) -> int:
         """Bulgulara dayalı olarak 100 üzerinden bir risk skoru hesaplar."""
         if not findings: return 0
-        severity_weights = {"critical": 25, "high": 15, "medium": 5, "low": 1}
+        severity_weights = {"critical": 25, "high": 15, "medium": 5, "low": 1, "info": 0.5}
         score = sum(severity_weights.get(f.get("severity", "low"), 1) for f in findings)
-        return min(score, 100)
+        return min(int(score), 100)
 
     def _get_owasp_reference(self, finding: Dict[str, Any]) -> str:
         """Bulgu başlığına göre ilgili OWASP Top 10 referansını döndürür."""

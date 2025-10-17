@@ -643,15 +643,20 @@ async def generate_security_report(request: Dict[str, Any]):
         # ÖNCELİKLE: Gerçek tarama bulgularını ekle (scan_results'tan)
         logger.info(f"Scan results tipi: {type(scan_results)}, içerik: {list(scan_results.keys()) if isinstance(scan_results, dict) else 'dict değil'}")
         
-        # scan_results'dan bulguları çıkar
+        # scan_results'dan bulguları çıkar - GELİŞTİRİLMİŞ PARSING
         findings_added = 0
         if isinstance(scan_results, dict):
+            logger.info(f"🔍 Scan results keys: {list(scan_results.keys())}")
+            
             # Tool sonuçlarını kontrol et
             for key, value in scan_results.items():
                 if isinstance(value, dict):
+                    logger.info(f"📊 Processing tool: {key}")
+                    
                     # Tool sonucu mu?
                     if value.get('success') and value.get('data'):
                         tool_data = value.get('data', {})
+                        logger.info(f"📋 Tool {key} data keys: {list(tool_data.keys()) if isinstance(tool_data, dict) else 'not dict'}")
                         
                         # Zafiyetleri bul
                         vulnerabilities = tool_data.get('vulnerabilities', [])
@@ -673,6 +678,189 @@ async def generate_security_report(request: Dict[str, Any]):
                                     'exploitability': item.get('exploitability', 'Unknown'),
                                     'target': item.get('url') or item.get('endpoint') or target,
                                     'technology': item.get('technology') or item.get('service')
+                                }
+                                state.findings.append(finding)
+                                findings_added += 1
+                    
+                    # EĞER TOOL DATA'DA VULNERABILITIES/FINDINGS YOKSA - TOOL'A ÖZEL PARSING
+                    elif value.get('success') and isinstance(value.get('data'), dict):
+                        tool_data = value.get('data', {})
+                        
+                        # Tool'a özel parsing
+                        if key == 'enum_tech_detector':
+                            # Teknoloji tespiti sonuçlarından finding oluştur
+                            technologies = tool_data.get('technologies', [])
+                            if technologies:
+                                finding = {
+                                    'title': f'Teknoloji Tespiti: {len(technologies)} teknoloji bulundu',
+                                    'severity': 'low',
+                                    'description': f'Tespit edilen teknolojiler: {", ".join(technologies[:5])}',
+                                    'cvss_score': 'N/A',
+                                    'cve_id': None,
+                                    'evidence': f'Technologies: {technologies}',
+                                    'recommendation_summary': 'Tespit edilen teknolojilerin güvenlik güncellemelerini kontrol edin',
+                                    'business_impact': 'Bilinen teknolojiler potansiyel güvenlik riskleri taşıyabilir',
+                                    'exploitability': 'Information Gathering',
+                                    'target': target,
+                                    'technology': 'Technology Detection'
+                                }
+                                state.findings.append(finding)
+                                findings_added += 1
+                        
+                        elif key == 'verify_xss_http':
+                            # XSS test sonuçlarından finding oluştur
+                            vulnerabilities = tool_data.get('vulnerabilities', [])
+                            if vulnerabilities:
+                                for vuln in vulnerabilities:
+                                    finding = {
+                                        'title': f'XSS Zafiyeti: {vuln.get("type", "Reflected XSS")}',
+                                        'severity': vuln.get('severity', 'high').lower(),
+                                        'description': vuln.get('description', 'XSS zafiyeti tespit edildi'),
+                                        'cvss_score': vuln.get('cvss_score', '7.5'),
+                                        'cve_id': vuln.get('cve_id'),
+                                        'evidence': vuln.get('evidence', 'XSS payload başarılı'),
+                                        'recommendation_summary': 'Input validation ve output encoding uygulayın',
+                                        'business_impact': 'XSS saldırıları kullanıcı verilerini tehlikeye atabilir',
+                                        'exploitability': 'High',
+                                        'target': target,
+                                        'technology': 'Web Application'
+                                    }
+                                    state.findings.append(finding)
+                                    findings_added += 1
+                            else:
+                                # XSS bulunamadı ama test yapıldı
+                                finding = {
+                                    'title': 'XSS Testi Tamamlandı',
+                                    'severity': 'info',
+                                    'description': 'Reflected XSS testi yapıldı, kritik zafiyet bulunamadı',
+                                    'cvss_score': 'N/A',
+                                    'cve_id': None,
+                                    'evidence': 'XSS test payloadları gönderildi, pozitif yanıt alınmadı',
+                                    'recommendation_summary': 'Düzenli XSS testleri yapın',
+                                    'business_impact': 'XSS koruması aktif görünüyor',
+                                    'exploitability': 'Low',
+                                    'target': target,
+                                    'technology': 'Web Application'
+                                }
+                                state.findings.append(finding)
+                                findings_added += 1
+                        
+                        elif key == 'enum_subdomain_bruteforcer':
+                            # Subdomain enumeration sonuçlarından finding oluştur
+                            subdomains = tool_data.get('subdomains', [])
+                            if subdomains:
+                                finding = {
+                                    'title': f'Subdomain Keşfi: {len(subdomains)} subdomain bulundu',
+                                    'severity': 'medium',
+                                    'description': f'Tespit edilen subdomainler: {", ".join([s.get("subdomain", str(s)) for s in subdomains[:5]])}',
+                                    'cvss_score': 'N/A',
+                                    'cve_id': None,
+                                    'evidence': f'Subdomains: {subdomains}',
+                                    'recommendation_summary': 'Tespit edilen subdomainleri güvenlik açısından kontrol edin',
+                                    'business_impact': 'Genişletilmiş saldırı yüzeyi oluşturabilir',
+                                    'exploitability': 'Information Gathering',
+                                    'target': target,
+                                    'technology': 'DNS'
+                                }
+                                state.findings.append(finding)
+                                findings_added += 1
+                        
+                        elif key == 'enum_port_scanner':
+                            # Port tarama sonuçlarından finding oluştur
+                            open_ports = tool_data.get('open_ports', [])
+                            if open_ports:
+                                finding = {
+                                    'title': f'Port Tarama: {len(open_ports)} açık port bulundu',
+                                    'severity': 'medium',
+                                    'description': f'Açık portlar: {", ".join([str(port) for port in open_ports[:10]])}',
+                                    'cvss_score': 'N/A',
+                                    'cve_id': None,
+                                    'evidence': f'Open ports: {open_ports}',
+                                    'recommendation_summary': 'Gereksiz portları kapatın ve servisleri güncelleyin',
+                                    'business_impact': 'Açık portlar saldırı vektörü oluşturabilir',
+                                    'exploitability': 'Medium',
+                                    'target': target,
+                                    'technology': 'Network'
+                                }
+                                state.findings.append(finding)
+                                findings_added += 1
+                        
+                        elif key == 'enum_directory_bruteforce':
+                            # Directory bruteforce sonuçlarından finding oluştur
+                            directories = tool_data.get('directories', [])
+                            if directories:
+                                finding = {
+                                    'title': f'Directory Keşfi: {len(directories)} dizin bulundu',
+                                    'severity': 'low',
+                                    'description': f'Tespit edilen dizinler: {", ".join(directories[:5])}',
+                                    'cvss_score': 'N/A',
+                                    'cve_id': None,
+                                    'evidence': f'Directories: {directories}',
+                                    'recommendation_summary': 'Gereksiz dizinleri gizleyin veya kaldırın',
+                                    'business_impact': 'Hassas bilgilerin açığa çıkmasına neden olabilir',
+                                    'exploitability': 'Low',
+                                    'target': target,
+                                    'technology': 'Web Application'
+                                }
+                                state.findings.append(finding)
+                                findings_added += 1
+                        
+                        elif key == 'enum_web_crawler':
+                            # Web crawler sonuçlarından finding oluştur
+                            endpoints = tool_data.get('endpoints', [])
+                            if endpoints:
+                                finding = {
+                                    'title': f'Web Crawling: {len(endpoints)} endpoint bulundu',
+                                    'severity': 'low',
+                                    'description': f'Tespit edilen endpointler: {", ".join(endpoints[:5])}',
+                                    'cvss_score': 'N/A',
+                                    'cve_id': None,
+                                    'evidence': f'Endpoints: {endpoints}',
+                                    'recommendation_summary': 'Endpointleri güvenlik açısından kontrol edin',
+                                    'business_impact': 'Genişletilmiş saldırı yüzeyi oluşturabilir',
+                                    'exploitability': 'Information Gathering',
+                                    'target': target,
+                                    'technology': 'Web Application'
+                                }
+                                state.findings.append(finding)
+                                findings_added += 1
+                        
+                        elif key == 'enum_firewall_detector':
+                            # Firewall detection sonuçlarından finding oluştur
+                            firewall_info = tool_data.get('firewall_info', {})
+                            if firewall_info:
+                                finding = {
+                                    'title': f'Firewall Tespiti: {firewall_info.get("type", "Unknown")}',
+                                    'severity': 'info',
+                                    'description': f'Firewall tespit edildi: {firewall_info}',
+                                    'cvss_score': 'N/A',
+                                    'cve_id': None,
+                                    'evidence': f'Firewall info: {firewall_info}',
+                                    'recommendation_summary': 'Firewall konfigürasyonunu gözden geçirin',
+                                    'business_impact': 'Firewall koruması aktif',
+                                    'exploitability': 'Information Gathering',
+                                    'target': target,
+                                    'technology': 'Network Security'
+                                }
+                                state.findings.append(finding)
+                                findings_added += 1
+                        
+                        # GENEL TOOL SONUCU - Eğer yukarıdaki tool'lardan hiçbiri değilse
+                        else:
+                            # Tool'un genel sonucundan finding oluştur
+                            if tool_data:
+                                finding = {
+                                    'title': f'{key.replace("_", " ").title()} Testi',
+                                    'severity': 'info',
+                                    'description': f'{key} testi tamamlandı',
+                                    'cvss_score': 'N/A',
+                                    'cve_id': None,
+                                    'evidence': f'Tool data: {str(tool_data)[:200]}',
+                                    'recommendation_summary': f'{key} test sonuçları incelenmeli',
+                                    'business_impact': 'Test sonuçları güvenlik değerlendirmesi için önemli',
+                                    'exploitability': 'Information Gathering',
+                                    'target': target,
+                                    'technology': 'Security Testing'
                                 }
                                 state.findings.append(finding)
                                 findings_added += 1
@@ -718,13 +906,31 @@ async def generate_security_report(request: Dict[str, Any]):
             # CVSS skorunu doğru çek
             cvss_score = cve.get('cvss_score') or cve.get('base_score') or cve.get('cvss') or cve.get('baseScore', 'N/A')
             
+            # CVE açıklamasını düzgün çek
+            description = cve.get('description', 'Açıklama mevcut değil')
+            if description == 'Açıklama mevcut değil' or not description or description.strip() == '':
+                # RAG servisinden CVE detayını çek
+                try:
+                    rag_service = get_rag_service()
+                    if rag_service.is_available():
+                        cve_id = cve.get('cve_id', f'CVE-{i}')
+                        cve_detail = rag_service.get_cve_by_id(cve_id)
+                        if cve_detail:
+                            description = cve_detail.description or f"{cve_id} güvenlik açığı tespit edildi"
+                            cvss_score = cve_detail.base_score or cvss_score
+                        else:
+                            description = f"{cve_id} güvenlik açığı tespit edildi"
+                except Exception as e:
+                    logger.warning(f"CVE detayı çekilemedi: {e}")
+                    description = f"{cve.get('cve_id', f'CVE-{i}')} güvenlik açığı tespit edildi"
+            
             finding = {
                 'title': f"Iliskili CVE: {cve.get('cve_id', f'CVE-{i}')}",
                 'severity': _map_cvss_to_severity(cvss_score),
-                'description': cve.get('description', 'Açıklama mevcut değil')[:500],  # İlk 500 karakter
+                'description': description[:500],  # İlk 500 karakter
                 'cvss_score': cvss_score,
                 'cve_id': cve.get('cve_id', 'N/A'),
-                'evidence': f"RAG Eşleşme Skoru: %{cve.get('score', 0)*100:.1f}\n\nCVSS Vektör: {cve.get('cvss_vector') or cve.get('vector', 'N/A')}\n\n{cve.get('description', 'Açıklama yok')}",
+                'evidence': f"RAG Eşleşme Skoru: %{cve.get('score', 0)*100:.1f}\n\nCVSS Vektör: {cve.get('cvss_vector') or cve.get('vector', 'N/A')}\n\n{description}",
                 'recommendation_summary': f"Bu CVE ile ilişkili zafiyetleri kontrol edin. CVSS Skoru: {cvss_score}",
                 'business_impact': f"Bu zafiyet, CVSS skoru {cvss_score} olan bilinen bir güvenlik açığıdır.",
                 'exploitability': 'Known CVE',
@@ -767,7 +973,7 @@ async def generate_security_report(request: Dict[str, Any]):
                     logger.info(f"✅ RAG query oluşturuldu: {optimized_query}")
                     
                     # RAG'dan CVE'leri ara
-                    rag_results = await rag_service.search(optimized_query)
+                    rag_results = rag_service.search_cve(optimized_query, limit=3)
                     
                     if rag_results:
                         logger.info(f"🎯 RAG'dan {len(rag_results)} CVE bulundu")
@@ -779,13 +985,18 @@ async def generate_security_report(request: Dict[str, Any]):
                             else:
                                 cve_dict = cve
                             
+                            # CVE açıklamasını kontrol et
+                            description = cve_dict.get('description', 'Açıklama mevcut değil')
+                            if not description or description.strip() == '' or description == 'Açıklama mevcut değil':
+                                description = f"{cve_dict.get('cve_id', f'CVE-{i}')} güvenlik açığı tespit edildi"
+                            
                             finding = {
                                 'title': f"RAG CVE: {cve_dict.get('cve_id', f'CVE-{i}')}",
                                 'severity': _map_cvss_to_severity(cve_dict.get('base_score', 5.0)),
-                                'description': cve_dict.get('description', 'Açıklama mevcut değil')[:500],
+                                'description': description[:500],
                                 'cvss_score': cve_dict.get('base_score', 'N/A'),
                                 'cve_id': cve_dict.get('cve_id', 'N/A'),
-                                'evidence': f"RAG Query: {optimized_query}\n\n{cve_dict.get('description', 'Açıklama yok')}",
+                                'evidence': f"RAG Query: {optimized_query}\n\n{description}",
                                 'recommendation_summary': f"Bu CVE ile ilişkili zafiyetleri kontrol edin. CVSS: {cve_dict.get('base_score', 'N/A')}",
                                 'business_impact': f"RAG ile tespit edilen bilinen güvenlik açığı. CVSS: {cve_dict.get('base_score', 'N/A')}",
                                 'exploitability': 'Known CVE',
@@ -931,6 +1142,12 @@ async def generate_security_report(request: Dict[str, Any]):
         # Risk skoru hesapla (tüm bulgulardan)
         all_findings = state.findings  # Tüm bulguları al
         risk_score = report_gen._calculate_risk_score(all_findings)
+        
+        # EĞER HİÇ BULGU YOKSA - minimum risk skoru ver
+        if risk_score == 0 and len(all_findings) > 0:
+            risk_score = 10  # Minimum risk skoru
+        elif risk_score == 0 and len(all_findings) == 0:
+            risk_score = 5  # Hiç bulgu yoksa çok düşük risk
         
         # Zafiyet sayıları
         vulnerabilities = {
