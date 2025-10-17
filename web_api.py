@@ -714,8 +714,96 @@ async def generate_security_report(request: Dict[str, Any]):
                     elif value.get('success') and isinstance(value.get('data'), dict):
                         tool_data = value.get('data', {})
                         
-                        # Tool'a özel parsing
-                        if key == 'enum_tech_detector':
+                        # RAG analysis data'dan bulguları çıkar
+                        if 'rag_analysis_data' in tool_data:
+                            rag_data = tool_data['rag_analysis_data']
+                            scan_metadata = rag_data.get('scan_metadata', {})
+                            
+                            # Endpoint sayısına göre bulgu oluştur
+                            total_endpoints = scan_metadata.get('total_endpoints_found', 0)
+                            if total_endpoints > 0:
+                                if total_endpoints >= 20:
+                                    severity = 'critical'
+                                    cvss = '9.0'
+                                elif total_endpoints >= 15:
+                                    severity = 'high'
+                                    cvss = '8.0'
+                                elif total_endpoints >= 10:
+                                    severity = 'high'
+                                    cvss = '7.5'
+                                else:
+                                    severity = 'medium'
+                                    cvss = '6.0'
+                                
+                                finding = {
+                                    'title': f'Çok Fazla Endpoint Bulundu: {total_endpoints} endpoint',
+                                    'severity': severity,
+                                    'description': f'Web crawler {total_endpoints} endpoint tespit etti. Bu geniş saldırı yüzeyi oluşturur.',
+                                    'cvss_score': cvss,
+                                    'cve_id': None,
+                                    'evidence': f'Total endpoints: {total_endpoints}, Pages crawled: {scan_metadata.get("total_pages_crawled", 0)}',
+                                    'recommendation_summary': 'Endpoint sayısını azaltın ve gereksiz sayfaları kaldırın',
+                                    'business_impact': 'Geniş saldırı yüzeyi güvenlik riski oluşturur',
+                                    'exploitability': 'High',
+                                    'target': target,
+                                    'technology': 'Web Application'
+                                }
+                                state.findings.append(finding)
+                                findings_added += 1
+                            
+                            # Form sayısına göre bulgu oluştur
+                            total_forms = scan_metadata.get('total_forms_found', 0)
+                            if total_forms > 0:
+                                if total_forms >= 10:
+                                    severity = 'critical'
+                                    cvss = '9.0'
+                                elif total_forms >= 5:
+                                    severity = 'high'
+                                    cvss = '8.0'
+                                else:
+                                    severity = 'medium'
+                                    cvss = '6.5'
+                                
+                                finding = {
+                                    'title': f'Çok Fazla Form Bulundu: {total_forms} form',
+                                    'severity': severity,
+                                    'description': f'Web crawler {total_forms} form tespit etti. Formlar potansiyel saldırı vektörüdür.',
+                                    'cvss_score': cvss,
+                                    'cve_id': None,
+                                    'evidence': f'Total forms: {total_forms}',
+                                    'recommendation_summary': 'Form güvenliğini kontrol edin ve input validation uygulayın',
+                                    'business_impact': 'Formlar injection saldırıları için hedef olabilir',
+                                    'exploitability': 'High',
+                                    'target': target,
+                                    'technology': 'Web Application'
+                                }
+                                state.findings.append(finding)
+                                findings_added += 1
+                            
+                            # Kritik endpoint'leri kontrol et
+                            endpoints_for_analysis = rag_data.get('endpoints_for_analysis', [])
+                            critical_endpoints = []
+                            for endpoint in endpoints_for_analysis:
+                                path = endpoint.get('path', '').lower()
+                                if any(keyword in path for keyword in ['login', 'admin', 'auth', 'api', 'user', 'cart', 'signup', 'payment']):
+                                    critical_endpoints.append(path)
+                            
+                            if critical_endpoints:
+                                finding = {
+                                    'title': f'Kritik Endpoint\'ler Bulundu: {len(critical_endpoints)} kritik endpoint',
+                                    'severity': 'critical',
+                                    'description': f'Kritik endpoint\'ler tespit edildi: {", ".join(critical_endpoints[:5])}',
+                                    'cvss_score': '9.5',
+                                    'cve_id': None,
+                                    'evidence': f'Critical endpoints: {critical_endpoints}',
+                                    'recommendation_summary': 'Kritik endpoint\'lerin güvenliğini artırın',
+                                    'business_impact': 'Kritik endpoint\'ler yüksek risk taşır',
+                                    'exploitability': 'High',
+                                    'target': target,
+                                    'technology': 'Web Application'
+                                }
+                                state.findings.append(finding)
+                                findings_added += 1
                             # Teknoloji tespiti sonuçlarından finding oluştur
                             technologies = tool_data.get('technologies', [])
                             if technologies:

@@ -49,7 +49,7 @@ class ReportGenerator:
     # ==========================================================================
 
     def _calculate_risk_score(self, findings: List[Dict[str, Any]]) -> int:
-        """Bulgulara dayalı olarak 100 üzerinden dinamik risk skoru hesaplar - Bulgu sayısı ve türüne göre."""
+        """Bulgulara dayalı olarak 100 üzerinden dinamik risk skoru hesaplar - Web güvenlik odaklı."""
         if not findings:
             return 0
         
@@ -57,19 +57,79 @@ class ReportGenerator:
         total_findings = len(findings)
         base_score = 0
         
-        # Bulgu sayısı kategorileri
-        if total_findings >= 50:
-            base_score = 80  # Çok fazla bulgu = yüksek risk
-        elif total_findings >= 30:
-            base_score = 65  # Fazla bulgu = orta-yüksek risk
+        # Web güvenlik odaklı skorlama
+        if total_findings >= 30:
+            base_score = 85  # Çok fazla bulgu = kritik risk
         elif total_findings >= 20:
-            base_score = 50  # Orta bulgu = orta risk
+            base_score = 75  # Fazla bulgu = yüksek risk
+        elif total_findings >= 15:
+            base_score = 65  # Orta-yüksek bulgu = yüksek risk
         elif total_findings >= 10:
-            base_score = 35  # Az bulgu = düşük-orta risk
+            base_score = 50  # Orta bulgu = orta risk
         elif total_findings >= 5:
-            base_score = 25  # Çok az bulgu = düşük risk
+            base_score = 35  # Az bulgu = düşük-orta risk
         else:
-            base_score = 15  # Minimal bulgu = minimal risk
+            base_score = 20  # Minimal bulgu = düşük risk
+        
+        # Bulgu türlerine göre agresif bonus
+        endpoint_count = 0
+        form_count = 0
+        vulnerability_count = 0
+        critical_path_count = 0
+        
+        for finding in findings:
+            title = finding.get('title', '').lower()
+            description = finding.get('description', '').lower()
+            
+            # Endpoint sayısını say
+            if 'endpoint' in title or 'sayfa' in title or 'page' in title or 'url' in title:
+                endpoint_count += 1
+                
+                # Kritik endpoint'ler için ekstra puan
+                if any(keyword in title for keyword in ['login', 'admin', 'auth', 'api', 'user', 'cart', 'signup']):
+                    critical_path_count += 1
+            
+            # Form sayısını say
+            elif 'form' in title or 'form' in description:
+                form_count += 1
+            
+            # Zafiyet sayısını say
+            elif any(keyword in title for keyword in ['vulnerability', 'exploit', 'injection', 'xss', 'sql', 'lfi', 'rfi']):
+                vulnerability_count += 1
+        
+        # Endpoint bazlı risk artırma
+        if endpoint_count >= 20:
+            base_score += 20  # Çok fazla endpoint = kritik risk
+        elif endpoint_count >= 15:
+            base_score += 15  # Fazla endpoint = yüksek risk
+        elif endpoint_count >= 10:
+            base_score += 10  # Orta endpoint = orta risk
+        elif endpoint_count >= 5:
+            base_score += 5   # Az endpoint = düşük risk
+        
+        # Kritik endpoint'ler için ekstra bonus
+        if critical_path_count >= 5:
+            base_score += 15  # Çok kritik endpoint
+        elif critical_path_count >= 3:
+            base_score += 10  # Orta kritik endpoint
+        elif critical_path_count >= 1:
+            base_score += 5   # Az kritik endpoint
+        
+        # Form sayısına göre risk artırma
+        if form_count >= 10:
+            base_score += 15  # Çok fazla form = yüksek risk
+        elif form_count >= 5:
+            base_score += 10  # Fazla form = orta risk
+        elif form_count >= 3:
+            base_score += 5   # Az form = düşük risk
+        
+        # Zafiyet sayısına göre risk artırma
+        if vulnerability_count >= 5:
+            base_score += 25  # Çok fazla zafiyet = kritik risk
+        elif vulnerability_count >= 3:
+            base_score += 15  # Fazla zafiyet = yüksek risk
+        elif vulnerability_count >= 1:
+            base_score += 10  # Az zafiyet = orta risk
         
         # Severity dağılımına göre bonus
         severity_counts = {
@@ -82,49 +142,16 @@ class ReportGenerator:
         
         # Kritik bulgular varsa skor artır
         if severity_counts['critical'] > 0:
-            base_score += min(severity_counts['critical'] * 5, 20)  # Kritik bulgu başına +5, max +20
+            base_score += min(severity_counts['critical'] * 8, 25)  # Kritik bulgu başına +8, max +25
         
         # Yüksek bulgular varsa skor artır
         if severity_counts['high'] > 0:
-            base_score += min(severity_counts['high'] * 3, 15)  # Yüksek bulgu başına +3, max +15
-        
-        # Bulgu türlerine göre bonus
-        finding_types = {}
-        for finding in findings:
-            title = finding.get('title', '').lower()
-            if 'endpoint' in title or 'api' in title:
-                finding_types['endpoints'] = finding_types.get('endpoints', 0) + 1
-            elif 'page' in title or 'crawler' in title or 'directory' in title:
-                finding_types['pages'] = finding_types.get('pages', 0) + 1
-            elif 'vulnerability' in title or 'exploit' in title:
-                finding_types['vulnerabilities'] = finding_types.get('vulnerabilities', 0) + 1
-            elif 'port' in title or 'service' in title:
-                finding_types['services'] = finding_types.get('services', 0) + 1
-        
-        # Çok fazla endpoint varsa risk artır
-        if finding_types.get('endpoints', 0) >= 20:
-            base_score += 15
-        elif finding_types.get('endpoints', 0) >= 10:
-            base_score += 10
-        
-        # Çok fazla sayfa varsa risk artır
-        if finding_types.get('pages', 0) >= 30:
-            base_score += 10
-        elif finding_types.get('pages', 0) >= 15:
-            base_score += 5
-        
-        # Zafiyet varsa risk artır
-        if finding_types.get('vulnerabilities', 0) > 0:
-            base_score += min(finding_types['vulnerabilities'] * 8, 25)
-        
-        # Çok fazla servis varsa risk artır
-        if finding_types.get('services', 0) >= 15:
-            base_score += 8
+            base_score += min(severity_counts['high'] * 5, 20)  # Yüksek bulgu başına +5, max +20
         
         # CVE'li bulgular varsa ekstra bonus
         cve_count = len([f for f in findings if f.get('cve_id') and f.get('cve_id') != 'N/A'])
         if cve_count > 0:
-            base_score += min(cve_count * 5, 20)
+            base_score += min(cve_count * 8, 25)
         
         # CVSS skorlarına göre bonus
         high_cvss_count = 0
@@ -139,7 +166,22 @@ class ReportGenerator:
                     pass
         
         if high_cvss_count > 0:
-            base_score += min(high_cvss_count * 3, 15)
+            base_score += min(high_cvss_count * 5, 20)
+        
+        # Web güvenlik özel durumları
+        web_security_keywords = ['login', 'admin', 'auth', 'api', 'user', 'cart', 'signup', 'payment', 'checkout']
+        web_security_count = 0
+        for finding in findings:
+            title = finding.get('title', '').lower()
+            if any(keyword in title for keyword in web_security_keywords):
+                web_security_count += 1
+        
+        if web_security_count >= 10:
+            base_score += 15  # Çok fazla web güvenlik endpoint'i
+        elif web_security_count >= 5:
+            base_score += 10  # Fazla web güvenlik endpoint'i
+        elif web_security_count >= 3:
+            base_score += 5   # Az web güvenlik endpoint'i
         
         return min(int(base_score), 100)
 
