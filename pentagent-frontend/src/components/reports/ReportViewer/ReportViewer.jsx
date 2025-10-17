@@ -82,50 +82,65 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
 
   // 1. YÖNETİCİ ÖZETİ
   const renderYoneticiOzeti = () => {
-    const data = report.structured_data?.executive_summary || {};
+    // Veriyi hem structured_data'dan hem de direkt report'tan al
+    const executiveData = report.structured_data?.executive_summary || {};
+    const riskScore = report.risk_score || executiveData.risk_skoru || 0;
+    const vulnerabilities = report.vulnerabilities || {};
+    
+    // Genel değerlendirme metni
+    const genelDegerlendirme = executiveData.genel_degerlendirme || 
+      `Bu rapor, ${report.target || 'hedef sistem'} sistemine yönelik gerçekleştirilen penetrasyon testinin sonuçlarını özetlemektedir. ` +
+      `Testler, sistemin genel güvenlik duruşunu ve potansiyel risklerini değerlendirmek amacıyla yapılmıştır. ` +
+      `Değerlendirme sonucunda, sistemin güvenlik seviyesi '${riskScore >= 70 ? 'HIGH' : riskScore >= 40 ? 'MEDIUM' : 'LOW'}' olarak belirlenmiştir.`;
     
     return (
       <div className="space-y-6">
         <div className="prose prose-invert max-w-none">
-          <p className="text-text-secondary leading-relaxed">{data.genel_degerlendirme}</p>
+          <p className="text-text-secondary leading-relaxed">{genelDegerlendirme}</p>
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="bg-obsidian-900/50 border border-platinum-500/10 rounded-lg p-5">
             <h4 className="text-sm font-medium text-text-primary mb-3">Risk Skoru</h4>
             <div className="flex items-baseline gap-3 mb-3">
-              <div className={`text-4xl font-bold ${getRiskColor(data.risk_skoru)}`}>
-                {data.risk_skoru}
+              <div className={`text-4xl font-bold ${getRiskColor(riskScore)}`}>
+                {riskScore}
               </div>
               <span className="text-text-tertiary text-sm">/100</span>
             </div>
             <div className="w-full bg-obsidian-950 rounded-full h-2 overflow-hidden">
               <div 
                 className={`h-full transition-all ${
-                  data.risk_skoru >= 70 ? 'bg-rose-500' : 
-                  data.risk_skoru >= 40 ? 'bg-amber-500' : 'bg-emerald-500'
+                  riskScore >= 70 ? 'bg-rose-500' : 
+                  riskScore >= 40 ? 'bg-amber-500' : 'bg-emerald-500'
                 }`}
-                style={{ width: `${data.risk_skoru}%` }}
+                style={{ width: `${Math.min(riskScore, 100)}%` }}
               />
             </div>
-            <div className={`mt-2 text-sm font-medium ${getRiskColor(data.risk_skoru)}`}>
-              {data.risk_seviyesi}
+            <div className={`mt-2 text-sm font-medium ${getRiskColor(riskScore)}`}>
+              {riskScore >= 70 ? 'HIGH' : riskScore >= 40 ? 'MEDIUM' : 'LOW'}
             </div>
           </div>
           
           <div className="bg-obsidian-900/50 border border-platinum-500/10 rounded-lg p-5">
             <h4 className="text-sm font-medium text-text-primary mb-3">Bulgular</h4>
             <div className="grid grid-cols-2 gap-2">
-              {Object.entries(report.vulnerabilities || {}).map(([severity, count]) => (
-                <div key={severity} className="text-center py-2 bg-obsidian-950/50 rounded">
-                  <div className={`text-xl font-bold ${getSeverityColor(severity).split(' ')[0]}`}>
-                    {count}
+              {Object.entries(vulnerabilities).length > 0 ? (
+                Object.entries(vulnerabilities).map(([severity, count]) => (
+                  <div key={severity} className="text-center py-2 bg-obsidian-950/50 rounded">
+                    <div className={`text-xl font-bold ${getSeverityColor(severity).split(' ')[0]}`}>
+                      {count}
+                    </div>
+                    <div className="text-xs text-text-tertiary uppercase mt-0.5">
+                      {getSeverityText(severity)}
+                    </div>
                   </div>
-                  <div className="text-xs text-text-tertiary uppercase mt-0.5">
-                    {getSeverityText(severity)}
-                  </div>
+                ))
+              ) : (
+                <div className="col-span-2 text-center py-4">
+                  <div className="text-text-tertiary text-sm">Bulgular yükleniyor...</div>
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </div>
@@ -196,14 +211,18 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
 
   // 3. DETAYLI BULGULAR (Risk Matrix ve Bulgular Özeti kaldırıldı)
   const renderDetayliBulgular = () => {
-    const findings = report.structured_data?.detailed_findings || [];
-    const cveReferences = report.structured_data?.cve_references || [];
+    // Bulguları hem structured_data'dan hem de direkt report'tan al
+    const findings = report.structured_data?.detailed_findings || report.structured_data?.findings || [];
+    const cveReferences = report.structured_data?.cve_references || report.cve_results || [];
     
     if (findings.length === 0) {
       return (
         <div className="text-center py-12">
           <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
           <p className="text-text-secondary text-sm">Teknik bulgu tespit edilmedi</p>
+          <p className="text-text-tertiary text-xs mt-2">
+            Tarama verileri henüz yüklenmemiş olabilir. Lütfen tarama tamamlandıktan sonra tekrar deneyin.
+          </p>
         </div>
       );
     }
@@ -405,6 +424,9 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
         <div className="text-center py-12">
           <Database className="w-12 h-12 text-platinum-500 mx-auto mb-3" />
           <p className="text-text-secondary text-sm">CVE referansı bulunamadı</p>
+          <p className="text-text-tertiary text-xs mt-2">
+            RAG servisi henüz CVE verilerini yüklememiş olabilir. Lütfen tarama tamamlandıktan sonra tekrar deneyin.
+          </p>
         </div>
       );
     }
@@ -461,18 +483,91 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
                     </div>
                   )}
                   
-                  {cve.published_date && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  {/* CVE Meta Bilgileri */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                    {cve.published_date && (
                       <div>
                         <div className="text-xs text-text-tertiary mb-1">Yayın Tarihi</div>
                         <p className="text-text-secondary text-xs">{cve.published_date}</p>
                       </div>
-                      {cve.modified_date && (
-                        <div>
-                          <div className="text-xs text-text-tertiary mb-1">Güncellenme Tarihi</div>
-                          <p className="text-text-secondary text-xs">{cve.modified_date}</p>
+                    )}
+                    {cve.modified_date && (
+                      <div>
+                        <div className="text-xs text-text-tertiary mb-1">Güncellenme Tarihi</div>
+                        <p className="text-text-secondary text-xs">{cve.modified_date}</p>
+                      </div>
+                    )}
+                    {cve.last_modified_date && (
+                      <div>
+                        <div className="text-xs text-text-tertiary mb-1">Son Güncelleme</div>
+                        <p className="text-text-secondary text-xs">{cve.last_modified_date}</p>
+                      </div>
+                    )}
+                    {cve.source && (
+                      <div>
+                        <div className="text-xs text-text-tertiary mb-1">Kaynak</div>
+                        <p className="text-text-secondary text-xs">{cve.source}</p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* CVE Context ve Detaylar */}
+                  {cve.context && (
+                    <div>
+                      <div className="text-xs text-text-tertiary mb-1">Context</div>
+                      <p className="text-text-secondary text-xs leading-relaxed">{cve.context}</p>
+                    </div>
+                  )}
+                  
+                  {cve.summary && (
+                    <div>
+                      <div className="text-xs text-text-tertiary mb-1">Özet</div>
+                      <p className="text-text-secondary text-xs leading-relaxed">{cve.summary}</p>
+                    </div>
+                  )}
+                  
+                  {/* CVE Kategorileri */}
+                  {cve.categories && cve.categories.length > 0 && (
+                    <div>
+                      <div className="text-xs text-text-tertiary mb-1">Kategoriler</div>
+                      <div className="flex flex-wrap gap-1">
+                        {cve.categories.map((category, catIndex) => (
+                          <span key={catIndex} className="px-2 py-1 bg-platinum-500/10 text-platinum-400 rounded text-xs">
+                            {category}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* CVE Etiketleri */}
+                  {cve.tags && cve.tags.length > 0 && (
+                    <div>
+                      <div className="text-xs text-text-tertiary mb-1">Etiketler</div>
+                      <div className="flex flex-wrap gap-1">
+                        {cve.tags.map((tag, tagIndex) => (
+                          <span key={tagIndex} className="px-2 py-1 bg-amber-500/10 text-amber-400 rounded text-xs">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* CVE Skor Detayları */}
+                  {cve.score && (
+                    <div>
+                      <div className="text-xs text-text-tertiary mb-1">Detaylı Skor</div>
+                      <div className="bg-obsidian-950 p-2 rounded text-xs">
+                        <div className="grid grid-cols-2 gap-2">
+                          {Object.entries(cve.score).map(([key, value]) => (
+                            <div key={key} className="flex justify-between">
+                              <span className="text-text-tertiary">{key}:</span>
+                              <span className="text-text-primary">{value}</span>
+                            </div>
+                          ))}
                         </div>
-                      )}
+                      </div>
                     </div>
                   )}
                   
@@ -637,14 +732,16 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
                     </div>
                   )}
                   
-                  {/* Ham JSON Çıktı */}
-                  <div className="bg-obsidian-950/50 rounded border border-platinum-500/5 p-3">
-                    <div className="text-xs text-text-tertiary mb-1">Ham JSON Çıktı</div>
-                    <pre className="text-xs text-text-secondary whitespace-pre-wrap overflow-x-auto">
-                      {JSON.stringify(toolOutput.data, null, 2).substring(0, 2000)}
-                      {JSON.stringify(toolOutput.data, null, 2).length > 2000 && '...'}
-                    </pre>
-                  </div>
+                  {/* Ham JSON Çıktı - Sadece Debug için */}
+                  {process.env.NODE_ENV === 'development' && (
+                    <div className="bg-obsidian-950/50 rounded border border-platinum-500/5 p-3">
+                      <div className="text-xs text-text-tertiary mb-1">Debug: Ham JSON Çıktı</div>
+                      <pre className="text-xs text-text-secondary whitespace-pre-wrap overflow-x-auto">
+                        {JSON.stringify(toolOutput.data, null, 2).substring(0, 1000)}
+                        {JSON.stringify(toolOutput.data, null, 2).length > 1000 && '...'}
+                      </pre>
+                    </div>
+                  )}
                 </div>
               )}
               
