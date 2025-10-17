@@ -1593,7 +1593,7 @@ class ReportGenerator:
             return "Rapor içeriği oluşturulamadı"
 
     # Web API için sync metod
-    def generate_llm_enhanced_report(self, findings: List[Dict[str, Any]], target: str, cve_results: List[Dict[str, Any]] = None) -> str:
+    def generate_llm_enhanced_report(self, findings: List[Dict[str, Any]], target: str, cve_results: List[Dict[str, Any]] = None, tool_outputs: Dict[str, Any] = None, scan_results: Dict[str, Any] = None) -> str:
         """LLM ile gelişmiş rapor üretimi"""
         try:
             # Bulguları kategorize et
@@ -1760,6 +1760,9 @@ Bu penetrasyon testi aşağıdaki metodoloji ile gerçekleştirilmiştir:
 4. **Exploit Geliştirme**: Tespit edilen zafiyetlerin exploit edilebilirliği
 5. **Raporlama**: Bulguların analizi ve önerilerin hazırlanması
 
+### Kullanılan Araçlar ve Sonuçları:
+{self._format_tool_outputs_for_llm(tool_outputs) if tool_outputs else 'Tool çıktıları mevcut değil'}
+
 ## BULGULAR
 
 {self._generate_detailed_findings(findings)}
@@ -1865,6 +1868,53 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
 - Güvenlik farkındalığı eğitimleri düzenleyin
 - Incident response planı oluşturun
 - Güvenlik monitoring sistemi kurun"""
+    
+    def _format_tool_outputs_for_llm(self, tool_outputs: Dict[str, Any]) -> str:
+        """Tool çıktılarını LLM için formatla"""
+        if not tool_outputs:
+            return "Tool çıktıları mevcut değil"
+        
+        formatted = []
+        for tool_name, output in tool_outputs.items():
+            if isinstance(output, dict) and output.get('success'):
+                data = output.get('data', {})
+                formatted.append(f"""
+**{tool_name.replace('_', ' ').title()}**
+- Durum: ✅ Başarılı
+- Sonuç: {self._extract_tool_summary(data)}
+""")
+            elif isinstance(output, dict) and not output.get('success'):
+                formatted.append(f"""
+**{tool_name.replace('_', ' ').title()}**
+- Durum: ❌ Başarısız
+- Hata: {output.get('error', 'Bilinmeyen hata')}
+""")
+        
+        return "\n".join(formatted) if formatted else "Tool çıktıları formatlanamadı"
+    
+    def _extract_tool_summary(self, data: Dict[str, Any]) -> str:
+        """Tool verisinden özet çıkar"""
+        if not isinstance(data, dict):
+            return "Veri formatı uygun değil"
+        
+        # Tool tipine göre özet çıkar
+        if 'vulnerabilities' in data:
+            vulns = data.get('vulnerabilities', [])
+            return f"{len(vulns)} zafiyet tespit edildi"
+        elif 'directories' in data:
+            dirs = data.get('directories', [])
+            return f"{len(dirs)} dizin bulundu"
+        elif 'open_ports' in data:
+            ports = data.get('open_ports', [])
+            return f"{len(ports)} açık port tespit edildi"
+        elif 'subdomains' in data:
+            subs = data.get('subdomains', [])
+            return f"{len(subs)} subdomain bulundu"
+        elif 'technologies' in data:
+            techs = data.get('technologies', [])
+            return f"{len(techs)} teknoloji tespit edildi"
+        else:
+            return "Tool çalıştırıldı, detaylar mevcut"
     
     def _generate_fallback_report(self, findings: List[Dict[str, Any]], target: str) -> str:
         """LLM hatası durumunda fallback rapor"""

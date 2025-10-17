@@ -556,7 +556,7 @@ async def get_rag_stats():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/reports/{report_id}/download")
-async def download_report(report_id: str, format: str = "pdf", type: str = "normal"):
+async def download_report(report_id: str, format: str = "pdf"):
     """
     Raporu belirtilen formatta indir.
     
@@ -569,10 +569,7 @@ async def download_report(report_id: str, format: str = "pdf", type: str = "norm
         from fastapi.responses import FileResponse
         
         # Dosya yolunu oluştur
-        if type == "llm" and format == "md":
-            report_path = f"reports/{report_id}_llm.md"
-        else:
-            report_path = f"reports/{report_id}.{format}"
+        report_path = f"reports/{report_id}.{format}"
         
         if not os.path.exists(report_path):
             raise HTTPException(status_code=404, detail="Rapor dosyası bulunamadı")
@@ -590,7 +587,7 @@ async def download_report(report_id: str, format: str = "pdf", type: str = "norm
         return FileResponse(
             path=report_path,
             media_type=media_type,
-            filename=f"{report_id}_{type if type != 'normal' else ''}.{format}"
+            filename=f"{report_id}.{format}"
         )
         
     except HTTPException:
@@ -1114,13 +1111,23 @@ async def generate_security_report(request: Dict[str, Any]):
         # AI ile geliştirilmiş rapor oluştur
         ai_report_content = await report_gen.generate_ai_enhanced_report(state, scan_results, cve_results)
         
-        # LLM ile gelişmiş rapor üret
+        # LLM ile gelişmiş rapor üret - TÜM TOOL ÇIKTILARI İLE
         try:
             logger.info("🤖 LLM ile gelişmiş rapor üretiliyor...")
+            
+            # Tüm tool çıktılarını topla
+            all_tool_outputs = {}
+            if isinstance(scan_results, dict):
+                for key, value in scan_results.items():
+                    if key not in {'target', 'user_task', 'start_time', 'end_time', 'execution_time', 'status', 'conversation_id'}:
+                        all_tool_outputs[key] = value
+            
             llm_report = report_gen.generate_llm_enhanced_report(
                 findings=state.findings,
                 target=target,
-                cve_results=cve_results
+                cve_results=cve_results,
+                tool_outputs=all_tool_outputs,
+                scan_results=scan_results
             )
             
             # LLM raporunu da kaydet
