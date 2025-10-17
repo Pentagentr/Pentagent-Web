@@ -1753,11 +1753,11 @@ Lütfen aşağıdaki yapıda profesyonel bir rapor oluştur:
             
             # LLM'den yanıt al (basit implementasyon)
             # Gerçek implementasyonda Groq API kullanılabilir
-            return self._generate_llm_response(prompt, findings, target)
+            return self._generate_llm_response(prompt, findings, target, tool_outputs)
             
         except Exception as e:
             logger.error(f"LLM rapor üretimi hatası: {e}")
-            return self._generate_fallback_report(findings, target)
+            return self._generate_fallback_report(findings, target, tool_outputs)
     
     def _get_risk_level_from_score(self, score: int) -> str:
         """Risk skorundan risk seviyesi belirle"""
@@ -1804,7 +1804,7 @@ Lütfen aşağıdaki yapıda profesyonel bir rapor oluştur:
 """)
         return "\n".join(formatted)
     
-    def _generate_llm_response(self, prompt: str, findings: List[Dict[str, Any]], target: str) -> str:
+    def _generate_llm_response(self, prompt: str, findings: List[Dict[str, Any]], target: str, tool_outputs: Dict[str, Any] = None) -> str:
         """LLM'den yanıt al (basit implementasyon)"""
         # Bu kısımda gerçek LLM API çağrısı yapılabilir
         # Şimdilik template-based response döndürelim
@@ -2000,7 +2000,7 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
         else:
             return "Tool çalıştırıldı, detaylar mevcut"
     
-    def _generate_fallback_report(self, findings: List[Dict[str, Any]], target: str) -> str:
+    def _generate_fallback_report(self, findings: List[Dict[str, Any]], target: str, tool_outputs: Dict[str, Any] = None) -> str:
         """LLM hatası durumunda fallback rapor"""
         return f"""# GÜVENLİK RAPORU - {target}
 
@@ -2015,6 +2015,9 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
 - Yüksek: {len([f for f in findings if f.get('severity') == 'high'])}
 - Orta: {len([f for f in findings if f.get('severity') == 'medium'])}
 - Düşük: {len([f for f in findings if f.get('severity') == 'low'])}
+
+### Kullanılan Araçlar:
+{self._format_tool_outputs_for_llm(tool_outputs) if tool_outputs else 'Tool çıktıları mevcut değil'}
 
 ## BULGULAR
 
