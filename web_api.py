@@ -89,18 +89,18 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 # Global LLM model (RAG query optimization için)
-gemini_model = None
+llm_model = None
 
 @app.on_event("startup")
 async def startup_event():
     """Uygulama başlatıldığında API key kontrolü yap"""
-    global gemini_model
+    global llm_model
     try:
         logger.info("Pentagent API başlatılıyor...")
         
         # Unified LLM model'i başlat (RAG query optimization için)
         # Uses env: MODEL_PROVIDER, GROQ_API_KEY, GROQ_MODEL
-        gemini_model = UnifiedLLM()
+        llm_model = UnifiedLLM()
         
         logger.info(f"✅ LLM provider hazır (MODEL_PROVIDER={config.MODEL_PROVIDER})")
         logger.info("✅ Pentagent API başarıyla başlatıldı!")
@@ -129,7 +129,8 @@ async def root():
 @app.get("/health")
 async def health_check():
     """API health check"""
-    api_key_valid = config.GEMINI_API_KEY and config.GEMINI_API_KEY != 'YOUR_GEMINI_API_KEY_HERE'
+    # Groq API key kontrolü
+    groq_api_key_valid = config.GROQ_API_KEY and config.GROQ_API_KEY != ''
     
     # RAG servisi kontrolü
     rag_service = get_rag_service()
@@ -137,7 +138,8 @@ async def health_check():
     
     return {
         "status": "healthy",
-        "api_key_configured": api_key_valid,
+        "llm_provider": config.MODEL_PROVIDER,
+        "groq_api_key_configured": groq_api_key_valid,
         "active_connections": len(manager.active_connections),
         "rag_available": rag_stats.get("available", False),
         "rag_cves": rag_stats.get("total_cves", 0),
@@ -148,10 +150,11 @@ async def health_check():
 async def start_scan(request: Dict[str, Any]):
     """Yeni bir güvenlik taraması başlat - MODÜLER (her scan için yeni orchestrator)"""
     try:
-        # API key kontrolü
-        api_key = config.GEMINI_API_KEY
-        if not api_key or api_key == 'YOUR_GEMINI_API_KEY_HERE':
-            raise HTTPException(status_code=503, detail="GEMINI_API_KEY yapılandırılmamış")
+        # Groq API key kontrolü
+        groq_api_key = config.GROQ_API_KEY
+        if not groq_api_key or groq_api_key == '':
+            raise HTTPException(status_code=503, detail="GROQ_API_KEY yapılandırılmamış")
+        
         target = request.get("target", "")
         task = request.get("task", "")
         
@@ -197,9 +200,9 @@ async def run_scan_async(scan_id: str, target: str, task: str, status_callback):
         await status_callback(f"🎯 Scan başlatıldı: {target}", "info")
         
         # Her scan için YENİ orchestrator oluştur (modüler)
-        api_key = config.GEMINI_API_KEY
-        scan_orchestrator = DynamicAgentOrchestrator(api_key=api_key)
-        logger.info(f"✅ Scan {scan_id} için yeni orchestrator oluşturuldu")
+        # UnifiedLLM kullanır (Groq API key'i env'den alır)
+        scan_orchestrator = DynamicAgentOrchestrator(api_key=None)  # api_key ignored, uses env
+        logger.info(f"✅ Scan {scan_id} için yeni orchestrator oluşturuldu (Groq)")
         
         # Orchestrator ile scan çalıştır - streaming düşünce ile
         result = await scan_orchestrator.run_autonomous_pentest_streaming(
@@ -352,10 +355,10 @@ async def optimize_rag_query(user_query: str) -> str:
         "SQL injection nasıl test edilir?" → "SQL injection CVE testing methods"
         "Apache için kritik güvenlik zafiyetleri" → "Apache critical security vulnerabilities"
     """
-    global gemini_model
+    global llm_model
     
-    if not gemini_model:
-        logger.warning("Gemini model yok, query optimize edilmeden kullanılacak")
+    if not llm_model:
+        logger.warning("LLM model yok, query optimize edilmeden kullanılacak")
         return user_query
     
     try:
@@ -382,7 +385,7 @@ KURALLAR:
 
 SADECE OPTİMİZE EDİLMİŞ SORGUYU DÖNDÜR (açıklama yapma):"""
 
-        response = await gemini_model.generate_content_async(optimization_prompt)
+        response = await llm_model.generate_content_async(optimization_prompt)
         
         # Response string veya object olabilir
         if isinstance(response, str):

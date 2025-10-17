@@ -13,8 +13,8 @@ class Config:
     def __init__(self):
         self.project_root = Path(__file__).parent
         
-        # API Configuration (Gemini deprecated)
-        self.GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
+        # API Configuration (Gemini deprecated - using Groq now)
+        # self.GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')  # DEPRECATED
         
         # Security Research API Keys
         self.VIRUSTOTAL_API_KEY = os.getenv('VIRUSTOTAL_API_KEY', 'a3613c70e43afc77772f75985a4f7ba228baadd31cceefd6a79902effdaf41c0')
