@@ -396,6 +396,113 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
     );
   };
 
+  // 4. CVE DETAYLARI
+  const renderCveDetaylari = () => {
+    const cveReferences = report.structured_data?.cve_references || report.cve_results || [];
+    
+    if (cveReferences.length === 0) {
+      return (
+        <div className="text-center py-12">
+          <Database className="w-12 h-12 text-platinum-500 mx-auto mb-3" />
+          <p className="text-text-secondary text-sm">CVE referansı bulunamadı</p>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="space-y-6">
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+            <Database className="w-4 h-4 text-platinum-400" />
+            Tespit Edilen CVE Referansları ({cveReferences.length})
+          </h3>
+          
+          <div className="grid gap-4">
+            {cveReferences.map((cve, index) => (
+              <div key={index} className="bg-obsidian-900/50 border border-platinum-500/10 rounded-lg p-5">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="px-2 py-1 bg-obsidian-950 text-text-tertiary rounded text-xs font-mono">
+                        {cve.cve_id || `CVE-${index + 1}`}
+                      </span>
+                      <span className={`px-2 py-1 rounded text-xs flex-shrink-0 ${getSeverityColor(cve.severity)}`}>
+                        {getSeverityText(cve.severity)}
+                      </span>
+                      {cve.base_score && (
+                        <span className="px-2 py-1 bg-obsidian-950 rounded text-xs text-platinum-400">
+                          CVSS: {cve.base_score}
+                        </span>
+                      )}
+                    </div>
+                    
+                    {cve.product && (
+                      <div className="text-xs text-text-tertiary mb-2">
+                        Etkilenen Sistem: <span className="text-platinum-400">{cve.product}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <div className="text-xs text-text-tertiary mb-1">Açıklama</div>
+                    <p className="text-text-secondary text-xs leading-relaxed">
+                      {cve.description || 'Açıklama mevcut değil'}
+                    </p>
+                  </div>
+                  
+                  {cve.cvss_vector && (
+                    <div>
+                      <div className="text-xs text-text-tertiary mb-1">CVSS Vektör</div>
+                      <code className="bg-obsidian-950 p-2 rounded text-xs text-emerald-400 block">
+                        {cve.cvss_vector}
+                      </code>
+                    </div>
+                  )}
+                  
+                  {cve.published_date && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                      <div>
+                        <div className="text-xs text-text-tertiary mb-1">Yayın Tarihi</div>
+                        <p className="text-text-secondary text-xs">{cve.published_date}</p>
+                      </div>
+                      {cve.modified_date && (
+                        <div>
+                          <div className="text-xs text-text-tertiary mb-1">Güncellenme Tarihi</div>
+                          <p className="text-text-secondary text-xs">{cve.modified_date}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {cve.references && cve.references.length > 0 && (
+                    <div>
+                      <div className="text-xs text-text-tertiary mb-1">Referanslar</div>
+                      <div className="space-y-1">
+                        {cve.references.slice(0, 3).map((ref, refIndex) => (
+                          <a
+                            key={refIndex}
+                            href={ref}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-platinum-400 hover:text-platinum-300 underline block truncate"
+                          >
+                            {ref}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // 5. TOOL ÇIKTILARI
   const renderToolCiktilari = () => {
     // Tool çıktılarını hem structured_data'dan hem de direkt report'tan al
@@ -482,79 +589,14 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
     );
   };
 
-  // CVE Detayları render fonksiyonu
-  const renderCveDetaylari = () => {
-    const cveReferences = report.structured_data?.cve_references || [];
-    
-    if (cveReferences.length === 0) {
-      return (
-        <div className="text-center py-12">
-          <Database className="w-12 h-12 text-text-tertiary mx-auto mb-4" />
-          <p className="text-text-secondary">CVE referansı bulunamadı</p>
-        </div>
-      );
-    }
-    
-    return (
-      <div className="space-y-6">
-        <div className="prose prose-invert max-w-none">
-          <p className="text-text-secondary leading-relaxed">
-            Tarama sonuçlarına göre tespit edilen CVE referansları aşağıda listelenmiştir.
-          </p>
-        </div>
-        
-        <div className="bg-obsidian-900/50 border border-platinum-500/10 rounded-lg overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-obsidian-950 border-b border-platinum-500/10">
-                <tr>
-                  <th className="text-left py-3 px-4 text-text-tertiary font-medium">CVE ID</th>
-                  <th className="text-left py-3 px-4 text-text-tertiary font-medium">CVSS Skoru</th>
-                  <th className="text-left py-3 px-4 text-text-tertiary font-medium">Severity</th>
-                  <th className="text-left py-3 px-4 text-text-tertiary font-medium">Açıklama</th>
-                  <th className="text-left py-3 px-4 text-text-tertiary font-medium">Etkilenen Sistem</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-platinum-500/10">
-                {cveReferences.map((cve, index) => (
-                  <tr key={index} className="hover:bg-obsidian-800/30 transition-colors">
-                    <td className="py-3 px-4 font-mono text-platinum-400">{cve.cve_id}</td>
-                    <td className="py-3 px-4">
-                      <span className="px-2 py-1 bg-obsidian-950 rounded text-text-primary font-medium">
-                        {cve.cvss_skoru || cve.base_score || 'N/A'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className={`px-2 py-1 rounded ${getSeverityColor(cve.severity)}`}>
-                        {getSeverityText(cve.severity)}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-text-secondary max-w-md">
-                      <div className="line-clamp-2">{cve.aciklama || cve.description || 'Açıklama yok'}</div>
-                    </td>
-                    <td className="py-3 px-4 text-text-secondary">{cve.etkilenen_sistem || cve.product || 'N/A'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        
-        <p className="text-xs text-text-tertiary">
-          Toplam {cveReferences.length} CVE referansı tespit edildi.
-        </p>
-      </div>
-    );
-  };
-
   const renderCurrentSection = () => {
     switch (currentSection) {
       case 'yonetici-ozeti': return renderYoneticiOzeti();
       case 'metodoloji': return renderMetodoloji();
       case 'detayli-bulgular': return renderDetayliBulgular();
+      case 'cve-detaylari': return renderCveDetaylari();
       case 'tool-ciktilari': return renderToolCiktilari();
       case 'oneriler': return renderOneriler();
-      case 'cve-detaylari': return renderCveDetaylari();
       default: return <div className="text-center py-12 text-text-secondary">Yükleniyor...</div>;
     }
   };
