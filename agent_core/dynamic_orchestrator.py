@@ -46,6 +46,7 @@ class DynamicAgentOrchestrator:
         self.scan_context = {}
         self.execution_history = []
         self.discovered_information = {}
+        self._findings = []  # Findings listesini başlat
         self.max_steps = 10  # Maksimum limit
         self.min_steps = 3   # Minimum gereksinim
         self.suggested_steps = 3  # Varsayılan hedef - minimum ile aynı (gereksiz tool çağrılarını engelle)
@@ -1212,7 +1213,31 @@ Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu haz�
         
         try:
             response = await self._call_gemini(prompt)
-            analysis = json.loads(response)
+            # JSON parsing'i daha güvenli yap
+            try:
+                analysis = json.loads(response)
+            except json.JSONDecodeError as json_err:
+                logger.warning(f"JSON parsing failed, trying to fix: {json_err}")
+                # JSON'u temizle ve tekrar dene
+                cleaned_response = response.strip()
+                if cleaned_response.startswith('```json'):
+                    cleaned_response = cleaned_response[7:]
+                if cleaned_response.endswith('```'):
+                    cleaned_response = cleaned_response[:-3]
+                cleaned_response = cleaned_response.strip()
+                
+                try:
+                    analysis = json.loads(cleaned_response)
+                except json.JSONDecodeError:
+                    logger.error(f"JSON parsing completely failed, using fallback")
+                    analysis = {
+                        "security_vulnerabilities": [],
+                        "risk_level": "unknown",
+                        "recommendations": ["Test tamamlandı, detaylı analiz gerekli"],
+                        "test_effectiveness": "unknown",
+                        "summary": "Test tamamlandı"
+                    }
+            
             return analysis
         except Exception as e:
             logger.error(f"Final analysis failed: {e}")
@@ -1565,7 +1590,12 @@ Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu haz�
     
     def get_findings(self) -> List[Dict[str, Any]]:
         """Tüm bulguları döndür"""
-        return getattr(self, '_findings', [])
+        findings = getattr(self, '_findings', [])
+        if not isinstance(findings, list):
+            logger.warning("⚠️ _findings is not a list, initializing as empty list")
+            self._findings = []
+            findings = []
+        return findings
 
     def _make_json_serializable(self, obj):
         """Objeyi JSON serializable hale getir - CVEResult desteği ile"""
