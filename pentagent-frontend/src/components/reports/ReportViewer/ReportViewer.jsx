@@ -145,11 +145,11 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
           </div>
         </div>
         
-        {data.kritik_bulgular && data.kritik_bulgular.length > 0 && (
+        {executiveData.kritik_bulgular && executiveData.kritik_bulgular.length > 0 && (
           <div>
             <h4 className="text-sm font-medium text-text-primary mb-3">Kritik Bulgular</h4>
             <div className="space-y-2">
-              {data.kritik_bulgular.map((bulgu, index) => (
+              {executiveData.kritik_bulgular.map((bulgu, index) => (
                 <div key={index} className="bg-obsidian-900/50 border border-platinum-500/10 rounded-lg p-4">
                   <div className="flex items-start gap-3">
                     <AlertTriangle className="w-4 h-4 text-rose-500 flex-shrink-0 mt-0.5" />
@@ -402,7 +402,7 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
           </div>
         )}
         
-        {data.sonuc && (
+        {data?.sonuc && (
           <div className="bg-obsidian-900/50 border border-platinum-500/10 rounded-lg p-4">
             <h4 className="text-sm font-semibold text-text-primary mb-2 flex items-center gap-2">
               <BookOpen className="w-4 h-4 text-platinum-500" />

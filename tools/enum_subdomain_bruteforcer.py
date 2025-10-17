@@ -28,7 +28,7 @@ class SubdomainBruteforceModule(MCPTool):
         self.reasoning_log = []
     
     async def run_tool(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """MCP ajanı tarafından çağrılacak ana fonksiyon."""
+        """MCP ajanı tarafından çağrılacak ana fonksiyon - OPTIMIZE EDİLMİŞ."""
         try:
             # Hem 'domain' hem de 'target' parametresini kabul et
             domain = params.get("domain") or params.get("target")
@@ -40,11 +40,11 @@ class SubdomainBruteforceModule(MCPTool):
                 from urllib.parse import urlparse
                 domain = urlparse(domain).netloc
             
-            scan_type = params.get("scan_type", "comprehensive")
-            timeout = params.get("timeout", 60)
-            threads = params.get("threads", 20)
+            scan_type = params.get("scan_type", "fast")  # Default'u "fast" yap
+            timeout = params.get("timeout", 3)  # 5'ten 3'e düşürüldü
+            threads = params.get("threads", 3)  # 5'ten 3'e düşürüldü
             
-            self._add_reasoning(self.reasoning_log, "initialization", f"Subdomain bruteforce '{domain}' için başlatılıyor.")
+            self._add_reasoning(self.reasoning_log, "initialization", f"Subdomain bruteforce '{domain}' için başlatılıyor (OPTIMIZE EDİLMİŞ).")
             
             # Ana tarama mantığını çalıştır
             scan_result = await self._bruteforce_subdomains(domain, scan_type, timeout, threads)
@@ -70,7 +70,7 @@ class SubdomainBruteforceModule(MCPTool):
             )
     
     async def _bruteforce_subdomains(self, domain: str, scan_type: str, timeout: int, threads: int) -> Dict[str, Any]:
-        """Ana subdomain bruteforce fonksiyonu."""
+        """Ana subdomain bruteforce fonksiyonu - OPTIMIZE EDİLMİŞ"""
         found_subdomains = set()
         techniques_used = []
         
@@ -79,24 +79,53 @@ class SubdomainBruteforceModule(MCPTool):
         
         self._add_reasoning(self.reasoning_log, "wordlist_generation", f"{len(wordlist)} kelime ile wordlist oluşturuldu.")
         
-        # Bruteforce işlemini başlat
-        async with aiohttp.ClientSession() as session:
-            # Paralel bruteforce
-            semaphore = asyncio.Semaphore(threads)
-            tasks = []
+        # Bruteforce işlemini başlat - BATCH PROCESSING ile
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=timeout),
+            connector=aiohttp.TCPConnector(limit=threads, limit_per_host=threads)
+        ) as session:
+            # Batch processing - küçük gruplar halinde işle
+            batch_size = min(threads * 2, 10)  # Maksimum 10 subdomain per batch
+            total_batches = (len(wordlist) + batch_size - 1) // batch_size
             
-            for subdomain in wordlist:
-                task = self._check_subdomain(session, subdomain, domain, semaphore, timeout)
-                tasks.append(task)
-            
-            # Tüm görevleri çalıştır
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            # Sonuçları topla
-            for result in results:
-                if isinstance(result, dict) and result.get("found"):
-                    found_subdomains.add(result["subdomain"])
-                    techniques_used.append("DNS Bruteforce")
+            for batch_num in range(total_batches):
+                start_idx = batch_num * batch_size
+                end_idx = min(start_idx + batch_size, len(wordlist))
+                batch_wordlist = wordlist[start_idx:end_idx]
+                
+                self._add_reasoning(
+                    self.reasoning_log, 
+                    "batch_progress", 
+                    f"Batch {batch_num + 1}/{total_batches}: {len(batch_wordlist)} subdomain kontrol ediliyor..."
+                )
+                
+                # Paralel bruteforce - sadece bu batch için
+                semaphore = asyncio.Semaphore(threads)
+                tasks = []
+                
+                for subdomain in batch_wordlist:
+                    task = self._check_subdomain(session, subdomain, domain, semaphore, timeout)
+                    tasks.append(task)
+                
+                # Bu batch'i çalıştır
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                # Sonuçları topla
+                batch_found = 0
+                for result in results:
+                    if isinstance(result, dict) and result.get("found"):
+                        found_subdomains.add(result["subdomain"])
+                        techniques_used.append(result.get("method", "HTTP_BRUTEFORCE"))
+                        batch_found += 1
+                
+                self._add_reasoning(
+                    self.reasoning_log, 
+                    "batch_complete", 
+                    f"Batch {batch_num + 1} tamamlandı: {batch_found} subdomain bulundu"
+                )
+                
+                # Kısa bir bekleme (rate limiting)
+                await asyncio.sleep(0.1)
         
         # Subdomain'leri analiz et
         analyzed_subdomains = self._analyze_subdomains(found_subdomains, domain)
@@ -110,64 +139,22 @@ class SubdomainBruteforceModule(MCPTool):
         }
 
     def _generate_wordlist(self, domain: str, scan_type: str) -> List[str]:
-        """Domain'e özel wordlist oluştur"""
+        """Domain'e özel wordlist oluştur - OPTIMIZE EDİLMİŞ"""
+        # Temel yaygın subdomain'ler (en kritik olanlar)
         base_words = [
-            # Yaygın subdomain'ler
-            "www", "mail", "ftp", "admin", "api", "dev", "test", "staging", "prod", "production",
-            "blog", "shop", "store", "app", "mobile", "cdn", "static", "assets", "img", "images",
-            "js", "css", "fonts", "downloads", "files", "docs", "help", "support", "status",
-            "monitor", "stats", "analytics", "tracking", "metrics", "logs", "backup", "backups",
-            "db", "database", "mysql", "postgres", "redis", "cache", "memcache", "elastic",
-            "search", "solr", "lucene", "kibana", "grafana", "prometheus", "alertmanager",
-            "jenkins", "ci", "cd", "git", "gitlab", "github", "bitbucket", "svn", "hg",
-            "docker", "k8s", "kubernetes", "helm", "terraform", "ansible", "puppet", "chef",
-            "nagios", "zabbix", "cacti", "munin", "collectd", "telegraf", "influxdb",
-            "rabbitmq", "kafka", "zookeeper", "consul", "etcd", "vault", "nomad",
-            "nginx", "apache", "tomcat", "jetty", "glassfish", "wildfly", "jboss",
-            "php", "python", "ruby", "node", "java", "go", "rust", "scala", "clojure",
-            "wordpress", "drupal", "joomla", "magento", "prestashop", "opencart",
-            "laravel", "symfony", "codeigniter", "cakephp", "yii", "zend", "phalcon",
-            "django", "flask", "fastapi", "tornado", "bottle", "cherrypy", "pyramid",
-            "rails", "sinatra", "hanami", "grape", "padrino", "cuba", "roda",
-            "express", "koa", "hapi", "sails", "meteor", "next", "nuxt", "gatsby",
-            "spring", "struts", "hibernate", "mybatis", "jpa", "jdbc", "jsp", "servlet",
-            "react", "vue", "angular", "ember", "backbone", "knockout", "jquery",
-            "bootstrap", "foundation", "bulma", "tailwind", "materialize", "semantic",
-            "aws", "azure", "gcp", "digitalocean", "linode", "vultr", "heroku", "netlify",
-            "cloudflare", "maxcdn", "keycdn", "bunnycdn", "fastly", "incapsula", "sucuri",
-            "mailgun", "sendgrid", "mandrill", "postmark", "sparkpost", "ses", "sns",
-            "stripe", "paypal", "square", "braintree", "authorize", "adyen", "klarna",
-            "google", "facebook", "twitter", "linkedin", "instagram", "youtube", "tiktok",
-            "slack", "discord", "teams", "zoom", "skype", "whatsapp", "telegram",
-            "salesforce", "hubspot", "pipedrive", "zendesk", "freshdesk", "intercom",
-            "mixpanel", "amplitude", "segment", "hotjar", "fullstory", "logrocket",
-            "sentry", "bugsnag", "rollbar", "airbrake", "honeybadger", "raygun",
-            "datadog", "newrelic", "appdynamics", "dynatrace", "splunk", "sumo",
-            "elasticsearch", "logstash", "kibana", "beats", "filebeat", "metricbeat",
-            "prometheus", "grafana", "alertmanager", "thanos", "cortex", "victoriametrics",
-            "consul", "etcd", "zookeeper", "eureka", "nacos", "apollo", "discovery",
-            "kong", "nginx", "haproxy", "traefik", "envoy", "istio", "linkerd",
-            "redis", "memcached", "hazelcast", "ignite", "caffeine", "guava",
-            "rabbitmq", "kafka", "pulsar", "nats", "zeromq", "activemq", "artemis",
-            "postgresql", "mysql", "mariadb", "oracle", "sqlserver", "sqlite", "h2",
-            "mongodb", "cassandra", "dynamodb", "couchdb", "riak", "neo4j", "arango",
-            "influxdb", "timescaledb", "clickhouse", "bigquery", "redshift", "snowflake",
-            "hadoop", "spark", "hive", "pig", "hbase", "kafka", "storm", "flink",
-            "tensorflow", "pytorch", "keras", "scikit", "pandas", "numpy", "matplotlib",
-            "jupyter", "zeppelin", "databricks", "sagemaker", "mlflow", "kubeflow",
-            "jenkins", "gitlab", "github", "bitbucket", "azure", "circleci", "travis",
-            "docker", "kubernetes", "helm", "terraform", "ansible", "puppet", "chef",
-            "vagrant", "packer", "consul", "vault", "nomad", "serf", "raft",
-            "prometheus", "grafana", "alertmanager", "thanos", "cortex", "victoriametrics",
-            "jaeger", "zipkin", "opentelemetry", "honeycomb", "lightstep", "datadog",
-            "newrelic", "appdynamics", "dynatrace", "splunk", "sumo", "loggly",
-            "papertrail", "logentries", "logdna", "humio", "elastic", "kibana",
-            "fluentd", "fluentbit", "logstash", "beats", "filebeat", "metricbeat",
-            "packetbeat", "heartbeat", "auditbeat", "functionbeat", "journalbeat",
-            "winlogbeat", "osquerybeat", "cloudbeat", "agentbeat", "communitybeat"
+            "www", "mail", "ftp", "admin", "api", "dev", "test", "staging", "prod",
+            "blog", "shop", "store", "app", "mobile", "cdn", "static", "assets",
+            "docs", "help", "support", "status", "monitor", "stats", "analytics",
+            "backup", "db", "database", "mysql", "redis", "cache", "search",
+            "jenkins", "ci", "git", "gitlab", "github", "docker", "k8s",
+            "nginx", "apache", "tomcat", "php", "python", "node", "java",
+            "wordpress", "drupal", "laravel", "django", "rails", "express",
+            "aws", "azure", "gcp", "cloudflare", "stripe", "paypal",
+            "google", "facebook", "twitter", "slack", "discord", "zoom",
+            "salesforce", "hubspot", "zendesk", "sentry", "datadog", "newrelic"
         ]
         
-        # Domain'e özel kelimeler ekle
+        # Domain'e özel kelimeler ekle (sadece ana domain)
         domain_words = domain.split('.')[0]
         if len(domain_words) > 3:
             base_words.extend([
@@ -175,52 +162,65 @@ class SubdomainBruteforceModule(MCPTool):
                 domain_words + "api",
                 domain_words + "app",
                 domain_words + "dev",
-                domain_words + "test",
-                domain_words + "staging",
-                domain_words + "prod"
+                domain_words + "test"
             ])
         
-        # Sayılar ekle
-        numbers = [str(i) for i in range(0, 100)]
+        # Sayılar ekle (sadece 0-20 arası)
+        numbers = [str(i) for i in range(0, 21)]
         
         # Kombinasyonlar oluştur
         wordlist = set(base_words)
         
-        if scan_type == "comprehensive":
-            # Daha kapsamlı wordlist
+        if scan_type == "fast":
+            # Hızlı tarama - sadece en kritik kelimeler
+            wordlist.update(numbers[:10])  # Sadece 0-9
+            # Maksimum 50 kelime
+            return list(wordlist)[:50]
+        elif scan_type == "comprehensive":
+            # Daha kapsamlı ama hala sınırlı wordlist
             wordlist.update(numbers)
-            wordlist.update([f"{word}{num}" for word in base_words[:50] for num in numbers[:10]])
-            wordlist.update([f"{num}{word}" for word in base_words[:50] for num in numbers[:10]])
-        
-        return list(wordlist)[:1000]  # Maksimum 1000 kelime
+            # Sadece en önemli 20 kelime ile kombinasyon yap
+            wordlist.update([f"{word}{num}" for word in base_words[:20] for num in numbers[:5]])
+            wordlist.update([f"{num}{word}" for word in base_words[:20] for num in numbers[:5]])
+            # Maksimum 200 kelime ile sınırla
+            return list(wordlist)[:200]
+        else:
+            # Default: balanced scan
+            wordlist.update(numbers[:20])  # 0-19
+            # Maksimum 100 kelime
+            return list(wordlist)[:100]
 
     async def _check_subdomain(self, session: aiohttp.ClientSession, subdomain: str, domain: str, semaphore: asyncio.Semaphore, timeout: int) -> Dict[str, Any]:
-        """Tek bir subdomain'i kontrol et"""
+        """Tek bir subdomain'i kontrol et - HTTP-based OPTIMIZE EDİLMİŞ"""
         async with semaphore:
             full_domain = f"{subdomain}.{domain}"
-            try:
-                # DNS A kaydı kontrol et
-                import dns.resolver
-                a_records = dns.resolver.resolve(full_domain, 'A')
-                if a_records:
-                    return {
-                        "found": True,
-                        "subdomain": full_domain,
-                        "ip": str(a_records[0]),
-                        "method": "DNS_A"
-                    }
-            except:
-                pass
             
+            # HTTP/HTTPS kontrolü (daha hızlı)
+            for protocol in ["https", "http"]:
+                try:
+                    url = f"{protocol}://{full_domain}"
+                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
+                        if response.status < 500:  # 4xx ve 2xx/3xx kodları kabul et
+                            return {
+                                "found": True,
+                                "subdomain": full_domain,
+                                "url": url,
+                                "status_code": response.status,
+                                "method": f"HTTP_{protocol.upper()}"
+                            }
+                except (aiohttp.ClientError, asyncio.TimeoutError):
+                    continue
+            
+            # DNS kontrolü sadece HTTP başarısız olursa (fallback)
             try:
-                # DNS CNAME kaydı kontrol et
-                cname_records = dns.resolver.resolve(full_domain, 'CNAME')
-                if cname_records:
+                import socket
+                ip = socket.gethostbyname(full_domain)
+                if ip:
                     return {
                         "found": True,
                         "subdomain": full_domain,
-                        "cname": str(cname_records[0]),
-                        "method": "DNS_CNAME"
+                        "ip": ip,
+                        "method": "DNS_FALLBACK"
                     }
             except:
                 pass
