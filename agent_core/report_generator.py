@@ -1593,7 +1593,302 @@ class ReportGenerator:
             return "Rapor içeriği oluşturulamadı"
 
     # Web API için sync metod
-    def generate_comprehensive_report_sync(self, enriched_data: Dict[str, Any]) -> str:
+    def generate_llm_enhanced_report(self, findings: List[Dict[str, Any]], target: str, cve_results: List[Dict[str, Any]] = None) -> str:
+        """LLM ile gelişmiş rapor üretimi"""
+        try:
+            # Bulguları kategorize et
+            critical_findings = [f for f in findings if f.get('severity') == 'critical']
+            high_findings = [f for f in findings if f.get('severity') == 'high']
+            medium_findings = [f for f in findings if f.get('severity') == 'medium']
+            low_findings = [f for f in findings if f.get('severity') == 'low']
+            
+            # Risk skoru hesapla
+            risk_score = self._calculate_risk_score(findings)
+            risk_level = self._get_risk_level_from_score(risk_score)
+            
+            # LLM prompt oluştur
+            prompt = f"""
+Sen bir siber güvenlik uzmanısın. Aşağıdaki penetrasyon testi sonuçlarına dayanarak profesyonel bir güvenlik raporu oluştur.
+
+HEDEF: {target}
+RİSK SKORU: {risk_score}/100 ({risk_level})
+TARİH: {datetime.now().strftime('%d/%m/%Y %H:%M')}
+
+BULGULAR:
+- Kritik: {len(critical_findings)} bulgu
+- Yüksek: {len(high_findings)} bulgu  
+- Orta: {len(medium_findings)} bulgu
+- Düşük: {len(low_findings)} bulgu
+
+DETAYLI BULGULAR:
+{self._format_findings_for_llm(findings)}
+
+CVE REFERANSLARI:
+{self._format_cve_results_for_llm(cve_results) if cve_results else 'CVE referansı bulunamadı'}
+
+Lütfen aşağıdaki yapıda profesyonel bir rapor oluştur:
+
+# GÜVENLİK RAPORU - {target}
+
+## YÖNETİCİ ÖZETİ
+- Risk seviyesi ve genel değerlendirme
+- Kritik bulguların özeti
+- Acil aksiyon gereken alanlar
+
+## METODOLOJİ
+- Kullanılan test yöntemleri
+- Test kapsamı ve sınırları
+
+## BULGULAR
+### Kritik Bulgular
+- Her kritik bulgu için detaylı açıklama
+- CVSS skoru ve etki analizi
+- Önerilen çözümler
+
+### Yüksek Risk Bulgular
+- Yüksek risk bulguların detayları
+- İş etkisi analizi
+
+### Orta ve Düşük Risk Bulgular
+- Orta ve düşük risk bulguların özeti
+
+## CVE ANALİZİ
+- Tespit edilen CVE'ler
+- Etkilenen sistemler
+- Güncelleme önerileri
+
+## ÖNERİLER
+- Genel güvenlik önerileri
+- Acil aksiyon planı
+- Uzun vadeli güvenlik stratejisi
+
+## EKLER
+- Teknik detaylar
+- Referanslar
+"""
+            
+            # LLM'den yanıt al (basit implementasyon)
+            # Gerçek implementasyonda Groq API kullanılabilir
+            return self._generate_llm_response(prompt, findings, target)
+            
+        except Exception as e:
+            logger.error(f"LLM rapor üretimi hatası: {e}")
+            return self._generate_fallback_report(findings, target)
+    
+    def _get_risk_level_from_score(self, score: int) -> str:
+        """Risk skorundan risk seviyesi belirle"""
+        if score >= 80:
+            return "KRİTİK"
+        elif score >= 60:
+            return "YÜKSEK"
+        elif score >= 40:
+            return "ORTA"
+        elif score >= 20:
+            return "DÜŞÜK"
+        else:
+            return "MİNİMAL"
+    
+    def _format_findings_for_llm(self, findings: List[Dict[str, Any]]) -> str:
+        """Bulguları LLM için formatla"""
+        formatted = []
+        for i, finding in enumerate(findings, 1):
+            formatted.append(f"""
+{i}. {finding.get('title', 'Bilinmeyen Bulgu')}
+   Severity: {finding.get('severity', 'unknown').upper()}
+   CVSS: {finding.get('cvss_score', 'N/A')}
+   CVE: {finding.get('cve_id', 'N/A')}
+   Açıklama: {finding.get('description', 'Açıklama yok')}
+   Kanıt: {finding.get('evidence', 'Kanıt yok')}
+   Öneri: {finding.get('recommendation_summary', 'Öneri yok')}
+   İş Etkisi: {finding.get('business_impact', 'Etki analizi yok')}
+""")
+        return "\n".join(formatted)
+    
+    def _format_cve_results_for_llm(self, cve_results: List[Dict[str, Any]]) -> str:
+        """CVE sonuçlarını LLM için formatla"""
+        if not cve_results:
+            return "CVE referansı bulunamadı"
+        
+        formatted = []
+        for cve in cve_results:
+            formatted.append(f"""
+- {cve.get('cve_id', 'Unknown CVE')}
+  Severity: {cve.get('severity', 'unknown')}
+  CVSS: {cve.get('base_score', 'N/A')}
+  Açıklama: {cve.get('description', 'Açıklama yok')}
+  Etkilenen Sistem: {cve.get('product', 'Bilinmeyen')}
+""")
+        return "\n".join(formatted)
+    
+    def _generate_llm_response(self, prompt: str, findings: List[Dict[str, Any]], target: str) -> str:
+        """LLM'den yanıt al (basit implementasyon)"""
+        # Bu kısımda gerçek LLM API çağrısı yapılabilir
+        # Şimdilik template-based response döndürelim
+        
+        critical_count = len([f for f in findings if f.get('severity') == 'critical'])
+        high_count = len([f for f in findings if f.get('severity') == 'high'])
+        medium_count = len([f for f in findings if f.get('severity') == 'medium'])
+        low_count = len([f for f in findings if f.get('severity') == 'low'])
+        
+        risk_score = self._calculate_risk_score(findings)
+        risk_level = self._get_risk_level_from_score(risk_score)
+        
+        return f"""# GÜVENLİK RAPORU - {target}
+
+## YÖNETİCİ ÖZETİ
+
+Bu rapor, {target} hedef sistemine yönelik gerçekleştirilen penetrasyon testinin sonuçlarını özetlemektedir. Test sonucunda toplam {len(findings)} güvenlik bulgusu tespit edilmiştir.
+
+**Risk Seviyesi: {risk_level} ({risk_score}/100)**
+
+### Bulgu Dağılımı:
+- 🔴 Kritik: {critical_count} bulgu
+- 🟠 Yüksek: {high_count} bulgu  
+- 🟡 Orta: {medium_count} bulgu
+- 🟢 Düşük: {low_count} bulgu
+
+### Acil Aksiyon Gereken Alanlar:
+{self._get_critical_summary(findings)}
+
+## METODOLOJİ
+
+Bu penetrasyon testi aşağıdaki metodoloji ile gerçekleştirilmiştir:
+
+1. **Bilgi Toplama**: Hedef sistem hakkında bilgi toplama
+2. **Keşif**: Açık portlar, servisler ve dizinlerin tespiti
+3. **Zafiyet Analizi**: Tespit edilen servislerde zafiyet taraması
+4. **Exploit Geliştirme**: Tespit edilen zafiyetlerin exploit edilebilirliği
+5. **Raporlama**: Bulguların analizi ve önerilerin hazırlanması
+
+## BULGULAR
+
+{self._generate_detailed_findings(findings)}
+
+## ÖNERİLER
+
+### Acil Aksiyon Planı (0-7 gün):
+{self._get_urgent_recommendations(findings)}
+
+### Kısa Vadeli Öneriler (1-4 hafta):
+{self._get_short_term_recommendations(findings)}
+
+### Uzun Vadeli Strateji (1-6 ay):
+{self._get_long_term_recommendations(findings)}
+
+## SONUÇ
+
+{target} sisteminde tespit edilen güvenlik bulguları, sistemin güvenlik duruşunun iyileştirilmesi gerektiğini göstermektedir. Özellikle kritik ve yüksek risk bulgularının acil olarak ele alınması önerilmektedir.
+
+Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazırlanmıştır. Tüm bulguların detaylı analizi ve çözüm önerileri yukarıda sunulmuştur.
+
+---
+*Rapor Tarihi: {datetime.now().strftime('%d/%m/%Y %H:%M')}*
+*Risk Skoru: {risk_score}/100*
+*Toplam Bulgu: {len(findings)}*
+"""
+    
+    def _get_critical_summary(self, findings: List[Dict[str, Any]]) -> str:
+        """Kritik bulguların özeti"""
+        critical_findings = [f for f in findings if f.get('severity') == 'critical']
+        if not critical_findings:
+            return "Kritik bulgu tespit edilmedi."
+        
+        summary = []
+        for finding in critical_findings[:3]:  # İlk 3 kritik bulgu
+            summary.append(f"- {finding.get('title', 'Bilinmeyen')}: {finding.get('description', 'Açıklama yok')}")
+        
+        return "\n".join(summary)
+    
+    def _generate_detailed_findings(self, findings: List[Dict[str, Any]]) -> str:
+        """Detaylı bulgular bölümü"""
+        sections = []
+        
+        # Kritik bulgular
+        critical_findings = [f for f in findings if f.get('severity') == 'critical']
+        if critical_findings:
+            sections.append("### 🔴 Kritik Bulgular")
+            for finding in critical_findings:
+                sections.append(self._format_finding_detail(finding))
+        
+        # Yüksek bulgular
+        high_findings = [f for f in findings if f.get('severity') == 'high']
+        if high_findings:
+            sections.append("### 🟠 Yüksek Risk Bulgular")
+            for finding in high_findings:
+                sections.append(self._format_finding_detail(finding))
+        
+        # Orta bulgular
+        medium_findings = [f for f in findings if f.get('severity') == 'medium']
+        if medium_findings:
+            sections.append("### 🟡 Orta Risk Bulgular")
+            for finding in medium_findings[:5]:  # İlk 5 orta risk
+                sections.append(self._format_finding_detail(finding))
+        
+        return "\n\n".join(sections)
+    
+    def _format_finding_detail(self, finding: Dict[str, Any]) -> str:
+        """Tek bulgu detayını formatla"""
+        return f"""
+**{finding.get('title', 'Bilinmeyen Bulgu')}**
+
+- **Severity**: {finding.get('severity', 'unknown').upper()}
+- **CVSS**: {finding.get('cvss_score', 'N/A')}
+- **CVE**: {finding.get('cve_id', 'N/A')}
+- **Açıklama**: {finding.get('description', 'Açıklama yok')}
+- **Kanıt**: {finding.get('evidence', 'Kanıt yok')}
+- **Öneri**: {finding.get('recommendation_summary', 'Öneri yok')}
+- **İş Etkisi**: {finding.get('business_impact', 'Etki analizi yok')}
+"""
+    
+    def _get_urgent_recommendations(self, findings: List[Dict[str, Any]]) -> str:
+        """Acil öneriler"""
+        critical_findings = [f for f in findings if f.get('severity') == 'critical']
+        if not critical_findings:
+            return "Kritik bulgu olmadığı için acil aksiyon gerekmiyor."
+        
+        recommendations = []
+        for finding in critical_findings:
+            recommendations.append(f"- {finding.get('recommendation_summary', 'Güvenlik güncellemesi yapın')}")
+        
+        return "\n".join(recommendations)
+    
+    def _get_short_term_recommendations(self, findings: List[Dict[str, Any]]) -> str:
+        """Kısa vadeli öneriler"""
+        return """- Tüm sistemlerin güvenlik güncellemelerini yapın
+- Güvenlik duvarı kurallarını gözden geçirin
+- Erişim kontrollerini güçlendirin
+- Düzenli güvenlik taramaları planlayın"""
+    
+    def _get_long_term_recommendations(self, findings: List[Dict[str, Any]]) -> str:
+        """Uzun vadeli öneriler"""
+        return """- Güvenlik mimarisini gözden geçirin
+- Güvenlik farkındalığı eğitimleri düzenleyin
+- Incident response planı oluşturun
+- Güvenlik monitoring sistemi kurun"""
+    
+    def _generate_fallback_report(self, findings: List[Dict[str, Any]], target: str) -> str:
+        """LLM hatası durumunda fallback rapor"""
+        return f"""# GÜVENLİK RAPORU - {target}
+
+## YÖNETİCİ ÖZETİ
+
+{target} sistemine yönelik penetrasyon testi tamamlanmıştır.
+
+**Toplam Bulgu**: {len(findings)}
+
+### Bulgu Dağılımı:
+- Kritik: {len([f for f in findings if f.get('severity') == 'critical'])}
+- Yüksek: {len([f for f in findings if f.get('severity') == 'high'])}
+- Orta: {len([f for f in findings if f.get('severity') == 'medium'])}
+- Düşük: {len([f for f in findings if f.get('severity') == 'low'])}
+
+## BULGULAR
+
+{self._generate_detailed_findings(findings)}
+
+---
+*Rapor Tarihi: {datetime.now().strftime('%d/%m/%Y %H:%M')}*
+"""
         """Web API için sync rapor oluşturma"""
         try:
             # Enriched data'dan state oluştur

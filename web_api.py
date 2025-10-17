@@ -556,7 +556,7 @@ async def get_rag_stats():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/reports/{report_id}/download")
-async def download_report(report_id: str, format: str = "pdf"):
+async def download_report(report_id: str, format: str = "pdf", type: str = "normal"):
     """
     Raporu belirtilen formatta indir.
     
@@ -569,7 +569,10 @@ async def download_report(report_id: str, format: str = "pdf"):
         from fastapi.responses import FileResponse
         
         # Dosya yolunu oluştur
-        report_path = f"reports/{report_id}.{format}"
+        if type == "llm" and format == "md":
+            report_path = f"reports/{report_id}_llm.md"
+        else:
+            report_path = f"reports/{report_id}.{format}"
         
         if not os.path.exists(report_path):
             raise HTTPException(status_code=404, detail="Rapor dosyası bulunamadı")
@@ -587,7 +590,7 @@ async def download_report(report_id: str, format: str = "pdf"):
         return FileResponse(
             path=report_path,
             media_type=media_type,
-            filename=f"{report_id}.{format}"
+            filename=f"{report_id}_{type if type != 'normal' else ''}.{format}"
         )
         
     except HTTPException:
@@ -707,7 +710,73 @@ async def generate_security_report(request: Dict[str, Any]):
                                 state.findings.append(finding)
                                 findings_added += 1
                         
-                        elif key == 'verify_xss_http':
+                        elif key == 'enum_directory_bruteforce':
+                            # Directory bruteforce sonuçlarından finding oluştur
+                            directories = tool_data.get('directories', [])
+                            files = tool_data.get('files', [])
+                            
+                            # Kritik dizinler için finding oluştur
+                            critical_dirs = [d for d in directories if any(keyword in d.get('path', '').lower() 
+                                                                        for keyword in ['admin', 'login', 'dashboard', 'api', 'config', 'backup'])]
+                            
+                            if critical_dirs:
+                                for dir_info in critical_dirs:
+                                    finding = {
+                                        'title': f'Kritik Dizin Bulundu: {dir_info.get("path", "Unknown")}',
+                                        'severity': 'high',
+                                        'description': f'Kritik dizin tespit edildi: {dir_info.get("path")}',
+                                        'cvss_score': '6.5',
+                                        'cve_id': None,
+                                        'evidence': f'Directory: {dir_info.get("path")}, Status: {dir_info.get("status", "Unknown")}',
+                                        'recommendation_summary': 'Kritik dizinlere erişimi kısıtlayın ve authentication ekleyin',
+                                        'business_impact': 'Kritik dizinler yetkisiz erişime açık olabilir',
+                                        'exploitability': 'Medium',
+                                        'target': target,
+                                        'technology': 'Web Application'
+                                    }
+                                    state.findings.append(finding)
+                                    findings_added += 1
+                            
+                            # Normal dizinler için finding oluştur
+                            normal_dirs = [d for d in directories if d not in critical_dirs]
+                            if normal_dirs:
+                                finding = {
+                                    'title': f'Dizin Keşfi: {len(normal_dirs)} dizin bulundu',
+                                    'severity': 'medium',
+                                    'description': f'Tespit edilen dizinler: {", ".join([d.get("path", "") for d in normal_dirs[:5]])}',
+                                    'cvss_score': '4.0',
+                                    'cve_id': None,
+                                    'evidence': f'Directories: {[d.get("path") for d in normal_dirs]}',
+                                    'recommendation_summary': 'Gereksiz dizinleri kaldırın ve directory listing\'i devre dışı bırakın',
+                                    'business_impact': 'Dizin keşfi bilgi toplama aşamasında kullanılabilir',
+                                    'exploitability': 'Low',
+                                    'target': target,
+                                    'technology': 'Web Application'
+                                }
+                                state.findings.append(finding)
+                                findings_added += 1
+                            
+                            # Kritik dosyalar için finding oluştur
+                            critical_files = [f for f in files if any(keyword in f.get('path', '').lower() 
+                                                                    for keyword in ['.env', '.git', 'backup', 'config', 'database'])]
+                            
+                            if critical_files:
+                                for file_info in critical_files:
+                                    finding = {
+                                        'title': f'Kritik Dosya Bulundu: {file_info.get("path", "Unknown")}',
+                                        'severity': 'critical',
+                                        'description': f'Kritik dosya tespit edildi: {file_info.get("path")}',
+                                        'cvss_score': '8.5',
+                                        'cve_id': None,
+                                        'evidence': f'File: {file_info.get("path")}, Status: {file_info.get("status", "Unknown")}',
+                                        'recommendation_summary': 'Kritik dosyaları public erişimden kaldırın',
+                                        'business_impact': 'Kritik dosyalar sistem güvenliğini tehlikeye atabilir',
+                                        'exploitability': 'High',
+                                        'target': target,
+                                        'technology': 'Web Application'
+                                    }
+                                    state.findings.append(finding)
+                                    findings_added += 1
                             # XSS test sonuçlarından finding oluştur
                             vulnerabilities = tool_data.get('vulnerabilities', [])
                             if vulnerabilities:
@@ -1044,6 +1113,25 @@ async def generate_security_report(request: Dict[str, Any]):
         
         # AI ile geliştirilmiş rapor oluştur
         ai_report_content = await report_gen.generate_ai_enhanced_report(state, scan_results, cve_results)
+        
+        # LLM ile gelişmiş rapor üret
+        try:
+            logger.info("🤖 LLM ile gelişmiş rapor üretiliyor...")
+            llm_report = report_gen.generate_llm_enhanced_report(
+                findings=state.findings,
+                target=target,
+                cve_results=cve_results
+            )
+            
+            # LLM raporunu da kaydet
+            llm_md_path = f"{report_path}_llm.md"
+            with open(llm_md_path, 'w', encoding='utf-8') as f:
+                f.write(llm_report)
+            logger.info(f"✅ LLM raporu oluşturuldu: {llm_md_path}")
+            
+        except Exception as e:
+            logger.error(f"❌ LLM rapor üretimi hatası: {e}")
+            llm_report = "LLM raporu oluşturulamadı"
         
         # Rapor oluştur (TÜM TOOL ÇIKTILARI İLE)
         success = await report_gen.generate_report(state, report_path)

@@ -79,6 +79,31 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
     }
   };
 
+  const handleDownloadLLM = async () => {
+    try {
+      setDownloading(true);
+      const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${baseURL}/api/reports/${report.report_id}/download?format=md&type=llm`);
+      
+      if (!response.ok) throw new Error('LLM raporu indirilemedi');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${report.report_id}_LLM.md`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('LLM Download error:', error);
+      alert('LLM raporu indirilemedi');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   // 1. YÖNETİCİ ÖZETİ
   const renderYoneticiOzeti = () => {
     // Veriyi hem structured_data'dan hem de direkt report'tan al
@@ -1097,6 +1122,24 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
               <>
                 <FileText className="w-3.5 h-3.5" />
                 Markdown İndir
+              </>
+            )}
+          </button>
+          
+          <button 
+            onClick={handleDownloadLLM}
+            disabled={downloading}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 rounded-lg transition-colors text-xs font-medium disabled:opacity-50"
+          >
+            {downloading ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                İndiriliyor...
+              </>
+            ) : (
+              <>
+                <BookOpen className="w-3.5 h-3.5" />
+                LLM Raporu İndir
               </>
             )}
           </button>
