@@ -902,6 +902,7 @@ async def generate_security_report(request: Dict[str, Any]):
         logger.info(f"✅ TOPLAM BULGU: {len(state.findings)}")
         
         # SONRA: RAG CVE sonuçlarını referans olarak ekle (sadece ilişkili CVE'ler)
+        logger.info(f"🔍 CVE Results: {cve_results}")
         for i, cve in enumerate(cve_results[:3], 1):  # En yakın 3 CVE
             # CVSS skorunu doğru çek
             cvss_score = cve.get('cvss_score') or cve.get('base_score') or cve.get('cvss') or cve.get('baseScore', 'N/A')
@@ -914,12 +915,15 @@ async def generate_security_report(request: Dict[str, Any]):
                     rag_service = get_rag_service()
                     if rag_service.is_available():
                         cve_id = cve.get('cve_id', f'CVE-{i}')
+                        logger.info(f"🔍 CVE ID için detay çekiliyor: {cve_id}")
                         cve_detail = rag_service.get_cve_by_id(cve_id)
                         if cve_detail:
                             description = cve_detail.description or f"{cve_id} güvenlik açığı tespit edildi"
                             cvss_score = cve_detail.base_score or cvss_score
+                            logger.info(f"✅ CVE detayı çekildi: {description[:100]}...")
                         else:
                             description = f"{cve_id} güvenlik açığı tespit edildi"
+                            logger.warning(f"⚠️ CVE detayı bulunamadı: {cve_id}")
                 except Exception as e:
                     logger.warning(f"CVE detayı çekilemedi: {e}")
                     description = f"{cve.get('cve_id', f'CVE-{i}')} güvenlik açığı tespit edildi"
