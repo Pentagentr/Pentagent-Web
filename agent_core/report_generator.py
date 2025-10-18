@@ -2406,6 +2406,304 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
             logger.error(f"AI rapor oluşturma hatası: {e}")
             return self._generate_fallback_ai_report(state, scan_results, cve_results)
 
+    def generate_llm_enhanced_report(self, findings: List[Dict[str, Any]], target: str, cve_results: List[Dict[str, Any]], tool_outputs: Dict[str, Any], scan_results: Dict[str, Any]) -> str:
+        """
+        LLM ile zenginleştirilmiş rapor oluştur - TÜM TOOL ÇIKTILARI İLE.
+        Web API'den çağrılır.
+        """
+        try:
+            logger.info("🤖 LLM ile gelişmiş markdown raporu oluşturuluyor...")
+            
+            # Tool çıktılarını metne çevir - DETAYLI
+            tool_outputs_text = ""
+            if tool_outputs:
+                tool_outputs_text = "## TOOL ÇIKTILARI:\n\n"
+                for tool_name, tool_data in tool_outputs.items():
+                    tool_outputs_text += f"\n### {tool_name}:\n"
+                    if isinstance(tool_data, dict):
+                        if tool_data.get('success'):
+                            data = tool_data.get('data', {})
+                            # AI Summary varsa ekle
+                            if tool_data.get('ai_summary'):
+                                tool_outputs_text += f"**AI Özeti:** {tool_data['ai_summary']}\n\n"
+                            
+                            # Data'yı özetleyerek ekle
+                            if isinstance(data, dict):
+                                tool_outputs_text += f"**Veri Noktaları:** {len(data)} key\n"
+                                tool_outputs_text += f"**Anahtarlar:** {', '.join(list(data.keys())[:10])}\n"
+                                
+                                # Önemli alanları detaylı göster
+                                important_keys = ['vulnerabilities', 'findings', 'technologies', 'open_ports', 
+                                                'subdomains', 'directories', 'endpoints', 'forms', 'parameters']
+                                for key in important_keys:
+                                    if key in data and data[key]:
+                                        value = data[key]
+                                        if isinstance(value, list):
+                                            tool_outputs_text += f"**{key}:** {len(value)} items\n"
+                                            # İlk 5 itemi göster
+                                            for item in value[:5]:
+                                                if isinstance(item, dict):
+                                                    item_str = ", ".join([f"{k}: {v}" for k, v in list(item.items())[:3]])
+                                                    tool_outputs_text += f"  - {item_str}\n"
+                                                else:
+                                                    tool_outputs_text += f"  - {str(item)[:100]}\n"
+                                        else:
+                                            tool_outputs_text += f"**{key}:** {str(value)[:200]}\n"
+                            tool_outputs_text += "\n"
+                        else:
+                            error = tool_data.get('error', 'Unknown error')
+                            tool_outputs_text += f"**Hata:** {error}\n\n"
+                    else:
+                        tool_outputs_text += f"{str(tool_data)[:300]}...\n\n"
+            else:
+                tool_outputs_text = "Tool çıktıları bulunamadı.\n"
+            
+            # Bulguları metne çevir
+            findings_text = ""
+            if findings:
+                findings_text = "## TESPİT EDİLEN BULGULAR:\n\n"
+                for i, finding in enumerate(findings, 1):
+                    findings_text += f"{i}. **{finding.get('title', 'Bilinmeyen Bulgu')}**\n"
+                    findings_text += f"   - Severity: {finding.get('severity', 'Unknown')}\n"
+                    findings_text += f"   - Açıklama: {finding.get('description', 'Açıklama yok')}\n"
+                    findings_text += f"   - Kanıt: {finding.get('evidence', 'Kanıt yok')[:200]}...\n"
+                    findings_text += f"   - Hedef: {finding.get('target', 'N/A')}\n"
+                    findings_text += f"   - CVE: {finding.get('cve_id', 'N/A')}\n"
+                    findings_text += f"   - CVSS: {finding.get('cvss_score', 'N/A')}\n\n"
+            else:
+                findings_text = "Bulgu tespit edilmedi.\n"
+            
+            # CVE'leri metne çevir
+            cve_text = ""
+            if cve_results:
+                cve_text = "## CVE REFERANSLARI:\n\n"
+                for i, cve in enumerate(cve_results[:10], 1):
+                    if isinstance(cve, dict):
+                        cve_text += f"{i}. **{cve.get('cve_id', 'N/A')}**\n"
+                        cve_text += f"   - Severity: {cve.get('severity', 'N/A')}\n"
+                        cve_text += f"   - CVSS: {cve.get('base_score') or cve.get('cvss_score', 'N/A')}\n"
+                        cve_text += f"   - Açıklama: {cve.get('description', 'N/A')[:300]}...\n"
+                        cve_text += f"   - Yayın Tarihi: {cve.get('published_date', 'N/A')}\n\n"
+            else:
+                cve_text = "CVE referansı bulunamadı.\n"
+            
+            # Unified LLM kullanarak rapor oluştur
+            from model_wrapper import UnifiedLLM
+            model = UnifiedLLM()
+            
+            prompt = f"""Sen profesyonel bir siber güvenlik uzmanı ve penetrasyon test raporlayıcısısın. 
+
+Aşağıdaki penetrasyon testi sonuçlarına dayanarak KAPSAMLI ve DETAYLI bir güvenlik raporu oluştur.
+
+**HEDEF SİSTEM:** {target}
+**TEST TARİHİ:** {datetime.now().strftime('%d.%m.%Y %H:%M')}
+
+{tool_outputs_text}
+
+{findings_text}
+
+{cve_text}
+
+**GÖREV:**
+Yukarıdaki tüm verileri analiz ederek profesyonel bir penetrasyon testi raporu oluştur. Rapor şu bölümleri içermeli:
+
+# PENETRASYON TESTİ RAPORU
+
+## 1. YÖNETİCİ ÖZETİ
+- Genel güvenlik durumu değerlendirmesi (teknik olmayan dil)
+- Risk seviyesi ve skor (0-100 arası)
+- En kritik 3 bulgu ve iş etkileri
+- Acil aksiyon gerektiren konular
+
+## 2. METODOLOJİ VE KAPSAM
+- Kullanılan test metodolojisi (OWASP, PTES, NIST SP 800-115)
+- Test kapsamı ve hedef sistem
+- Kullanılan araçlar ve teknikler (tool çıktılarından)
+- Test sınırlamaları
+
+## 3. DETAYLI TEKNİK BULGULAR
+Her bulgu için:
+- Bulgu başlığı ve ID
+- Severity (CRITICAL/HIGH/MEDIUM/LOW)
+- CVSS skoru (varsa)
+- Detaylı teknik açıklama
+- Kanıt (PoC, screenshot, log)
+- Etkilenen sistem/URL
+- Teknik risk analizi
+- İş etkisi analizi
+- OWASP kategorisi
+
+## 4. TOOL ÇIKTILARI VE ANALİZLER
+Çalıştırılan her tool için:
+- Tool adı ve amacı
+- Tespit edilen veri (teknolojiler, portlar, endpointler vb.)
+- Kritik bulgular
+- Güvenlik değerlendirmesi
+
+## 5. CVE ANALİZİ VE ZAFİYET MAPLEMESİ
+- İlişkili CVE'lerin detaylı analizi
+- CVSS skorları ve severity dağılımı
+- Exploit durumu ve güncellik
+- Zafiyet zincirleri ve saldırı senaryoları
+
+## 6. RİSK MATRİSİ VE PRİORİTİZASYON
+- Risk skoru ve dağılımı (kritik, yüksek, orta, düşük)
+- Bulguların önceliklendirmesi
+- Saldırı senaryoları ve zincir analizi
+
+## 7. ÖNERİLER VE ÇÖZÜMLER
+### 7.1 Acil Aksiyonlar (0-48 Saat)
+- Kritik bulguların giderilmesi
+- Detaylı çözüm adımları
+
+### 7.2 Kısa Vadeli (1-7 Gün)
+- Yüksek riskli bulguların giderilmesi
+- Güvenlik sıkılaştırma adımları
+
+### 7.3 Orta ve Uzun Vadeli Stratejik Öneriler
+- Sistem mimarisine yönelik öneriler
+- Güvenlik süreçleri ve politikalar
+- Compliance gereksinimleri
+
+## 8. SONUÇ VE GENEL DEĞERLENDİRME
+- Genel güvenlik postürü
+- Güçlü ve zayıf yönler
+- Compliance durumu (OWASP, PCI-DSS, ISO 27001)
+- İleriye dönük öneriler
+
+**ÖNEMLI:**
+- Rapor Türkçe olmalı
+- Teknik ve detaylı olmalı
+- Tool çıktılarından elde edilen TÜM önemli bilgileri kullan
+- Her bulgunun kanıt ve çözümü olmalı
+- Markdown formatında yaz
+- Profesyonel penetrasyon testi standardlarına uygun hazırla
+- En az 3000 kelime olmalı
+
+Şimdi profesyonel raporu oluştur:"""
+
+            # LLM'den rapor al
+            try:
+                import asyncio
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Event loop zaten çalışıyor - thread pool kullan
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as pool:
+                        response = pool.submit(
+                            asyncio.run,
+                            model.generate_content_async(prompt)
+                        ).result(timeout=120)  # 2 dakika timeout
+                else:
+                    # Event loop çalışmıyor - direkt çalıştır
+                    response = loop.run_until_complete(
+                        model.generate_content_async(prompt)
+                    )
+                
+                # Response'u string'e çevir
+                if isinstance(response, str):
+                    report = response
+                elif hasattr(response, 'text'):
+                    report = response.text
+                elif hasattr(response, 'get'):
+                    report = response.get('text', str(response))
+                else:
+                    report = str(response)
+                
+                logger.info(f"✅ LLM raporu oluşturuldu: {len(report)} karakter")
+                return report
+                
+            except Exception as e:
+                logger.error(f"LLM rapor oluşturma hatası: {e}")
+                # Fallback: template-based rapor
+                return self._generate_template_llm_report(findings, target, cve_results, tool_outputs)
+                
+        except Exception as e:
+            logger.error(f"LLM enhanced report hatası: {e}")
+            return self._generate_template_llm_report(findings, target, cve_results, tool_outputs)
+    
+    def _generate_template_llm_report(self, findings: List[Dict[str, Any]], target: str, cve_results: List[Dict[str, Any]], tool_outputs: Dict[str, Any]) -> str:
+        """Template-based fallback rapor"""
+        report_parts = []
+        
+        # Başlık
+        report_parts.append("# PENETRASYON TESTİ RAPORU")
+        report_parts.append("")
+        report_parts.append(f"**Hedef Sistem:** {target}")
+        report_parts.append(f"**Test Tarihi:** {datetime.now().strftime('%d.%m.%Y %H:%M')}")
+        report_parts.append(f"**Rapor ID:** PENTAGENT-{datetime.now().strftime('%Y%m%d%H%M%S')}")
+        report_parts.append("")
+        report_parts.append("---")
+        report_parts.append("")
+        
+        # Yönetici Özeti
+        report_parts.append("## 1. YÖNETİCİ ÖZETİ")
+        report_parts.append("")
+        findings_count = len(findings)
+        critical_count = len([f for f in findings if f.get('severity') == 'critical'])
+        high_count = len([f for f in findings if f.get('severity') == 'high'])
+        
+        if findings_count == 0:
+            report_parts.append("Bu güvenlik değerlendirmesi sonucunda kritik bir güvenlik açığına rastlanmamıştır.")
+        else:
+            report_parts.append(f"Bu penetrasyon testi sonucunda **{findings_count}** adet güvenlik bulgusu tespit edilmiştir.")
+            if critical_count > 0:
+                report_parts.append(f"- **{critical_count}** kritik seviyede bulgu")
+            if high_count > 0:
+                report_parts.append(f"- **{high_count}** yüksek seviyede bulgu")
+        
+        report_parts.append("")
+        
+        # Detaylı Bulgular
+        if findings:
+            report_parts.append("## 3. DETAYLI BULGULAR")
+            report_parts.append("")
+            
+            for i, finding in enumerate(findings, 1):
+                report_parts.append(f"### {i}. {finding.get('title', 'Bilinmeyen Bulgu')}")
+                report_parts.append(f"**Severity:** {finding.get('severity', 'Unknown').upper()}")
+                report_parts.append(f"**CVSS:** {finding.get('cvss_score', 'N/A')}")
+                report_parts.append(f"**Açıklama:** {finding.get('description', 'Açıklama yok')}")
+                report_parts.append(f"**Kanıt:**")
+                report_parts.append(f"```\n{finding.get('evidence', 'Kanıt yok')}\n```")
+                report_parts.append("")
+        
+        # Tool Çıktıları
+        if tool_outputs:
+            report_parts.append("## 4. TOOL ÇIKTILARI")
+            report_parts.append("")
+            
+            for tool_name, tool_data in list(tool_outputs.items())[:10]:  # İlk 10 tool
+                report_parts.append(f"### {tool_name}")
+                if isinstance(tool_data, dict):
+                    if tool_data.get('ai_summary'):
+                        report_parts.append(f"**Özet:** {tool_data['ai_summary']}")
+                    report_parts.append("")
+        
+        # CVE Analizi
+        if cve_results:
+            report_parts.append("## 5. CVE ANALİZİ")
+            report_parts.append("")
+            
+            for i, cve in enumerate(cve_results[:10], 1):
+                if isinstance(cve, dict):
+                    report_parts.append(f"### {i}. {cve.get('cve_id', 'N/A')}")
+                    report_parts.append(f"**Severity:** {cve.get('severity', 'N/A')}")
+                    report_parts.append(f"**CVSS:** {cve.get('base_score') or cve.get('cvss_score', 'N/A')}")
+                    report_parts.append(f"**Açıklama:** {cve.get('description', 'N/A')[:300]}...")
+                    report_parts.append("")
+        
+        # Öneriler
+        report_parts.append("## 7. ÖNERİLER VE ÇÖZÜMLER")
+        report_parts.append("")
+        
+        if critical_count > 0:
+            report_parts.append("### Acil Aksiyonlar (0-48 Saat)")
+            report_parts.append("- Kritik seviyedeki bulguların acil olarak giderilmesi")
+            report_parts.append("")
+        
+        return "\n".join(report_parts)
+    
     def _generate_fallback_ai_report(self, state: AgentState, scan_results: Dict[str, Any], cve_results: List[Dict[str, Any]]) -> str:
         """Fallback AI raporu - template-based"""
         try:

@@ -1424,6 +1424,50 @@ async def generate_security_report(request: Dict[str, Any]):
         logger.info(f"📊 Scan results keys: {list(scan_results.keys()) if isinstance(scan_results, dict) else 'Not dict'}")
         logger.info(f"📊 All tool outputs keys: {list(all_tool_outputs.keys())}")
         
+        # CVE detaylarını zenginleştir - RAG'dan tüm bilgileri çek
+        logger.info("🔍 CVE detayları zenginleştiriliyor...")
+        enriched_cve_findings = []
+        for cve in cve_findings:
+            cve_id = cve.get('cve_id')
+            if cve_id and cve_id != 'N/A':
+                try:
+                    # RAG'dan CVE detaylarını çek
+                    rag_service = get_rag_service()
+                    if rag_service.is_available():
+                        cve_detail = rag_service.get_cve_by_id(cve_id)
+                        if cve_detail:
+                            # CVE'yi zenginleştir
+                            enriched_cve = cve.copy()
+                            enriched_cve.update({
+                                'description': cve_detail.description or cve.get('description', ''),
+                                'base_score': cve_detail.base_score or cve.get('base_score') or cve.get('cvss_score'),
+                                'severity': cve_detail.severity or cve.get('severity'),
+                                'published_date': cve_detail.published_date,
+                                'modified_date': cve_detail.modified_date,
+                                'references': cve_detail.references or [],
+                                'cwe_id': cve_detail.cwe_id,
+                                'vendor': cve_detail.vendor,
+                                'product': cve_detail.product,
+                                'cvss_vector': cve_detail.cvss_vector,
+                                'exploitability_score': cve_detail.exploitability_score,
+                                'impact_score': cve_detail.impact_score,
+                                'attack_vector': cve_detail.attack_vector
+                            })
+                            enriched_cve_findings.append(enriched_cve)
+                            logger.info(f"✅ CVE zenginleştirildi: {cve_id}")
+                        else:
+                            enriched_cve_findings.append(cve)
+                            logger.warning(f"⚠️ CVE detayı bulunamadı: {cve_id}")
+                except Exception as e:
+                    logger.error(f"❌ CVE zenginleştirme hatası ({cve_id}): {e}")
+                    enriched_cve_findings.append(cve)
+            else:
+                enriched_cve_findings.append(cve)
+        
+        # Zenginleştirilmiş CVE'leri kullan
+        cve_findings = enriched_cve_findings
+        logger.info(f"✅ {len(enriched_cve_findings)} CVE zenginleştirildi")
+        
         # Eğer hiç bulgu yoksa, scan_results'tan tekrar parse et
         if len(state.findings) == 0:
             logger.warning("⚠️ Hiç bulgu bulunamadı, scan_results direkt parse ediliyor")
@@ -1529,12 +1573,33 @@ async def generate_security_report(request: Dict[str, Any]):
             }
         }
         
+        # CVE'leri zenginleştirilmiş şekilde structured_report'a ekle
+        enriched_cve_references = []
+        for cve in cve_findings:
+            enriched_cve_references.append({
+                "cve_id": cve.get("cve_id", "N/A"),
+                "cvss_skoru": cve.get("base_score") or cve.get("cvss_score", "N/A"),
+                "severity": cve.get("severity", "unknown"),
+                "aciklama": cve.get("description", ""),
+                "etkilenen_sistem": cve.get("product") or cve.get("technology") or cve.get("target", "N/A"),
+                "published_date": cve.get("published_date", "N/A"),
+                "modified_date": cve.get("modified_date", "N/A"),
+                "references": cve.get("references", []),
+                "cwe_id": cve.get("cwe_id", "N/A"),
+                "vendor": cve.get("vendor", "N/A"),
+                "cvss_vector": cve.get("cvss_vector", "N/A"),
+                "exploitability_score": cve.get("exploitability_score", "N/A"),
+                "impact_score": cve.get("impact_score", "N/A"),
+                "attack_vector": cve.get("attack_vector", "N/A")
+            })
+        
         # Structured report'a tool çıktılarını da ekle
         if structured_report:
             structured_report["all_tool_outputs"] = all_tool_outputs
             structured_report["execution_summary"] = enriched_data["execution_summary"]
             structured_report["findings"] = state.findings  # Bulguları ekle
-            structured_report["cve_results"] = cve_findings  # CVE'leri ekle
+            structured_report["cve_results"] = enriched_cve_references  # Zenginleştirilmiş CVE'leri ekle
+            structured_report["cve_references"] = enriched_cve_references  # CVE referanslarını da ekle
             structured_report["executive_summary"] = executive_summary  # Executive summary ekle
             
             # Frontend'in beklediği detailed_findings formatına çevir
@@ -1546,11 +1611,11 @@ async def generate_security_report(request: Dict[str, Any]):
                     "severity": finding.get("severity", "medium"),
                     "aciklama": finding.get("description", "Açıklama bulunamadı"),
                     "kanit": finding.get("evidence", "Kanıt bulunamadı"),
-                    "is_etkisi": finding.get("impact", "Etki analizi yapılamadı"),
-                    "cozum": finding.get("recommendation", "Çözüm önerisi bulunamadı"),
+                    "is_etkisi": finding.get("business_impact") or finding.get("impact", "Etki analizi yapılamadı"),
+                    "cozum": finding.get("recommendation_summary") or finding.get("recommendation", "Çözüm önerisi bulunamadı"),
                     "cvss_skoru": finding.get("cvss_score", "N/A"),
                     "cve_id": finding.get("cve_id", "N/A"),
-                    "hedef": finding.get("affected_component", state.target)
+                    "hedef": finding.get("target") or finding.get("affected_component", state.target)
                 })
             structured_report["detailed_findings"] = detailed_findings
         
