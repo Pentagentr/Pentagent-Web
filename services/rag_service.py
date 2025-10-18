@@ -203,8 +203,8 @@ class RAGService:
     
     async def _rerank_results(self, query: str, results: List[CVEResult]) -> List[CVEResult]:
         """
-        HuggingFace BAAI/bge-reranker-base ile sonuçları yeniden sırala.
-        403 hatası durumunda FALLBACK: Metin benzerliği ile sıralama
+        HuggingFace mixedbread-ai/mxbai-rerank-base-v1 ile sonuçları yeniden sırala.
+        Hata durumunda FALLBACK: Orijinal sıralama
         
         Args:
             query: Orijinal arama sorgusu
@@ -229,7 +229,7 @@ class RAGService:
         try:
             logger.info(f"🔄 Reranker başlatılıyor: {len(results)} sonuç sıralanacak")
             
-            # Query ve documents hazırla - BAAI/bge-reranker-base için optimize edilmiş format
+            # Query ve documents hazırla - mixedbread-ai/mxbai-rerank-base-v1 için optimize edilmiş format
             documents = []
             for r in results:
                 # CVE bilgilerini daha zengin format ile hazırla
@@ -246,7 +246,7 @@ class RAGService:
                 
                 documents.append(" | ".join(doc_parts))
             
-            logger.info(f"📝 {len(documents)} document BAAI/bge-reranker-base formatında hazırlandı")
+            logger.info(f"📝 {len(documents)} document reranker formatında hazırlandı")
             
             # RERANKER MODEL - Config'den al (BAAI/bge-reranker-base default)
             reranker_model = config.RERANKER_MODEL
@@ -267,17 +267,18 @@ class RAGService:
                 "Content-Type": "application/json"
             }
             
-            # BAAI/bge-reranker-base cross-encoder formatı kullanır
-            # Tüm reranker modelleri için standart cross-encoder formatı
-            pairs = [[query, doc] for doc in documents]
+            # mixedbread-ai/mxbai-rerank-base-v1 için özel format
             payload = {
-                "inputs": pairs,
+                "inputs": {
+                    "query": query,
+                    "documents": documents
+                },
                 "options": {
                     "wait_for_model": True,
                     "use_cache": False
                 }
             }
-            logger.info(f"🎯 Cross-encoder formatı kullanılıyor: {reranker_model}")
+            logger.info(f"🎯 Reranker formatı kullanılıyor: {reranker_model}")
             
             # Log için document sayısını al
             doc_count = len(documents)
@@ -312,11 +313,25 @@ class RAGService:
                         logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
                         return results  # Fallback: orijinal sıralama
                     
-                    rerank_scores = await response.json()
-                    logger.info(f"✅ Reranker yanıtı alındı: {type(rerank_scores)}")
+                    rerank_response = await response.json()
+                    logger.info(f"✅ Reranker yanıtı alındı: {type(rerank_response)}")
                     
-                    # Cross-encoder array of floats döndürür: [0.85, 0.72, 0.91, ...]
-                    if isinstance(rerank_scores, list) and len(rerank_scores) == len(results):
+                    # mixedbread-ai/mxbai-rerank-base-v1 array of scores döndürür veya dict
+                    # Response formatı: [{"score": 0.85}, {"score": 0.72}, ...] veya [0.85, 0.72, ...]
+                    rerank_scores = []
+                    if isinstance(rerank_response, list):
+                        for item in rerank_response:
+                            if isinstance(item, dict) and 'score' in item:
+                                rerank_scores.append(item['score'])
+                            elif isinstance(item, (int, float)):
+                                rerank_scores.append(item)
+                            else:
+                                rerank_scores.append(0.5)  # fallback
+                    else:
+                        logger.warning(f"⚠️ Beklenmeyen reranker response formatı: {type(rerank_response)}")
+                        return results
+                    
+                    if len(rerank_scores) == len(results):
                         # Sonuçları rerank skoruna göre sırala
                         reranked = []
                         for idx, score in enumerate(rerank_scores):
@@ -326,15 +341,13 @@ class RAGService:
                             # Rerank score normalize et (0-1 arası)
                             rerank_score = float(score) if isinstance(score, (int, float)) else 0.5
                             
-                            # BAAI/bge-reranker-base için score scaling - daha agresif
-                            # Cross-encoder skorları genelde -10 ile +10 arası
-                            # Sigmoid ile 0-1 arası normalize et
-                            import math
-                            normalized_rerank = 1 / (1 + math.exp(-rerank_score))
+                            # mixedbread-ai/mxbai-rerank-base-v1 zaten 0-1 arası skor verir
+                            # Sigmoid'e gerek yok, direkt kullan
+                            normalized_rerank = max(0.0, min(1.0, rerank_score))  # Clamp 0-1
                             
-                            # Combined score: %95 rerank (normalized), %5 original
+                            # Combined score: %90 rerank, %10 original
                             # Rerank'e daha fazla ağırlık veriyoruz çünkü çok daha doğru
-                            combined_score = (original_score * 0.05) + (normalized_rerank * 0.95)
+                            combined_score = (original_score * 0.10) + (normalized_rerank * 0.90)
                             
                             # Score'u update et - frontend'de görünsün
                             cve.score = combined_score
@@ -427,9 +440,19 @@ class RAGService:
             else:
                 logger.info(f"🎯 Reranker devre dışı - {limit} sonuç döndürülecek")
             
-            # Severity filtresi varsa
+            # Severity filtresi varsa - Qdrant filter kullan
             if severity:
-                results = self._engine.search_by_severity(
+                # Severity filter için Qdrant match condition kullan
+                from qdrant_client.models import Filter, FieldCondition, MatchValue
+                severity_filter = Filter(
+                    must=[
+                        FieldCondition(
+                            key="severity",
+                            match=MatchValue(value=severity.upper())
+                        )
+                    ]
+                )
+                results = self._engine.search(
                     query=query,
                     severity=severity,
                     limit=fetch_limit

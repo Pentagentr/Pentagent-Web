@@ -1489,8 +1489,69 @@ async def generate_security_report(request: Dict[str, Any]):
                             
                             # Tool data içinden bulgu oluştur - DETAYLI
                             if isinstance(tool_data, dict) and tool_data:
-                                # Teknoloji tespit edildi mi?
-                                if 'technologies' in tool_data and tool_data['technologies']:
+                                # Directory bruteforce findings (high, critical, informational)
+                                if 'findings' in tool_data and isinstance(tool_data['findings'], dict):
+                                    dir_findings = tool_data['findings']
+                                    
+                                    # Critical directories
+                                    if dir_findings.get('critical'):
+                                        for item in dir_findings['critical']:
+                                                    finding = {
+                                                        'title': f'Kritik Dizin: {item.get("path", "N/A")}',
+                                                        'severity': 'critical',
+                                                        'description': f'Kritik dizin tespit edildi: {item.get("path")} ({item.get("status_code")})',
+                                                        'cvss_score': '9.0',
+                                                        'cve_id': None,
+                                                        'evidence': f'URL: {item.get("url")}, Status: {item.get("status_code")}, Size: {item.get("content_length")}',
+                                                        'recommendation_summary': 'Kritik dizinlere erişimi kısıtlayın',
+                                                        'business_impact': 'Hassas bilgilere yetkisiz erişim riski',
+                                                        'exploitability': 'High',
+                                                        'target': item.get("url", target),
+                                                        'technology': 'Web Server'
+                                                    }
+                                                    state.findings.append(finding)
+                                                    logger.info(f"🔍 CRITICAL dizin bulgusu: {item.get('path')}")
+                                            
+                                            # High risk directories (admin, config, etc.)
+                                            if dir_findings.get('high'):
+                                                for item in dir_findings['high']:
+                                                    finding = {
+                                                        'title': f'Yüksek Riskli Dizin: {item.get("path", "N/A")}',
+                                                        'severity': 'high',
+                                                        'description': f'Yüksek riskli dizin tespit edildi: {item.get("path")} ({item.get("status_code")})',
+                                                        'cvss_score': '7.5',
+                                                        'cve_id': None,
+                                                        'evidence': f'URL: {item.get("url")}, Status: {item.get("status_code")}, Size: {item.get("content_length")}',
+                                                        'recommendation_summary': 'Hassas dizinleri koruyun ve erişim kontrolü ekleyin',
+                                                        'business_impact': 'Hassas dosya ve dizinlere erişim riski',
+                                                        'exploitability': 'High',
+                                                        'target': item.get("url", target),
+                                                        'technology': 'Web Server'
+                                                    }
+                                                    state.findings.append(finding)
+                                                    logger.info(f"🔍 HIGH dizin bulgusu: {item.get('path')}")
+                                            
+                                            # Informational directories
+                                            if dir_findings.get('informational'):
+                                                info_count = len(dir_findings['informational'])
+                                                finding = {
+                                                    'title': f'Bilgilendirici Dizinler: {info_count} dizin bulundu',
+                                                    'severity': 'info',
+                                                    'description': f'{info_count} bilgilendirici dizin tespit edildi',
+                                                    'cvss_score': 'N/A',
+                                                    'cve_id': None,
+                                                    'evidence': f'Directories: {[d.get("path") for d in dir_findings["informational"][:5]]}',
+                                                    'recommendation_summary': 'Dizin listelerini kontrol edin',
+                                                    'business_impact': 'Sistem yapısı hakkında bilgi sızıntısı',
+                                                    'exploitability': 'Low',
+                                                    'target': target,
+                                                    'technology': 'Web Server'
+                                                }
+                                                state.findings.append(finding)
+                                                logger.info(f"🔍 INFO dizin bulgusu: {info_count} dizin")
+                                        
+                                        # Teknoloji tespit edildi mi?
+                                        if 'technologies' in tool_data and tool_data['technologies']:
                                     tech_list = tool_data['technologies']
                                     tech_count = len(tech_list) if isinstance(tech_list, list) else 0
                                     if tech_count > 0:
