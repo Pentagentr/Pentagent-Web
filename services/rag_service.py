@@ -342,12 +342,14 @@ class RAGService:
                             rerank_score = float(score) if isinstance(score, (int, float)) else 0.5
                             
                             # mixedbread-ai/mxbai-rerank-base-v1 zaten 0-1 arası skor verir
-                            # Sigmoid'e gerek yok, direkt kullan
-                            normalized_rerank = max(0.0, min(1.0, rerank_score))  # Clamp 0-1
+                            # Ama genelde düşük skorlar veriyor (0.01-0.3 arası), scale up yapıyoruz
+                            # Score'u 10x yapıp clamp ediyoruz
+                            boosted_score = min(1.0, rerank_score * 10.0)  # 10x boost, max 1.0
+                            normalized_rerank = max(0.0, boosted_score)
                             
-                            # Combined score: %90 rerank, %10 original
-                            # Rerank'e daha fazla ağırlık veriyoruz çünkü çok daha doğru
-                            combined_score = (original_score * 0.10) + (normalized_rerank * 0.90)
+                            # Combined score: %85 rerank (boosted), %15 original
+                            # Boosted reranker score ile daha yüksek skorlar
+                            combined_score = (original_score * 0.15) + (normalized_rerank * 0.85)
                             
                             # Score'u update et - frontend'de görünsün
                             cve.score = combined_score

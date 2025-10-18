@@ -1550,6 +1550,66 @@ async def generate_security_report(request: Dict[str, Any]):
                                         state.findings.append(finding)
                                         logger.info(f"🔍 INFO dizin bulgusu: {info_count} dizin")
                                 
+                                # API Endpoints tespit edildi mi?
+                                if 'discovered_endpoints' in tool_data and tool_data['discovered_endpoints']:
+                                    endpoints = tool_data['discovered_endpoints']
+                                    endpoint_count = len(endpoints) if isinstance(endpoints, list) else 0
+                                    
+                                    # Yüksek riskli endpoint'leri say (ai_risk_score >= 5)
+                                    high_risk_endpoints = [e for e in endpoints if isinstance(e, dict) and e.get('ai_risk_score', 0) >= 5]
+                                    high_risk_count = len(high_risk_endpoints)
+                                    
+                                    if endpoint_count > 0:
+                                        severity = 'high' if high_risk_count > 0 else 'medium' if endpoint_count >= 10 else 'low'
+                                        cvss = '7.5' if high_risk_count > 0 else '5.0' if endpoint_count >= 10 else '3.0'
+                                        
+                                        finding = {
+                                            'title': f'API Endpoint Keşfi: {endpoint_count} endpoint bulundu ({high_risk_count} yüksek riskli)',
+                                            'severity': severity,
+                                            'description': f'{endpoint_count} API endpoint tespit edildi. {high_risk_count} tanesi yüksek riskli olarak işaretlendi.',
+                                            'cvss_score': cvss,
+                                            'cve_id': None,
+                                            'evidence': f'Endpoints: {[e.get("url") for e in endpoints[:5]]}, High risk: {[e.get("url") for e in high_risk_endpoints[:3]]}',
+                                            'recommendation_summary': 'Yüksek riskli API endpoint'leri authentication ve authorization kontrollerine tabi tutun',
+                                            'business_impact': 'API endpoint'ler unauthorized access riski taşıyor',
+                                            'exploitability': 'High' if high_risk_count > 0 else 'Medium',
+                                            'target': target,
+                                            'technology': 'API'
+                                        }
+                                        state.findings.append(finding)
+                                        logger.info(f"🔍 API Endpoint bulgusu eklendi: {endpoint_count} endpoint ({high_risk_count} yüksek riskli)")
+                                
+                                # Web Crawler sonuçları (pages, paths, forms)
+                                if any(k in tool_data for k in ['pages', 'paths', 'forms']):
+                                    pages = tool_data.get('pages', [])
+                                    paths = tool_data.get('paths', [])
+                                    forms = tool_data.get('forms', [])
+                                    
+                                    page_count = len(pages) if isinstance(pages, list) else 0
+                                    path_count = len(paths) if isinstance(paths, list) else 0
+                                    form_count = len(forms) if isinstance(forms, list) else 0
+                                    
+                                    if page_count > 0 or path_count > 0 or form_count > 0:
+                                        # Risk seviyesi belirleme
+                                        severity = 'high' if form_count >= 5 or path_count >= 15 else 'medium' if form_count >= 3 or path_count >= 10 else 'low'
+                                        cvss = '7.0' if form_count >= 5 else '5.5' if form_count >= 3 else '4.0'
+                                        
+                                        finding = {
+                                            'title': f'Web Crawling Sonuçları: {page_count} sayfa, {path_count} yol, {form_count} form',
+                                            'severity': severity,
+                                            'description': f'Site taramasında {page_count} sayfa analiz edildi, {path_count} yol ve {form_count} form tespit edildi. Saldırı yüzeyi geniş.',
+                                            'cvss_score': cvss,
+                                            'cve_id': None,
+                                            'evidence': f'Pages: {page_count}, Paths: {path_count}, Forms: {form_count}',
+                                            'recommendation_summary': f'Formları input validation ile koruyun. {form_count} form injection saldırılarına açık olabilir.',
+                                            'business_impact': f'{form_count} form ve {path_count} yol saldırı yüzeyini artırıyor',
+                                            'exploitability': 'High' if form_count >= 5 else 'Medium',
+                                            'target': target,
+                                            'technology': 'Web Application'
+                                        }
+                                        state.findings.append(finding)
+                                        logger.info(f"🔍 Web Crawler bulgusu eklendi: {page_count} sayfa, {path_count} yol, {form_count} form")
+                                
                                 # Teknoloji tespit edildi mi?
                                 if 'technologies' in tool_data and tool_data['technologies']:
                                     tech_list = tool_data['technologies']

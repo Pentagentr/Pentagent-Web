@@ -2051,7 +2051,8 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
                 findings=state.findings,
                 target=state.target,
                 cve_results=cve_results,
-                tool_outputs=tool_outputs
+                tool_outputs=tool_outputs,
+                scan_results=enriched_data  # scan_results parametresi eklendi
             )
             
             return llm_report
