@@ -267,12 +267,10 @@ class RAGService:
                 "Content-Type": "application/json"
             }
             
-            # mixedbread-ai/mxbai-rerank-base-v1 için özel format
+            # mixedbread-ai/mxbai-rerank-base-v1 için DOĞRU format (inputs sarmalamaya gerek yok)
             payload = {
-                "inputs": {
-                    "query": query,
-                    "documents": documents
-                },
+                "query": query,
+                "documents": documents,
                 "options": {
                     "wait_for_model": True,
                     "use_cache": False

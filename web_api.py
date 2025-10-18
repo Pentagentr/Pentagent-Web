@@ -1570,8 +1570,8 @@ async def generate_security_report(request: Dict[str, Any]):
                                             'cvss_score': cvss,
                                             'cve_id': None,
                                             'evidence': f'Endpoints: {[e.get("url") for e in endpoints[:5]]}, High risk: {[e.get("url") for e in high_risk_endpoints[:3]]}',
-                                            'recommendation_summary': 'Yüksek riskli API endpoint'leri authentication ve authorization kontrollerine tabi tutun',
-                                            'business_impact': 'API endpoint'ler unauthorized access riski taşıyor',
+                                            'recommendation_summary': 'Yüksek riskli API endpointleri authentication ve authorization kontrollerine tabi tutun',
+                                            'business_impact': 'API endpointler unauthorized access riski taşıyor',
                                             'exploitability': 'High' if high_risk_count > 0 else 'Medium',
                                             'target': target,
                                             'technology': 'API'
