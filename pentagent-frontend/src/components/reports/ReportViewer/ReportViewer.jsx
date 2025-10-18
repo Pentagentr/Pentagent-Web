@@ -880,7 +880,7 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
                       <div className="flex flex-wrap gap-1">
                         {toolOutput.data.technologies.slice(0, 10).map((tech, techIndex) => (
                           <span key={techIndex} className="px-2 py-1 bg-platinum-500/10 text-platinum-400 rounded text-xs">
-                            {tech}
+                            {typeof tech === 'object' ? (tech.name || tech.technology || JSON.stringify(tech)) : tech}
                           </span>
                         ))}
                       </div>
@@ -917,12 +917,34 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
                   {toolOutput.data.open_ports && toolOutput.data.open_ports.length > 0 && (
                     <div>
                       <div className="text-xs text-text-tertiary mb-1">Açık Portlar</div>
-                      <div className="flex flex-wrap gap-1">
-                        {toolOutput.data.open_ports.slice(0, 10).map((port, portIndex) => (
-                          <span key={portIndex} className="px-2 py-1 bg-amber-500/10 text-amber-400 rounded text-xs">
-                            {port}
-                          </span>
-                        ))}
+                      <div className="grid grid-cols-2 gap-2">
+                        {toolOutput.data.open_ports.slice(0, 10).map((port, portIndex) => {
+                          // Port obje ise detaylı göster
+                          if (typeof port === 'object' && port !== null) {
+                            return (
+                              <div key={portIndex} className="bg-obsidian-950 p-2 rounded">
+                                <div className="text-xs font-medium text-amber-400">
+                                  Port: {port.port || 'N/A'}
+                                </div>
+                                {port.service && (
+                                  <div className="text-xs text-text-tertiary">Service: {port.service}</div>
+                                )}
+                                {port.product && (
+                                  <div className="text-xs text-text-tertiary">Product: {port.product}</div>
+                                )}
+                                {port.version && (
+                                  <div className="text-xs text-text-tertiary">Version: {port.version}</div>
+                                )}
+                              </div>
+                            );
+                          }
+                          // Port string/number ise basit göster
+                          return (
+                            <span key={portIndex} className="px-2 py-1 bg-amber-500/10 text-amber-400 rounded text-xs">
+                              {port}
+                            </span>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -1131,9 +1153,9 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex bg-obsidian-950 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex bg-obsidian-950">
       {/* Sidebar */}
-      <div className="w-64 bg-obsidian-900 border-r border-platinum-500/10 flex flex-col overflow-hidden">
+      <div className="w-64 bg-obsidian-900 border-r border-platinum-500/10 flex flex-col flex-shrink-0">
         <div className="p-4 border-b border-platinum-500/10 flex-shrink-0">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-text-primary">Rapor</h2>
@@ -1220,20 +1242,20 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
       </div>
       
       {/* Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="h-12 bg-obsidian-900 border-b border-platinum-500/10 flex items-center justify-between px-6">
+      <div className="flex-1 flex flex-col min-w-0">
+        <div className="h-12 bg-obsidian-900 border-b border-platinum-500/10 flex items-center justify-between px-6 flex-shrink-0">
           <h3 className="text-sm font-semibold text-text-primary">
             {sections.find(s => s.id === currentSection)?.title}
           </h3>
         </div>
         
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-6">
           <div className="max-w-4xl mx-auto">
             {renderCurrentSection()}
           </div>
         </div>
         
-        <div className="h-12 bg-obsidian-900 border-t border-platinum-500/10 flex items-center justify-between px-6">
+        <div className="h-12 bg-obsidian-900 border-t border-platinum-500/10 flex items-center justify-between px-6 flex-shrink-0">
           <button
             onClick={() => {
               const currentIndex = sections.findIndex(s => s.id === currentSection);

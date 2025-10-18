@@ -1643,11 +1643,28 @@ async def generate_security_report(request: Dict[str, Any]):
                 state.findings.append(finding)
                 logger.info("🔍 Minimum bulgu eklendi")
         
-        # all_findings'i güncelle
-        all_findings = state.findings
+        # all_findings'i güncelle - CVE bulgularını da ekle
+        all_findings = state.findings.copy()
+        
+        # CVE bulgularını all_findings'e ekle - risk hesaplaması için
+        for cve in cve_findings:
+            if cve.get('cve_id') and cve.get('cve_id') != 'N/A':
+                # CVE'yi bulgu formatında ekle
+                cve_finding = {
+                    'title': f"CVE: {cve.get('cve_id')}",
+                    'severity': cve.get('severity', 'medium').lower(),
+                    'description': cve.get('description', 'CVE bulgusu'),
+                    'cvss_score': cve.get('base_score') or cve.get('cvss_score', 'N/A'),
+                    'cve_id': cve.get('cve_id'),
+                    'evidence': f"CVE database reference: {cve.get('cve_id')}",
+                    'target': target,
+                    'technology': cve.get('product') or cve.get('technology', 'N/A')
+                }
+                all_findings.append(cve_finding)
+                logger.info(f"🔍 CVE bulgusu risk hesaplamasına eklendi: {cve.get('cve_id')} (CVSS: {cve_finding['cvss_score']}, Severity: {cve_finding['severity']})")
         
         risk_score = report_gen._calculate_risk_score(all_findings)
-        logger.info(f"📊 Hesaplanan risk skoru: {risk_score}")
+        logger.info(f"📊 Hesaplanan risk skoru (CVE'ler dahil): {risk_score} (Toplam bulgu: {len(all_findings)})")
         
         # Vulnerabilities objesini oluştur (frontend için)
         vulnerabilities = {
@@ -1732,6 +1749,8 @@ async def generate_security_report(request: Dict[str, Any]):
             structured_report["cve_results"] = enriched_cve_references  # Zenginleştirilmiş CVE'leri ekle
             structured_report["cve_references"] = enriched_cve_references  # CVE referanslarını da ekle
             structured_report["executive_summary"] = executive_summary  # Executive summary ekle
+            structured_report["risk_score"] = risk_score  # Risk skoru ekle - KRİTİK!
+            structured_report["vulnerabilities"] = vulnerabilities  # Vulnerabilities ekle - KRİTİK!
             
             # Frontend'in beklediği detailed_findings formatına çevir
             detailed_findings = []

@@ -2491,9 +2491,9 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
             from model_wrapper import UnifiedLLM
             model = UnifiedLLM()
             
-            prompt = f"""Sen profesyonel bir siber güvenlik uzmanı ve penetrasyon test raporlayıcısısın. 
+            prompt = f"""Sen PROFESYONEL bir siber güvenlik uzmanı ve penetrasyon test raporlayıcısısın. 
 
-Aşağıdaki penetrasyon testi sonuçlarına dayanarak KAPSAMLI ve DETAYLI bir güvenlik raporu oluştur.
+🔴 ÖNEMLİ: Aşağıdaki TOOL ÇIKTILARI çok önemlidir. Raporunda MUTLAKA bu tool çıktılarından elde edilen bilgileri kullanmalısın!
 
 **HEDEF SİSTEM:** {target}
 **TEST TARİHİ:** {datetime.now().strftime('%d.%m.%Y %H:%M')}
@@ -2505,7 +2505,17 @@ Aşağıdaki penetrasyon testi sonuçlarına dayanarak KAPSAMLI ve DETAYLI bir g
 {cve_text}
 
 **GÖREV:**
-Yukarıdaki tüm verileri analiz ederek profesyonel bir penetrasyon testi raporu oluştur. Rapor şu bölümleri içermeli:
+Yukarıdaki TÜM VERİLERİ (özellikle TOOL ÇIKTILARINI) analiz ederek profesyonel bir penetrasyon testi raporu oluştur. 
+
+🎯 ÖNEMLİ TALİMATLAR:
+1. Tool çıktılarındaki teknolojileri, portları, endpointleri, formları, subdomainleri, dizinleri ve diğer tüm bilgileri raporda kullan
+2. Eğer tool çıktılarında 20+ endpoint varsa, bu YÜKSEK RİSK olarak değerlendir
+3. Eğer tool çıktılarında 10+ form varsa, bu YÜKSEK INJECTİON RİSKİ olarak değerlendir
+4. Eğer tool çıktılarında kritik portlar (22, 3389, 21, 23) açıksa, bu KRİTİK RİSK olarak değerlendir
+5. Tool çıktılarındaki TÜM bilgileri risk hesaplamasına dahil et
+6. Her tool çıktısını detaylı şekilde raporunda açıkla
+
+Rapor şu bölümleri içermeli:
 
 # PENETRASYON TESTİ RAPORU
 
@@ -2533,12 +2543,16 @@ Her bulgu için:
 - İş etkisi analizi
 - OWASP kategorisi
 
-## 4. TOOL ÇIKTILARI VE ANALİZLER
+## 4. TOOL ÇIKTILARI VE ANALİZLER (ÇOK ÖNEMLİ!)
+🔴 TOOL ÇIKTILARINI MUTLAKA DETAYLI ŞEKİLDE RAPORLA!
 Çalıştırılan her tool için:
 - Tool adı ve amacı
-- Tespit edilen veri (teknolojiler, portlar, endpointler vb.)
-- Kritik bulgular
-- Güvenlik değerlendirmesi
+- Tespit edilen veri (teknolojiler, portlar, endpointler vb.) - HERBİRİNİ DETAYLI YAZ
+- Kritik bulgular - NEDEN KRİTİK OLDUĞUNU AÇIKLA
+- Güvenlik değerlendirmesi - RİSK ANALİZİ YAP
+- Endpoint sayısı fazla ise (20+), bu YÜKSEKRİSK olarak değerlendir
+- Form sayısı fazla ise (10+), bu INJECTİON RİSKİ olarak değerlendir
+- Açık portlar kritik ise (22, 3389, 21, 23), bu KRİTİK RİSK olarak değerlendir
 
 ## 5. CVE ANALİZİ VE ZAFİYET MAPLEMESİ
 - İlişkili CVE'lerin detaylı analizi
@@ -2571,16 +2585,19 @@ Her bulgu için:
 - Compliance durumu (OWASP, PCI-DSS, ISO 27001)
 - İleriye dönük öneriler
 
-**ÖNEMLI:**
+**KRİTİK ÖNEMDE:**
 - Rapor Türkçe olmalı
 - Teknik ve detaylı olmalı
-- Tool çıktılarından elde edilen TÜM önemli bilgileri kullan
+- 🔴 TOOL ÇIKTILARINI MUTLAKA KULLAN! Endpoint sayısı, form sayısı, port sayısı, teknoloji sayısı gibi bilgileri raporda açıkça belirt
+- 🔴 Tool çıktılarındaki risk göstergelerini (fazla endpoint, fazla form, kritik portlar) risk değerlendirmesine dahil et
+- 🔴 Eğer tool çıktılarında 20+ endpoint, 10+ form, kritik portlar varsa, risk skorunu yükselt ve raporunda belirt
 - Her bulgunun kanıt ve çözümü olmalı
 - Markdown formatında yaz
 - Profesyonel penetrasyon testi standardlarına uygun hazırla
 - En az 3000 kelime olmalı
+- Risk skorunu tool çıktılarına göre hesapla
 
-Şimdi profesyonel raporu oluştur:"""
+Şimdi profesyonel raporu oluştur ve TOOL ÇIKTILARINI MUTLAKA DİKKATE AL:"""
 
             # LLM'den rapor al
             try:
