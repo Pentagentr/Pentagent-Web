@@ -27,7 +27,6 @@ const CVEModal = ({ cve, onClose }) => {
   const description = cve.description || cve.summary || 'No description available';
   const severity = cve.severity || 'UNKNOWN';
   const baseScore = cve.base_score || cve.cvss_score || null;
-  const matchScore = cve.score || null; // Arama match skoru
   const references = cve.references || cve.refs || cve.metadata?.references || [];
   const publishedDate = cve.published || cve.published_date || cve.metadata?.published_date || null;
   const modifiedDate = cve.modified || cve.modified_date || cve.metadata?.modified_date || null;

@@ -28,7 +28,7 @@ const CVECard = ({ cve }) => {
   const cveId = typeof cve === 'string' ? cve : cve.cve_id || cve.id;
   const description = cve.description || cve.summary || '';
   const severity = cve.severity || 'UNKNOWN';
-  const score = cve.score || cve.cvss_score || 'N/A';
+  const score = cve.base_score || cve.cvss_score || 'N/A';
   const references = cve.references || cve.refs || [];
 
   return (

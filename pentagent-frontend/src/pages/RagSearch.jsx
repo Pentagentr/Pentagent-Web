@@ -242,9 +242,6 @@ const RagSearch = () => {
                     </div>
                     
                     <div className="text-right">
-                      <div className="text-xs font-medium text-purple-400">
-                        {(result.score * 100).toFixed(0)}%
-                      </div>
                       {result.published_date && (
                         <div className="flex items-center gap-1 text-[10px] text-text-tertiary mt-1">
                           <Calendar className="w-3 h-3" />

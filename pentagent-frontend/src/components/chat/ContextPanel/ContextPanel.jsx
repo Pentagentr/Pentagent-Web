@@ -305,9 +305,6 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
                             )}
                           </div>
                         </div>
-                        <div className="text-xs text-purple-400 font-medium">
-                          {(cve.score * 100).toFixed(0)}%
-                        </div>
                       </div>
 
                       {/* Description */}

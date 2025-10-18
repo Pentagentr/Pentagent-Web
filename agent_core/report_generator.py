@@ -49,145 +49,150 @@ class ReportGenerator:
     # ==========================================================================
 
     def _calculate_risk_score(self, findings: List[Dict[str, Any]]) -> int:
-        """Bulgulara dayalı olarak 100 üzerinden dinamik risk skoru hesaplar - Web güvenlik odaklı."""
+        """
+        TOOL ÇIKTILARINA DAYALI DİNAMİK RİSK SKORU HESAPLAMA
+        Her tool çıktısı için belirli skorlar, severity'ye göre weighted scoring
+        """
         if not findings:
             return 0
         
-        # Bulgu sayısına göre temel skor
-        total_findings = len(findings)
-        base_score = 0
+        total_score = 0
         
-        # Web güvenlik odaklı skorlama
-        if total_findings >= 30:
-            base_score = 85  # Çok fazla bulgu = kritik risk
-        elif total_findings >= 20:
-            base_score = 75  # Fazla bulgu = yüksek risk
-        elif total_findings >= 15:
-            base_score = 65  # Orta-yüksek bulgu = yüksek risk
-        elif total_findings >= 10:
-            base_score = 50  # Orta bulgu = orta risk
-        elif total_findings >= 5:
-            base_score = 35  # Az bulgu = düşük-orta risk
-        else:
-            base_score = 20  # Minimal bulgu = düşük risk
-        
-        # Bulgu türlerine göre agresif bonus
-        endpoint_count = 0
-        form_count = 0
-        vulnerability_count = 0
-        critical_path_count = 0
-        
-        for finding in findings:
-            title = finding.get('title', '').lower()
-            description = finding.get('description', '').lower()
-            
-            # Endpoint sayısını say
-            if 'endpoint' in title or 'sayfa' in title or 'page' in title or 'url' in title:
-                endpoint_count += 1
-                
-                # Kritik endpoint'ler için ekstra puan
-                if any(keyword in title for keyword in ['login', 'admin', 'auth', 'api', 'user', 'cart', 'signup']):
-                    critical_path_count += 1
-            
-            # Form sayısını say
-            elif 'form' in title or 'form' in description:
-                form_count += 1
-            
-            # Zafiyet sayısını say
-            elif any(keyword in title for keyword in ['vulnerability', 'exploit', 'injection', 'xss', 'sql', 'lfi', 'rfi']):
-                vulnerability_count += 1
-        
-        # Endpoint bazlı risk artırma - ARTTIRILDI (Tool bulgularına daha fazla ağırlık)
-        if endpoint_count >= 20:
-            base_score += 25  # Çok fazla endpoint = kritik risk (20→25)
-        elif endpoint_count >= 15:
-            base_score += 18  # Fazla endpoint = yüksek risk (15→18)
-        elif endpoint_count >= 10:
-            base_score += 12  # Orta endpoint = orta risk (10→12)
-        elif endpoint_count >= 2:
-            base_score += 6   # Az endpoint = düşük risk (5→6)
-        
-        # Kritik endpoint'ler için ekstra bonus - ARTTIRILDI
-        if critical_path_count >= 5:
-            base_score += 20  # Çok kritik endpoint (15→20)
-        elif critical_path_count >= 3:
-            base_score += 12  # Orta kritik endpoint (10→12)
-        elif critical_path_count >= 1:
-            base_score += 6   # Az kritik endpoint (5→6)
-        
-        # Form sayısına göre risk artırma - ARTTIRILDI
-        if form_count >= 10:
-            base_score += 20  # Çok fazla form = yüksek risk (15→20)
-        elif form_count >= 5:
-            base_score += 12  # Fazla form = orta risk (10→12)
-        elif form_count >= 3:
-            base_score += 6   # Az form = düşük risk (5→6)
-        
-        # Zafiyet sayısına göre risk artırma
-        if vulnerability_count >= 5:
-            base_score += 25  # Çok fazla zafiyet = kritik risk
-        elif vulnerability_count >= 3:
-            base_score += 15  # Fazla zafiyet = yüksek risk
-        elif vulnerability_count >= 1:
-            base_score += 10  # Az zafiyet = orta risk
-        
-        # Severity dağılımına göre bonus
-        severity_counts = {
-            'critical': len([f for f in findings if f.get('severity') == 'critical']),
-            'high': len([f for f in findings if f.get('severity') == 'high']),
-            'medium': len([f for f in findings if f.get('severity') == 'medium']),
-            'low': len([f for f in findings if f.get('severity') == 'low']),
-            'info': len([f for f in findings if f.get('severity') == 'info'])
+        # 1. SEVERITY BAZLI SKORLAMA (EN YÜKSEK ÖNCELİK)
+        severity_weights = {
+            'critical': 15,  # Her kritik bulgu +15
+            'high': 10,      # Her yüksek bulgu +10
+            'medium': 5,     # Her orta bulgu +5
+            'low': 2,        # Her düşük bulgu +2
+            'info': 1        # Her info bulgu +1
         }
         
-        # Kritik bulgular varsa skor artır
-        if severity_counts['critical'] > 0:
-            base_score += min(severity_counts['critical'] * 8, 25)  # Kritik bulgu başına +8, max +25
-        
-        # Yüksek bulgular varsa skor artır
-        if severity_counts['high'] > 0:
-            base_score += min(severity_counts['high'] * 5, 20)  # Yüksek bulgu başına +5, max +20
-        
-        # CVE'li bulgular varsa ekstra bonus - AZALTILDI (Tool bulgularına daha fazla ağırlık vermek için)
-        cve_count = len([f for f in findings if f.get('cve_id') and f.get('cve_id') != 'N/A' and not f.get('title', '').startswith('CVE:')])
-        if cve_count > 0:
-            base_score += min(cve_count * 3, 12)  # Azaltıldı: 8→3, 25→12
-        
-        # CVSS skorlarına göre bonus - AZALTILDI
-        high_cvss_count = 0
         for finding in findings:
-            # Sadece "CVE:" başlıklı değil, gerçek zafiyet bulgularının CVSS'ini say
-            if finding.get('title', '').startswith('CVE:'):
-                continue
-            
-            cvss_score = finding.get('cvss_score')
-            if cvss_score and cvss_score != 'N/A':
+            severity = finding.get('severity', 'info').lower()
+            weight = severity_weights.get(severity, 1)
+            total_score += weight
+        
+        # 2. TOOL ÇIKTILARININ DETAY SEVİYESİNE GÖRE BONUS
+        # Port scanning
+        open_ports = [f for f in findings if 'port' in f.get('title', '').lower() or 'service' in f.get('title', '').lower()]
+        if len(open_ports) >= 10:
+            total_score += 20  # Çok fazla açık port = kritik
+        elif len(open_ports) >= 5:
+            total_score += 10
+        elif len(open_ports) >= 1:
+            total_score += 5
+        
+        # Endpoint discovery
+        endpoints = [f for f in findings if 'endpoint' in f.get('title', '').lower() or 'api' in f.get('title', '').lower()]
+        if len(endpoints) >= 1:  # Endpoint bulgusu varsa
+            # Endpoint count'u title'dan çıkar
+            for ep in endpoints:
+                title = ep.get('title', '')
+                if 'endpoint bulundu' in title.lower():
+                    try:
+                        count = int(title.split('endpoint bulundu')[0].split(':')[-1].strip())
+                        if count >= 50:
+                            total_score += 30  # 50+ endpoint = kritik
+                        elif count >= 30:
+                            total_score += 20
+                        elif count >= 15:
+                            total_score += 15
+                        elif count >= 5:
+                            total_score += 10
+                        else:
+                            total_score += 5
+                        break
+                    except:
+                        total_score += 10  # Parse edemediyse default
+        
+        # Web crawling (forms, paths, pages)
+        web_findings = [f for f in findings if 'crawling' in f.get('title', '').lower() or 'form' in f.get('title', '').lower()]
+        if len(web_findings) >= 1:
+            for wf in web_findings:
+                title = wf.get('title', '')
+                # Form count'u çıkar
+                if 'form' in title.lower():
+                    try:
+                        form_count = int([x for x in title.split() if 'form' in x.lower()][0].split('form')[0].strip().split()[-1])
+                        if form_count >= 10:
+                            total_score += 25  # 10+ form = kritik injection riski
+                        elif form_count >= 5:
+                            total_score += 15
+                        elif form_count >= 2:
+                            total_score += 8
+                        break
+                    except:
+                        total_score += 10
+        
+        # Directory bruteforce
+        directory_findings = [f for f in findings if 'directory' in f.get('title', '').lower() or 'dizin' in f.get('title', '').lower()]
+        for df in directory_findings:
+            severity = df.get('severity', '').lower()
+            if severity == 'critical':
+                total_score += 20  # Kritik dizin (admin, config) = çok tehlikeli
+            elif severity == 'high':
+                total_score += 12  # Yüksek riskli dizin
+            elif severity == 'info':
+                total_score += 2   # Info dizin (images vb)
+        
+        # Teknoloji tespiti
+        tech_findings = [f for f in findings if 'teknoloji' in f.get('title', '').lower() or 'technology' in f.get('title', '').lower()]
+        if len(tech_findings) >= 1:
+            for tf in tech_findings:
+                title = tf.get('title', '')
                 try:
-                    cvss_float = float(cvss_score)
-                    if cvss_float >= 7.0:
-                        high_cvss_count += 1
+                    tech_count = int([x for x in title.split() if x.isdigit()][0])
+                    if tech_count >= 15:
+                        total_score += 15  # Çok fazla teknoloji = saldırı yüzeyi geniş
+                    elif tech_count >= 10:
+                        total_score += 10
+                    elif tech_count >= 5:
+                        total_score += 5
+                    break
                 except:
-                    pass
+                    total_score += 5
         
-        if high_cvss_count > 0:
-            base_score += min(high_cvss_count * 2, 8)  # Azaltıldı: 5→2, 20→8
+        # Subdomain discovery
+        subdomain_findings = [f for f in findings if 'subdomain' in f.get('title', '').lower() or 'altdomain' in f.get('title', '').lower()]
+        if len(subdomain_findings) >= 1:
+            for sf in subdomain_findings:
+                title = sf.get('title', '')
+                try:
+                    sub_count = int([x for x in title.split() if x.isdigit()][0])
+                    if sub_count >= 20:
+                        total_score += 20  # Çok fazla subdomain = geniş saldırı yüzeyi
+                    elif sub_count >= 10:
+                        total_score += 12
+                    elif sub_count >= 5:
+                        total_score += 7
+                    break
+                except:
+                    total_score += 5
         
-        # Web güvenlik özel durumları - ARTTIRILDI
-        web_security_keywords = ['login', 'admin', 'auth', 'api', 'user', 'cart', 'signup', 'payment', 'checkout']
-        web_security_count = 0
-        for finding in findings:
-            title = finding.get('title', '').lower()
-            if any(keyword in title for keyword in web_security_keywords):
-                web_security_count += 1
+        # 3. GERÇEK ZAFİYET TESPİTLERİ (SQL, XSS, LFI vb)
+        real_vulns = [f for f in findings if any(keyword in f.get('title', '').lower() 
+                     for keyword in ['sql', 'xss', 'injection', 'lfi', 'rfi', 'ssrf', 'xxe', 'rce', 'csrf'])]
+        if len(real_vulns) > 0:
+            total_score += min(len(real_vulns) * 20, 50)  # Her gerçek zafiyet +20, max +50
         
-        if web_security_count >= 10:
-            base_score += 18  # Çok fazla web güvenlik endpoint'i (15→18)
-        elif web_security_count >= 5:
-            base_score += 12  # Fazla web güvenlik endpoint'i (10→12)
-        elif web_security_count >= 3:
-            base_score += 6   # Az web güvenlik endpoint'i (5→6)
+        # 4. KRİTİK YOL/ENDPOINT TESPİTİ (admin, login, api)
+        critical_paths = [f for f in findings if any(keyword in f.get('title', '').lower() 
+                         for keyword in ['admin', 'login', 'auth', 'dashboard', 'panel', 'config', 'backup'])]
+        if len(critical_paths) >= 5:
+            total_score += 20  # 5+ kritik yol = yüksek risk
+        elif len(critical_paths) >= 3:
+            total_score += 12
+        elif len(critical_paths) >= 1:
+            total_score += 8
         
-        return min(int(base_score), 100)
+        # Skorı 0-100 arası normalize et
+        normalized_score = min(int(total_score), 100)
+        
+        # Minimum skor: Eğer herhangi bir bulgu varsa en az 15 puan ver
+        if len(findings) > 0 and normalized_score < 15:
+            normalized_score = 15
+        
+        return normalized_score
 
     def _get_owasp_reference(self, finding: Dict[str, Any]) -> str:
         """Bulgu başlığına göre ilgili OWASP Top 10 referansını döndürür."""
