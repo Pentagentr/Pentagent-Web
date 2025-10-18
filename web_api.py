@@ -1286,51 +1286,7 @@ async def generate_security_report(request: Dict[str, Any]):
         # AI ile geliştirilmiş rapor oluştur
         ai_report_content = await report_gen.generate_ai_enhanced_report(state, scan_results, cve_results)
         
-        # LLM ile gelişmiş rapor üret - TÜM TOOL ÇIKTILARI İLE
-        try:
-            logger.info("🤖 LLM ile gelişmiş rapor üretiliyor...")
-            
-            # Tüm tool çıktılarını topla
-            all_tool_outputs = {}
-            if isinstance(scan_results, dict):
-                for key, value in scan_results.items():
-                    if key not in {'target', 'user_task', 'start_time', 'end_time', 'execution_time', 'status', 'conversation_id'}:
-                        all_tool_outputs[key] = value
-            
-            llm_report = report_gen.generate_llm_enhanced_report(
-                findings=state.findings,
-                target=target,
-                cve_results=cve_results,
-                tool_outputs=all_tool_outputs,
-                scan_results=scan_results
-            )
-            
-            # LLM raporunu da kaydet
-            llm_md_path = f"{report_path}_llm.md"
-            with open(llm_md_path, 'w', encoding='utf-8') as f:
-                f.write(llm_report)
-            logger.info(f"✅ LLM raporu oluşturuldu: {llm_md_path}")
-            
-        except Exception as e:
-            logger.error(f"❌ LLM rapor üretimi hatası: {e}")
-            llm_report = "LLM raporu oluşturulamadı"
-        
-        # Rapor oluştur (TÜM TOOL ÇIKTILARI İLE)
-        success = await report_gen.generate_report(state, report_path)
-        
-        # Markdown raporu da oluştur (AI ile geliştirilmiş)
-        md_path = f"{report_path}.md"
-        try:
-            with open(md_path, 'w', encoding='utf-8') as f:
-                f.write(ai_report_content)
-            logger.info(f"AI ile geliştirilmiş Markdown raporu oluşturuldu: {md_path}")
-        except Exception as e:
-            logger.error(f"Markdown raporu oluşturulamadı: {e}")
-        
-        if not success:
-            raise HTTPException(status_code=500, detail="Rapor oluşturulamadı")
-        
-        # TÜM TOOL ÇIKTILARINI RAPOR İÇİN HAZIRLA
+        # TÜM TOOL ÇIKTILARINI ÖNCE TOPLA - TEKRARLANMASIN
         all_tool_outputs = {}
         if hasattr(state, 'discovered_information'):
             for key, value in state.discovered_information.items():
@@ -1417,6 +1373,45 @@ async def generate_security_report(request: Dict[str, Any]):
         # Profesyonel rapor oluştur - SYNC VERSİYON KULLAN (sadece enriched_data)
         report_content = report_gen.generate_comprehensive_report_sync(enriched_data)
         
+        # LLM ile gelişmiş rapor üret - TÜM TOOL ÇIKTILARI İLE
+        try:
+            logger.info("🤖 LLM ile gelişmiş rapor üretiliyor...")
+            logger.info(f"📊 LLM'e gönderilen tool sayısı: {len(all_tool_outputs)}")
+            logger.info(f"📊 Tool isimleri: {list(all_tool_outputs.keys())}")
+            
+            llm_report = report_gen.generate_llm_enhanced_report(
+                findings=state.findings,
+                target=target,
+                cve_results=cve_findings,
+                tool_outputs=all_tool_outputs,
+                scan_results=scan_results
+            )
+            
+            # LLM raporunu da kaydet
+            llm_md_path = f"{report_path}_llm.md"
+            with open(llm_md_path, 'w', encoding='utf-8') as f:
+                f.write(llm_report)
+            logger.info(f"✅ LLM raporu oluşturuldu: {llm_md_path}")
+            
+        except Exception as e:
+            logger.error(f"❌ LLM rapor üretimi hatası: {e}", exc_info=True)
+            llm_report = "LLM raporu oluşturulamadı"
+        
+        # Rapor oluştur (TÜM TOOL ÇIKTILARI İLE)
+        success = await report_gen.generate_report(state, report_path)
+        
+        # Markdown raporu da oluştur (AI ile geliştirilmiş)
+        md_path = f"{report_path}.md"
+        try:
+            with open(md_path, 'w', encoding='utf-8') as f:
+                f.write(ai_report_content)
+            logger.info(f"AI ile geliştirilmiş Markdown raporu oluşturuldu: {md_path}")
+        except Exception as e:
+            logger.error(f"Markdown raporu oluşturulamadı: {e}")
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Rapor oluşturulamadı")
+        
         # Risk skoru hesapla (tüm bulgulardan)
         all_findings = state.findings  # Tüm bulguları al
         logger.info(f"📊 RAPOR GENERATİON - Toplam bulgu sayısı: {len(all_findings)}")
@@ -1424,7 +1419,7 @@ async def generate_security_report(request: Dict[str, Any]):
         logger.info(f"📊 Scan results keys: {list(scan_results.keys()) if isinstance(scan_results, dict) else 'Not dict'}")
         logger.info(f"📊 All tool outputs keys: {list(all_tool_outputs.keys())}")
         
-        # CVE detaylarını zenginleştir - RAG'dan tüm bilgileri çek
+        # CVE detaylarını zenginleştir - RAG'dan tüm bilgileri çek (GÜVENLİ)
         logger.info("🔍 CVE detayları zenginleştiriliyor...")
         enriched_cve_findings = []
         for cve in cve_findings:
@@ -1436,30 +1431,38 @@ async def generate_security_report(request: Dict[str, Any]):
                     if rag_service.is_available():
                         cve_detail = rag_service.get_cve_by_id(cve_id)
                         if cve_detail:
-                            # CVE'yi zenginleştir
+                            # CVE'yi zenginleştir - GÜVENLİ ALAN ERİŞİMİ
                             enriched_cve = cve.copy()
-                            enriched_cve.update({
-                                'description': cve_detail.description or cve.get('description', ''),
-                                'base_score': cve_detail.base_score or cve.get('base_score') or cve.get('cvss_score'),
-                                'severity': cve_detail.severity or cve.get('severity'),
-                                'published_date': cve_detail.published_date,
-                                'modified_date': cve_detail.modified_date,
-                                'references': cve_detail.references or [],
-                                'cwe_id': cve_detail.cwe_id,
-                                'vendor': cve_detail.vendor,
-                                'product': cve_detail.product,
-                                'cvss_vector': cve_detail.cvss_vector,
-                                'exploitability_score': cve_detail.exploitability_score,
-                                'impact_score': cve_detail.impact_score,
-                                'attack_vector': cve_detail.attack_vector
-                            })
+                            
+                            # Her alanı güvenli şekilde al
+                            safe_fields = {
+                                'description': getattr(cve_detail, 'description', None) or cve.get('description', ''),
+                                'base_score': getattr(cve_detail, 'base_score', None) or cve.get('base_score') or cve.get('cvss_score'),
+                                'severity': getattr(cve_detail, 'severity', None) or cve.get('severity'),
+                                'published_date': getattr(cve_detail, 'published_date', None) or cve.get('published_date'),
+                                'modified_date': getattr(cve_detail, 'modified_date', None) or cve.get('modified_date'),
+                                'references': getattr(cve_detail, 'references', None) or cve.get('references', []),
+                                'cwe_id': getattr(cve_detail, 'cwe_id', None) or cve.get('cwe_id'),
+                                'vendor': getattr(cve_detail, 'vendor', None) or cve.get('vendor'),
+                                'product': getattr(cve_detail, 'product', None) or cve.get('product'),
+                                'cvss_vector': getattr(cve_detail, 'cvss_vector', None) or cve.get('cvss_vector'),
+                                'exploitability_score': getattr(cve_detail, 'exploitability_score', None) or cve.get('exploitability_score'),
+                                'impact_score': getattr(cve_detail, 'impact_score', None) or cve.get('impact_score'),
+                                'attack_vector': getattr(cve_detail, 'attack_vector', None) or cve.get('attack_vector')
+                            }
+                            
+                            # Sadece None olmayan alanları ekle
+                            for key, value in safe_fields.items():
+                                if value is not None:
+                                    enriched_cve[key] = value
+                            
                             enriched_cve_findings.append(enriched_cve)
                             logger.info(f"✅ CVE zenginleştirildi: {cve_id}")
                         else:
                             enriched_cve_findings.append(cve)
                             logger.warning(f"⚠️ CVE detayı bulunamadı: {cve_id}")
                 except Exception as e:
-                    logger.error(f"❌ CVE zenginleştirme hatası ({cve_id}): {e}")
+                    logger.error(f"❌ CVE zenginleştirme hatası ({cve_id}): {e}", exc_info=True)
                     enriched_cve_findings.append(cve)
             else:
                 enriched_cve_findings.append(cve)
@@ -1468,30 +1471,158 @@ async def generate_security_report(request: Dict[str, Any]):
         cve_findings = enriched_cve_findings
         logger.info(f"✅ {len(enriched_cve_findings)} CVE zenginleştirildi")
         
-        # Eğer hiç bulgu yoksa, scan_results'tan tekrar parse et
+        # Eğer hiç bulgu yoksa, scan_results'tan AGRESİF parse et
         if len(state.findings) == 0:
-            logger.warning("⚠️ Hiç bulgu bulunamadı, scan_results direkt parse ediliyor")
-            # Scan results'tan bulguları tekrar parse et
+            logger.warning("⚠️ Hiç bulgu bulunamadı, scan_results AGRESİF parse ediliyor")
+            # Scan results'tan bulguları tekrar parse et - DAHA AGRESİF
             if isinstance(scan_results, dict):
                 for key, value in scan_results.items():
-                    if isinstance(value, dict) and value.get('success') and value.get('data'):
-                        tool_data = value.get('data', {})
-                        # Basit parsing - her tool için en az bir finding oluştur
-                        finding = {
-                            'title': f'{key.replace("_", " ").title()} Sonucu',
-                            'severity': 'medium',
-                            'description': f'{key} aracı çalıştırıldı ve sonuçlar alındı',
-                            'cvss_score': '5.0',
-                            'cve_id': None,
-                            'evidence': f'Tool: {key}, Data keys: {list(tool_data.keys())}',
-                            'recommendation_summary': 'Tool sonuçlarını detaylı analiz edin',
-                            'business_impact': 'Tool çıktıları güvenlik değerlendirmesi için önemli',
-                            'exploitability': 'Medium',
-                            'target': target,
-                            'technology': 'Security Tool'
-                        }
-                        state.findings.append(finding)
-                        logger.info(f"🔍 Basit bulgu eklendi: {key}")
+                    # Meta alanları atla
+                    if key in {'target', 'user_task', 'start_time', 'end_time', 'execution_time', 'status', 'conversation_id'}:
+                        continue
+                    
+                    # Dict ve success kontrolü
+                    if isinstance(value, dict):
+                        # Success varsa data'dan çıkar
+                        if value.get('success'):
+                            tool_data = value.get('data', {})
+                            
+                            # Tool data içinden bulgu oluştur - DETAYLI
+                            if isinstance(tool_data, dict) and tool_data:
+                                # Teknoloji tespit edildi mi?
+                                if 'technologies' in tool_data and tool_data['technologies']:
+                                    tech_list = tool_data['technologies']
+                                    tech_count = len(tech_list) if isinstance(tech_list, list) else 0
+                                    if tech_count > 0:
+                                        finding = {
+                                            'title': f'Teknoloji Tespiti: {tech_count} teknoloji bulundu',
+                                            'severity': 'info',
+                                            'description': f'Tespit edilen teknolojiler: {", ".join(str(t) for t in tech_list[:5])}',
+                                            'cvss_score': 'N/A',
+                                            'cve_id': None,
+                                            'evidence': f'Technologies: {tech_list}',
+                                            'recommendation_summary': 'Tespit edilen teknolojilerin güvenlik güncellemelerini kontrol edin',
+                                            'business_impact': 'Teknoloji bilgisi saldırganlar için değerlidir',
+                                            'exploitability': 'Information Gathering',
+                                            'target': target,
+                                            'technology': 'Technology Detection'
+                                        }
+                                        state.findings.append(finding)
+                                        logger.info(f"🔍 Teknoloji bulgusu eklendi: {tech_count} teknoloji")
+                                
+                                # Port taraması var mı?
+                                if 'open_ports' in tool_data and tool_data['open_ports']:
+                                    ports = tool_data['open_ports']
+                                    port_count = len(ports) if isinstance(ports, list) else 0
+                                    if port_count > 0:
+                                        # Kritik portlar var mı?
+                                        critical_ports = [p for p in (ports if isinstance(ports, list) else []) 
+                                                        if str(p).strip() in ['22', '3389', '5900', '23', '21']]
+                                        severity = 'high' if critical_ports else 'medium'
+                                        cvss = '7.5' if critical_ports else '5.0'
+                                        
+                                        finding = {
+                                            'title': f'Açık Portlar: {port_count} port tespit edildi',
+                                            'severity': severity,
+                                            'description': f'Sistemde {port_count} açık port bulundu. Kritik portlar: {critical_ports if critical_ports else "Yok"}',
+                                            'cvss_score': cvss,
+                                            'cve_id': None,
+                                            'evidence': f'Open ports: {ports}',
+                                            'recommendation_summary': 'Gereksiz portları kapatın ve güvenlik duvarı kurallarını gözden geçirin',
+                                            'business_impact': 'Açık portlar saldırı yüzeyini artırır',
+                                            'exploitability': 'High' if critical_ports else 'Medium',
+                                            'target': target,
+                                            'technology': 'Network Services'
+                                        }
+                                        state.findings.append(finding)
+                                        logger.info(f"🔍 Port bulgusu eklendi: {port_count} port")
+                                
+                                # Subdomain var mı?
+                                if 'subdomains' in tool_data and tool_data['subdomains']:
+                                    subdomains = tool_data['subdomains']
+                                    subdomain_count = len(subdomains) if isinstance(subdomains, list) else 0
+                                    if subdomain_count > 0:
+                                        finding = {
+                                            'title': f'Subdomain Keşfi: {subdomain_count} subdomain bulundu',
+                                            'severity': 'medium',
+                                            'description': f'{subdomain_count} subdomain tespit edildi, saldırı yüzeyi genişledi',
+                                            'cvss_score': '5.0',
+                                            'cve_id': None,
+                                            'evidence': f'Subdomains: {subdomains[:10]}',
+                                            'recommendation_summary': 'Tüm subdomainlerin güvenliğini kontrol edin',
+                                            'business_impact': 'Genişletilmiş saldırı yüzeyi',
+                                            'exploitability': 'Medium',
+                                            'target': target,
+                                            'technology': 'DNS'
+                                        }
+                                        state.findings.append(finding)
+                                        logger.info(f"🔍 Subdomain bulgusu eklendi: {subdomain_count} subdomain")
+                                
+                                # Endpoint var mı?
+                                if 'endpoints' in tool_data and tool_data['endpoints']:
+                                    endpoints = tool_data['endpoints']
+                                    endpoint_count = len(endpoints) if isinstance(endpoints, list) else 0
+                                    if endpoint_count > 0:
+                                        severity = 'high' if endpoint_count >= 20 else 'medium'
+                                        cvss = '7.0' if endpoint_count >= 20 else '5.0'
+                                        
+                                        finding = {
+                                            'title': f'Endpoint Keşfi: {endpoint_count} endpoint bulundu',
+                                            'severity': severity,
+                                            'description': f'{endpoint_count} endpoint tespit edildi, geniş saldırı yüzeyi',
+                                            'cvss_score': cvss,
+                                            'cve_id': None,
+                                            'evidence': f'Endpoints: {endpoints[:10]}',
+                                            'recommendation_summary': 'Endpoint sayısını azaltın ve gereksiz olanları kaldırın',
+                                            'business_impact': 'Çok fazla endpoint güvenlik riski oluşturur',
+                                            'exploitability': 'High' if endpoint_count >= 20 else 'Medium',
+                                            'target': target,
+                                            'technology': 'Web Application'
+                                        }
+                                        state.findings.append(finding)
+                                        logger.info(f"🔍 Endpoint bulgusu eklendi: {endpoint_count} endpoint")
+                                
+                                # Form var mı?
+                                if 'forms' in tool_data and tool_data['forms']:
+                                    forms = tool_data['forms']
+                                    form_count = len(forms) if isinstance(forms, list) else 0
+                                    if form_count > 0:
+                                        severity = 'high' if form_count >= 10 else 'medium'
+                                        cvss = '7.5' if form_count >= 10 else '5.5'
+                                        
+                                        finding = {
+                                            'title': f'Form Tespiti: {form_count} form bulundu',
+                                            'severity': severity,
+                                            'description': f'{form_count} form tespit edildi, injection saldırı riski',
+                                            'cvss_score': cvss,
+                                            'cve_id': None,
+                                            'evidence': f'Forms: {form_count} found',
+                                            'recommendation_summary': 'Form güvenliğini kontrol edin ve input validation uygulayın',
+                                            'business_impact': 'Formlar injection saldırıları için hedef olabilir',
+                                            'exploitability': 'High',
+                                            'target': target,
+                                            'technology': 'Web Application'
+                                        }
+                                        state.findings.append(finding)
+                                        logger.info(f"🔍 Form bulgusu eklendi: {form_count} form")
+                        
+                        # Success olmasa bile data varsa genel bulgu oluştur
+                        elif value:
+                            finding = {
+                                'title': f'{key.replace("_", " ").title()} Tool Sonucu',
+                                'severity': 'info',
+                                'description': f'{key} aracı çalıştırıldı',
+                                'cvss_score': 'N/A',
+                                'cve_id': None,
+                                'evidence': f'Tool: {key}, Data: {str(value)[:200]}',
+                                'recommendation_summary': 'Tool sonuçlarını inceleyin',
+                                'business_impact': 'Bilgi toplama aşaması',
+                                'exploitability': 'Low',
+                                'target': target,
+                                'technology': 'Security Tool'
+                            }
+                            state.findings.append(finding)
+                            logger.info(f"🔍 Genel bulgu eklendi: {key}")
             
             # Hala bulgu yoksa, en az bir bulgu oluştur
             if len(state.findings) == 0:

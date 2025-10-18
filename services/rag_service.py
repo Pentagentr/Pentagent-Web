@@ -317,14 +317,24 @@ class RAGService:
                             # Rerank score normalize et (0-1 arası)
                             rerank_score = float(score) if isinstance(score, (int, float)) else 0.5
                             
-                            # BAAI/bge-reranker-base çok güçlü, rerank score DOMİNANT olmalı
-                            # %90 rerank, %10 orijinal skor (daha agresif)
-                            combined_score = (original_score * 0.1) + (rerank_score * 0.9)
+                            # BAAI/bge-reranker-base için score scaling - daha agresif
+                            # Cross-encoder skorları genelde -10 ile +10 arası
+                            # Sigmoid ile 0-1 arası normalize et
+                            import math
+                            normalized_rerank = 1 / (1 + math.exp(-rerank_score))
+                            
+                            # Combined score: %95 rerank (normalized), %5 original
+                            # Rerank'e daha fazla ağırlık veriyoruz çünkü çok daha doğru
+                            combined_score = (original_score * 0.05) + (normalized_rerank * 0.95)
+                            
+                            # Score'u update et - frontend'de görünsün
+                            cve.score = combined_score
                             
                             reranked.append({
                                 "cve": cve,
                                 "original_score": original_score,
                                 "rerank_score": rerank_score,
+                                "normalized_rerank": normalized_rerank,
                                 "combined_score": combined_score
                             })
                         
@@ -336,9 +346,9 @@ class RAGService:
                         
                         logger.info(f"✅ RERANKING TAMAMLANDI: {len(reranked_cves)} sonuç")
                         
-                        # Top 3'ü logla
+                        # Top 3'ü logla - normalized score'ları göster
                         for i, item in enumerate(reranked[:3], 1):
-                            logger.info(f"  🏆 #{i}: {item['cve'].cve_id} | Rerank: {item['rerank_score']:.3f} | Combined: {item['combined_score']:.3f}")
+                            logger.info(f"  🏆 #{i}: {item['cve'].cve_id} | Rerank: {item['rerank_score']:.3f} | Normalized: {item['normalized_rerank']:.3f} | Final: {item['combined_score']:.3f} ({item['combined_score']*100:.1f}%)")
                         
                         return reranked_cves
                     else:
@@ -608,7 +618,7 @@ class RAGService:
 🎯 HEDEF: {scan_results.get('target', 'Unknown')}
 
 📊 TÜM TOOL ÇIKTILARI:
-{all_tool_outputs[:3000]}
+{all_tool_outputs[:5000]}
 
 🔍 DETAYLI ANALİZ GÖREVİN:
 1. **TEKNOLOJİ TESPİTİ**: Hangi yazılımlar, versiyonlar, servisler tespit edildi?
@@ -618,26 +628,36 @@ class RAGService:
 
 🎯 SPESİFİK QUERY OLUŞTURMA KURALLARI:
 - MUTLAKA tespit edilen teknoloji ve versiyonu kullan
-- Eğer versiyon yoksa, teknoloji adını kullan
-- Tespit edilen zafiyet türünü belirt
+- Eğer versiyon yoksa, teknoloji adını + zafiyet türünü kullan
+- Tespit edilen zafiyet türünü belirt (XSS, SQLi, LFI, RCE, vb.)
 - CVE veritabanında bulunabilir format kullan
-- Max 100 karakter, ÖZLÜ ve SPESİFİK
+- Max 150 karakter, ÖZLÜ ama DETAYLI
 - SADECE query string döndür, açıklama YAPMA
+- Teknoloji adını tam olarak yaz (kısaltma kullanma)
 
-💡 SPESİFİK QUERY ÖRNEKLERİ:
-- "Apache 2.4.49 path traversal vulnerability CVE"
-- "WordPress 5.8.1 SQL injection vulnerability CVE"
-- "nginx 1.18.0 remote code execution CVE"
-- "PHP 7.4.3 file upload vulnerability CVE"
-- "OpenSSH 8.2 privilege escalation CVE"
-- "Docker 20.10 container escape vulnerability CVE"
+💡 SPESİFİK QUERY ÖRNEKLERİ (İYİ):
+- "Apache HTTP Server 2.4.49 path traversal directory listing CVE-2021"
+- "WordPress 5.8.1 SQL injection authentication bypass vulnerability"
+- "nginx 1.18.0 HTTP request smuggling remote code execution"
+- "PHP 7.4.3 file upload arbitrary code execution CVE"
+- "OpenSSH 8.2 authentication bypass privilege escalation"
+- "MySQL 8.0.27 SQL injection remote authentication bypass"
+- "Redis 6.2.0 unauthorized access remote code execution"
+- "Node.js Express 4.17.1 prototype pollution denial of service"
+
+❌ KÖTÜ QUERY ÖRNEKLERİ (KULLANMA):
+- "web application vulnerability" (çok generic)
+- "security issue" (belirsiz)
+- "exploit" (spesifik değil)
+- "server misconfiguration" (teknoloji belirtilmemiş)
 
 ⚠️ ÖNEMLİ: 
-- Generic query'ler YASAK! (örn: "web application vulnerability")
-- Mutlaka SPESİFİK teknoloji+versiyon+zafiyet kombinasyonu
-- Tool çıktılarından TESPİT EDİLEN bilgileri kullan
+- Tool çıktılarından TESPİT EDİLEN GERÇEK bilgileri kullan
+- Teknoloji + Version + Zafiyet Türü kombinasyonu ŞART
+- Generic kelimeler kullanma, spesifik ol
+- CVE formatında arama yapılacak, buna uygun query yaz
 
-CVE Query:"""
+Şimdi SPESİFİK CVE query'i oluştur:"""
             
             # Yanıt al - Event loop sorunu çözümü
             import asyncio
