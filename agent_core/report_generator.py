@@ -114,9 +114,9 @@ class ReportGenerator:
                 if 'form' in title.lower():
                     try:
                         form_count = int([x for x in title.split() if 'form' in x.lower()][0].split('form')[0].strip().split()[-1])
-                        if form_count >= 10:
+        if form_count >= 10:
                             total_score += 25  # 10+ form = kritik injection riski
-                        elif form_count >= 5:
+        elif form_count >= 5:
                             total_score += 15
                         elif form_count >= 2:
                             total_score += 8
@@ -2533,102 +2533,46 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
 
 {cve_text}
 
-**TASK:**
-Analyze ALL DATA ABOVE (ESPECIALLY TOOL OUTPUTS AND FINDINGS) to create a professional penetration test report.
+**TASK:** Create a concise professional pentest report using the data above.
 
-🎯 CRITICAL INSTRUCTIONS (MANDATORY):
-1. ❌ NEVER write "no critical vulnerabilities" or "no high severity vulnerabilities"! Tool outputs and findings ARE present!
-2. ✅ Detail ALL TECHNOLOGIES, PORTS, ENDPOINTS, FORMS, SUBDOMAINS, DIRECTORIES from tool outputs
-3. ✅ If 6+ pages with forms → MEDIUM RISK minimum (injection attack surface)
-4. ✅ If 10+ endpoints → HIGH RISK (large attack surface)
-5. ✅ If critical ports open (22, 3389, 21, 23) → CRITICAL RISK (remote access)
-6. ✅ Every detected technology → vulnerability risk (requires update checks)
-7. ✅ Use EVERY finding in Executive Summary and Risk Assessment
-8. ✅ Risk level: Based on finding count and attack surface (LOW/MEDIUM/HIGH/CRITICAL)
+🎯 CRITICAL:
+1. ❌ NEVER write "no critical/high vulnerabilities"!
+2. ✅ Detail ALL tool outputs (endpoints, forms, ports, technologies)
+3. ✅ 6+ pages + forms → MEDIUM risk minimum
+4. ✅ 10+ endpoints → HIGH risk
+5. ✅ Critical ports (22,3389,21,23) → CRITICAL risk
 
-Rapor şu bölümleri içermeli:
+**Report Structure (Turkish, concise):**
 
 # PENETRASYON TESTİ RAPORU
 
 ## 1. YÖNETİCİ ÖZETİ
-- Genel güvenlik durumu değerlendirmesi (teknik olmayan dil)
-- Risk seviyesi ve skor (0-100 arası)
-- En kritik 3 bulgu ve iş etkileri
-- Acil aksiyon gerektiren konular
+- Güvenlik durumu (1-2 paragraf)
+- Risk skoru ve seviyesi
+- Top 3 kritik bulgu
+- Acil aksiyonlar
 
-## 2. METODOLOJİ VE KAPSAM
-- Kullanılan test metodolojisi (OWASP, PTES, NIST SP 800-115)
-- Test kapsamı ve hedef sistem
-- Kullanılan araçlar ve teknikler (tool çıktılarından)
-- Test sınırlamaları
+## 2. METODOLOJİ
+- Test kapsamı
+- Kullanılan araçlar (kısa liste)
 
-## 3. DETAYLI TEKNİK BULGULAR
+## 3. TEKNİK BULGULAR
 Her bulgu için:
-- Bulgu başlığı ve ID
-- Severity (CRITICAL/HIGH/MEDIUM/LOW)
-- CVSS skoru (varsa)
-- Detaylı teknik açıklama
-- Kanıt (PoC, screenshot, log)
-- Etkilenen sistem/URL
-- Teknik risk analizi
-- İş etkisi analizi
-- OWASP kategorisi
+- Başlık, Severity, CVSS
+- Açıklama (kısa)
+- Kanıt
+- Çözüm
 
-## 4. TOOL ÇIKTILARI VE ANALİZLER (ÇOK ÖNEMLİ!)
-🔴 TOOL ÇIKTILARINI MUTLAKA DETAYLI ŞEKİLDE RAPORLA!
-Çalıştırılan her tool için:
-- Tool adı ve amacı
-- Tespit edilen veri (teknolojiler, portlar, endpointler vb.) - HERBİRİNİ DETAYLI YAZ
-- Kritik bulgular - NEDEN KRİTİK OLDUĞUNU AÇIKLA
-- Güvenlik değerlendirmesi - RİSK ANALİZİ YAP
-- Endpoint sayısı fazla ise (20+), bu YÜKSEKRİSK olarak değerlendir
-- Form sayısı fazla ise (10+), bu INJECTİON RİSKİ olarak değerlendir
-- Açık portlar kritik ise (22, 3389, 21, 23), bu KRİTİK RİSK olarak değerlendir
+## 4. TOOL ÇIKTILARI
+🔴 List ALL tool data: endpoints count, forms count, ports, technologies
+🔴 Explain WHY each matters for security
 
-## 5. CVE ANALİZİ VE ZAFİYET MAPLEMESİ
-- İlişkili CVE'lerin detaylı analizi
-- CVSS skorları ve severity dağılımı
-- Exploit durumu ve güncellik
-- Zafiyet zincirleri ve saldırı senaryoları
+## 5. ÖNERİLER
+- Acil (0-48h)
+- Kısa vadeli (1-7 gün)
+- Uzun vadeli
 
-## 6. RİSK MATRİSİ VE PRİORİTİZASYON
-- Risk skoru ve dağılımı (kritik, yüksek, orta, düşük)
-- Bulguların önceliklendirmesi
-- Saldırı senaryoları ve zincir analizi
-
-## 7. ÖNERİLER VE ÇÖZÜMLER
-### 7.1 Acil Aksiyonlar (0-48 Saat)
-- Kritik bulguların giderilmesi
-- Detaylı çözüm adımları
-
-### 7.2 Kısa Vadeli (1-7 Gün)
-- Yüksek riskli bulguların giderilmesi
-- Güvenlik sıkılaştırma adımları
-
-### 7.3 Orta ve Uzun Vadeli Stratejik Öneriler
-- Sistem mimarisine yönelik öneriler
-- Güvenlik süreçleri ve politikalar
-- Compliance gereksinimleri
-
-## 8. SONUÇ VE GENEL DEĞERLENDİRME
-- Genel güvenlik postürü
-- Güçlü ve zayıf yönler
-- Compliance durumu (OWASP, PCI-DSS, ISO 27001)
-- İleriye dönük öneriler
-
-**KRİTİK ÖNEMDE:**
-- Rapor Türkçe olmalı
-- Teknik ve detaylı olmalı
-- 🔴 TOOL ÇIKTILARINI MUTLAKA KULLAN! Endpoint sayısı, form sayısı, port sayısı, teknoloji sayısı gibi bilgileri raporda açıkça belirt
-- 🔴 Tool çıktılarındaki risk göstergelerini (fazla endpoint, fazla form, kritik portlar) risk değerlendirmesine dahil et
-- 🔴 Eğer tool çıktılarında 20+ endpoint, 10+ form, kritik portlar varsa, risk skorunu yükselt ve raporunda belirt
-- Her bulgunun kanıt ve çözümü olmalı
-- Markdown formatında yaz
-- Profesyonel penetrasyon testi standardlarına uygun hazırla
-- En az 3000 kelime olmalı
-- Risk skorunu tool çıktılarına göre hesapla
-
-Şimdi profesyonel raporu oluştur ve TOOL ÇIKTILARINI MUTLAKA DİKKATE AL:"""
+**KEEP IT CONCISE (max 1500 words) but DETAILED on findings!**"""
 
             # LLM'den rapor al
             try:
@@ -2751,7 +2695,7 @@ Her bulgu için:
             report_parts.append("")
         
         return "\n".join(report_parts)
-    
+
     def _generate_fallback_ai_report(self, state: AgentState, scan_results: Dict[str, Any], cve_results: List[Dict[str, Any]]) -> str:
         """Fallback AI raporu - template-based"""
         try:
