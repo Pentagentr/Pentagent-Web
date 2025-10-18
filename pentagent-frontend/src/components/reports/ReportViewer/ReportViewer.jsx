@@ -839,25 +839,18 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
             <div key={index} className="bg-obsidian-900/50 border border-platinum-500/10 rounded-lg p-5">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                    isSuccess ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
-                  }`}>
-                    <Database className="w-4 h-4" />
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-platinum-500/10">
+                    <Database className="w-4 h-4 text-platinum-500" />
                   </div>
                   <div>
                     <h4 className="font-medium text-text-primary">{toolName}</h4>
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className={`px-2 py-1 rounded ${
-                        isSuccess ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
-                      }`}>
-                        {isSuccess ? 'Başarılı' : 'Başarısız'}
-                      </span>
-                      {toolOutput?.timestamp && (
+                    {toolOutput?.timestamp && (
+                      <div className="flex items-center gap-2 text-xs">
                         <span className="text-text-tertiary">
                           {new Date(toolOutput.timestamp).toLocaleString('tr-TR')}
                         </span>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

@@ -293,15 +293,24 @@ class RAGService:
                 ) as response:
                     if response.status == 403:
                         error_text = await response.text()
-                        logger.error(f"❌ RERANKER API 403 (YETKİ HATASI): {error_text[:300]}")
-                        logger.error("💡 Çözüm: HuggingFace token'ınızın 'Inference API' yetkisi olmalı")
-                        raise Exception(f"Reranker API yetki hatası (403): {error_text[:100]}")
+                        logger.warning(f"⚠️ Reranker API yetki hatası (403): {error_text[:100]}")
+                        logger.warning("💡 Çözüm: HuggingFace token'ınızın 'Inference API' yetkisi olmalı")
+                        logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
+                        return results  # Fallback: orijinal sıralama
+                    
+                    if response.status == 404:
+                        # Model bulunamadı - sessizce fallback kullan
+                        logger.warning(f"⚠️ Reranker modeli HuggingFace'de bulunamadı: {reranker_model}")
+                        logger.warning("💡 Çözüm: RERANKER_MODEL environment variable'ını kontrol edin")
+                        logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
+                        return results  # Fallback: orijinal sıralama
                     
                     if response.status != 200:
                         error_text = await response.text()
-                        logger.error(f"❌ Reranker API hatası: {response.status}")
-                        logger.error(f"API yanıtı: {error_text[:300]}")
-                        raise Exception(f"Reranker API başarısız ({response.status}): {error_text[:100]}")
+                        logger.warning(f"⚠️ Reranker API hatası: {response.status}")
+                        logger.warning(f"API yanıtı: {error_text[:300]}")
+                        logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
+                        return results  # Fallback: orijinal sıralama
                     
                     rerank_scores = await response.json()
                     logger.info(f"✅ Reranker yanıtı alındı: {type(rerank_scores)}")
@@ -360,7 +369,7 @@ class RAGService:
             logger.warning("⚠️ Orijinal sıralama kullanılıyor")
             return results
         except Exception as e:
-            logger.error(f"❌ RERANKER BAŞARISIZ: {e}")
+            logger.warning(f"⚠️ RERANKER BAŞARISIZ: {e}")
             logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
             return results
     

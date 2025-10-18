@@ -97,31 +97,31 @@ class ReportGenerator:
             elif any(keyword in title for keyword in ['vulnerability', 'exploit', 'injection', 'xss', 'sql', 'lfi', 'rfi']):
                 vulnerability_count += 1
         
-        # Endpoint bazlı risk artırma
+        # Endpoint bazlı risk artırma - ARTTIRILDI (Tool bulgularına daha fazla ağırlık)
         if endpoint_count >= 20:
-            base_score += 20  # Çok fazla endpoint = kritik risk
+            base_score += 25  # Çok fazla endpoint = kritik risk (20→25)
         elif endpoint_count >= 15:
-            base_score += 15  # Fazla endpoint = yüksek risk
+            base_score += 18  # Fazla endpoint = yüksek risk (15→18)
         elif endpoint_count >= 10:
-            base_score += 10  # Orta endpoint = orta risk
-        elif endpoint_count >= 5:
-            base_score += 5   # Az endpoint = düşük risk
+            base_score += 12  # Orta endpoint = orta risk (10→12)
+        elif endpoint_count >= 2:
+            base_score += 6   # Az endpoint = düşük risk (5→6)
         
-        # Kritik endpoint'ler için ekstra bonus
+        # Kritik endpoint'ler için ekstra bonus - ARTTIRILDI
         if critical_path_count >= 5:
-            base_score += 15  # Çok kritik endpoint
+            base_score += 20  # Çok kritik endpoint (15→20)
         elif critical_path_count >= 3:
-            base_score += 10  # Orta kritik endpoint
+            base_score += 12  # Orta kritik endpoint (10→12)
         elif critical_path_count >= 1:
-            base_score += 5   # Az kritik endpoint
+            base_score += 6   # Az kritik endpoint (5→6)
         
-        # Form sayısına göre risk artırma
+        # Form sayısına göre risk artırma - ARTTIRILDI
         if form_count >= 10:
-            base_score += 15  # Çok fazla form = yüksek risk
+            base_score += 20  # Çok fazla form = yüksek risk (15→20)
         elif form_count >= 5:
-            base_score += 10  # Fazla form = orta risk
+            base_score += 12  # Fazla form = orta risk (10→12)
         elif form_count >= 3:
-            base_score += 5   # Az form = düşük risk
+            base_score += 6   # Az form = düşük risk (5→6)
         
         # Zafiyet sayısına göre risk artırma
         if vulnerability_count >= 5:
@@ -148,14 +148,18 @@ class ReportGenerator:
         if severity_counts['high'] > 0:
             base_score += min(severity_counts['high'] * 5, 20)  # Yüksek bulgu başına +5, max +20
         
-        # CVE'li bulgular varsa ekstra bonus
-        cve_count = len([f for f in findings if f.get('cve_id') and f.get('cve_id') != 'N/A'])
+        # CVE'li bulgular varsa ekstra bonus - AZALTILDI (Tool bulgularına daha fazla ağırlık vermek için)
+        cve_count = len([f for f in findings if f.get('cve_id') and f.get('cve_id') != 'N/A' and not f.get('title', '').startswith('CVE:')])
         if cve_count > 0:
-            base_score += min(cve_count * 8, 25)
+            base_score += min(cve_count * 3, 12)  # Azaltıldı: 8→3, 25→12
         
-        # CVSS skorlarına göre bonus
+        # CVSS skorlarına göre bonus - AZALTILDI
         high_cvss_count = 0
         for finding in findings:
+            # Sadece "CVE:" başlıklı değil, gerçek zafiyet bulgularının CVSS'ini say
+            if finding.get('title', '').startswith('CVE:'):
+                continue
+            
             cvss_score = finding.get('cvss_score')
             if cvss_score and cvss_score != 'N/A':
                 try:
@@ -166,9 +170,9 @@ class ReportGenerator:
                     pass
         
         if high_cvss_count > 0:
-            base_score += min(high_cvss_count * 5, 20)
+            base_score += min(high_cvss_count * 2, 8)  # Azaltıldı: 5→2, 20→8
         
-        # Web güvenlik özel durumları
+        # Web güvenlik özel durumları - ARTTIRILDI
         web_security_keywords = ['login', 'admin', 'auth', 'api', 'user', 'cart', 'signup', 'payment', 'checkout']
         web_security_count = 0
         for finding in findings:
@@ -177,11 +181,11 @@ class ReportGenerator:
                 web_security_count += 1
         
         if web_security_count >= 10:
-            base_score += 15  # Çok fazla web güvenlik endpoint'i
+            base_score += 18  # Çok fazla web güvenlik endpoint'i (15→18)
         elif web_security_count >= 5:
-            base_score += 10  # Fazla web güvenlik endpoint'i
+            base_score += 12  # Fazla web güvenlik endpoint'i (10→12)
         elif web_security_count >= 3:
-            base_score += 5   # Az web güvenlik endpoint'i
+            base_score += 6   # Az web güvenlik endpoint'i (5→6)
         
         return min(int(base_score), 100)
 
@@ -2458,10 +2462,19 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
             else:
                 tool_outputs_text = "Tool çıktıları bulunamadı.\n"
             
-            # Bulguları metne çevir
+            # Bulguları metne çevir - ÖNCELİKLE TOOL BULGULARI
             findings_text = ""
             if findings:
-                findings_text = "## TESPİT EDİLEN BULGULAR:\n\n"
+                # Tool bulgularını say
+                tool_findings_count = len([f for f in findings if 'endpoint' in f.get('title', '').lower() or 
+                                          'form' in f.get('title', '').lower() or 
+                                          'port' in f.get('title', '').lower() or
+                                          'teknoloji' in f.get('title', '').lower() or
+                                          'subdomain' in f.get('title', '').lower()])
+                
+                findings_text = f"## TESPİT EDİLEN BULGULAR ({len(findings)} bulgu, {tool_findings_count} tool bulgusu):\n\n"
+                findings_text += "🔴 DİKKAT: Aşağıdaki tool bulgularını raporunda MUTLAKA detaylı şekilde açıkla!\n\n"
+                
                 for i, finding in enumerate(findings, 1):
                     findings_text += f"{i}. **{finding.get('title', 'Bilinmeyen Bulgu')}**\n"
                     findings_text += f"   - Severity: {finding.get('severity', 'Unknown')}\n"
@@ -2471,7 +2484,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
                     findings_text += f"   - CVE: {finding.get('cve_id', 'N/A')}\n"
                     findings_text += f"   - CVSS: {finding.get('cvss_score', 'N/A')}\n\n"
             else:
-                findings_text = "Bulgu tespit edilmedi.\n"
+                findings_text = "❌ HATA: Hiç bulgu tespit edilmedi - bu mümkün değil!\n"
             
             # CVE'leri metne çevir
             cve_text = ""
@@ -2493,7 +2506,8 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
             
             prompt = f"""Sen PROFESYONEL bir siber güvenlik uzmanı ve penetrasyon test raporlayıcısısın. 
 
-🔴 ÖNEMLİ: Aşağıdaki TOOL ÇIKTILARI çok önemlidir. Raporunda MUTLAKA bu tool çıktılarından elde edilen bilgileri kullanmalısın!
+🔴🔴🔴 KRİTİK ÖNEM: ASLA "kritik bir güvenlik açığına rastlanmamıştır" yazma! 
+🔴🔴🔴 Aşağıdaki TOOL ÇIKTILARI ve BULGULAR çok önemlidir ve raporunda MUTLAKA kullanılmalıdır!
 
 **HEDEF SİSTEM:** {target}
 **TEST TARİHİ:** {datetime.now().strftime('%d.%m.%Y %H:%M')}
@@ -2505,15 +2519,17 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
 {cve_text}
 
 **GÖREV:**
-Yukarıdaki TÜM VERİLERİ (özellikle TOOL ÇIKTILARINI) analiz ederek profesyonel bir penetrasyon testi raporu oluştur. 
+Yukarıdaki TÜM VERİLERİ (ÖZELLİKLE TOOL ÇIKTILARINI VE BULGULARI) analiz ederek profesyonel bir penetrasyon testi raporu oluştur. 
 
-🎯 ÖNEMLİ TALİMATLAR:
-1. Tool çıktılarındaki teknolojileri, portları, endpointleri, formları, subdomainleri, dizinleri ve diğer tüm bilgileri raporda kullan
-2. Eğer tool çıktılarında 20+ endpoint varsa, bu YÜKSEK RİSK olarak değerlendir
-3. Eğer tool çıktılarında 10+ form varsa, bu YÜKSEK INJECTİON RİSKİ olarak değerlendir
-4. Eğer tool çıktılarında kritik portlar (22, 3389, 21, 23) açıksa, bu KRİTİK RİSK olarak değerlendir
-5. Tool çıktılarındaki TÜM bilgileri risk hesaplamasına dahil et
-6. Her tool çıktısını detaylı şekilde raporunda açıkla
+🎯 KRİTİK TALİMATLAR (MUTLAKA UYGULA):
+1. ❌ ASLA "kritik bir güvenlik açığına rastlanmamıştır" yazma! Tool çıktıları ve bulgular VAR!
+2. ✅ Tool çıktılarındaki TEKNOLOJİLERİ, PORTLARI, ENDPOİNTLERİ, FORMLARI, SUBDOMAİNLERİ, DİZİNLERİ raporunda DETAYLI AÇIKLA
+3. ✅ Eğer 20+ endpoint varsa → YÜKSEK RİSK, saldırı yüzeyi geniş!
+4. ✅ Eğer 10+ form varsa → YÜKSEK INJECTİON RİSKİ, SQL Injection/XSS potansiyeli!
+5. ✅ Eğer kritik portlar (22, 3389, 21, 23) açıksa → KRİTİK RİSK, uzaktan erişim riski!
+6. ✅ Tespit edilen her teknoloji → zafiyet riski, güncelleme kontrolü gerekli!
+7. ✅ Bulgular bölümündeki HER bulguyu Yönetici Özetinde ve Risk Değerlendirmesinde kullan
+8. ✅ Risk seviyesi: Bulgu sayısına göre LOW/MEDIUM/HIGH/CRITICAL olarak belirle
 
 Rapor şu bölümleri içermeli:
 
