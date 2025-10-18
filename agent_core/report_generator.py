@@ -114,9 +114,9 @@ class ReportGenerator:
                 if 'form' in title.lower():
                     try:
                         form_count = int([x for x in title.split() if 'form' in x.lower()][0].split('form')[0].strip().split()[-1])
-        if form_count >= 10:
+                        if form_count >= 10:
                             total_score += 25  # 10+ form = kritik injection riski
-        elif form_count >= 5:
+                        elif form_count >= 5:
                             total_score += 15
                         elif form_count >= 2:
                             total_score += 8
