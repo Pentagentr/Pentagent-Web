@@ -1675,10 +1675,18 @@ Penetrasyon testi tamamlandı ve sen kapsamlı bir güvenlik analizi raporu haz�
                 end_idx = text.rfind('}') + 1
                 json_text = text[start_idx:end_idx]
                 logger.info(f"JSON çıkarıldı: {json_text[:100]}...")
-                return json_text
+                # JSON'u validate et
+                try:
+                    import json
+                    json.loads(json_text)  # Geçerli JSON mi?
+                    return json_text
+                except:
+                    logger.warning(f"Çıkarılan JSON geçersiz: {json_text[:100]}...")
             
-            logger.warning(f"Unexpected response format: {text[:100]}...")
-            return '{"action": "stop", "reasoning": "Gemini beklenmeyen format döndürdü"}'
+            # Hiçbir şey bulunamazsa fallback JSON dön (hata değil, duruş)
+            logger.warning(f"❌ Gemini beklenmeyen format döndürdü: {text[:200]}...")
+            logger.warning("⚠️ Fallback: Stop action")
+            return '{"action": "stop", "reasoning": "Gemini parsing başarısız, güvenli durdurma"}'
         
         except asyncio.TimeoutError:
             logger.error(f"Gemini API timeout after {timeout_seconds}s")

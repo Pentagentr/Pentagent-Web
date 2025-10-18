@@ -67,10 +67,18 @@ class ConnectionManager:
 
     async def send_personal_message(self, message: str, websocket: WebSocket):
         try:
+            # WebSocket state kontrolü ekle
             if websocket in self.active_connections:
+                # WebSocket bağlantı durumunu kontrol et
+                try:
                 await websocket.send_text(message)
+                except RuntimeError as re:
+                    # "WebSocket is not connected" hatası
+                    logger.warning(f"WebSocket bağlantısı kapalı: {re}")
+                    self.disconnect(websocket)
         except Exception as e:
             logger.error(f"Mesaj gönderme hatası: {e}")
+            logger.error(f"WebSocket hatası: {type(e).__name__}: {str(e)}")
             self.disconnect(websocket)
 
     async def broadcast(self, message: str):
@@ -1485,7 +1493,7 @@ async def generate_security_report(request: Dict[str, Any]):
                     if isinstance(value, dict):
                         # Success varsa data'dan çıkar
                         if value.get('success'):
-                            tool_data = value.get('data', {})
+                        tool_data = value.get('data', {})
                             
                             # Tool data içinden bulgu oluştur - DETAYLI
                             if isinstance(tool_data, dict) and tool_data:
@@ -1496,7 +1504,7 @@ async def generate_security_report(request: Dict[str, Any]):
                                     # Critical directories
                                     if dir_findings.get('critical'):
                                         for item in dir_findings['critical']:
-                                            finding = {
+                        finding = {
                                                 'title': f'Kritik Dizin: {item.get("path", "N/A")}',
                                                 'severity': 'critical',
                                                 'description': f'Kritik dizin tespit edildi: {item.get("path")} ({item.get("status_code")})',
@@ -1665,14 +1673,14 @@ async def generate_security_report(request: Dict[str, Any]):
                                     if subdomain_count > 0:
                                         finding = {
                                             'title': f'Subdomain Keşfi: {subdomain_count} subdomain bulundu',
-                                            'severity': 'medium',
+                            'severity': 'medium',
                                             'description': f'{subdomain_count} subdomain tespit edildi, saldırı yüzeyi genişledi',
-                                            'cvss_score': '5.0',
-                                            'cve_id': None,
+                            'cvss_score': '5.0',
+                            'cve_id': None,
                                             'evidence': f'Subdomains: {subdomains[:10]}',
                                             'recommendation_summary': 'Tüm subdomainlerin güvenliğini kontrol edin',
                                             'business_impact': 'Genişletilmiş saldırı yüzeyi',
-                                            'exploitability': 'Medium',
+                            'exploitability': 'Medium',
                                             'target': target,
                                             'technology': 'DNS'
                                         }
@@ -1739,10 +1747,10 @@ async def generate_security_report(request: Dict[str, Any]):
                                 'recommendation_summary': 'Tool sonuçlarını inceleyin',
                                 'business_impact': 'Bilgi toplama aşaması',
                                 'exploitability': 'Low',
-                                'target': target,
-                                'technology': 'Security Tool'
-                            }
-                            state.findings.append(finding)
+                            'target': target,
+                            'technology': 'Security Tool'
+                        }
+                        state.findings.append(finding)
                             logger.info(f"🔍 Genel bulgu eklendi: {key}")
             
             # Hala bulgu yoksa, en az bir bulgu oluştur

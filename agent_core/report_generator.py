@@ -2510,13 +2510,22 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
             from model_wrapper import UnifiedLLM
             model = UnifiedLLM()
             
-            prompt = f"""Sen PROFESYONEL bir siber güvenlik uzmanı ve penetrasyon test raporlayıcısısın. 
+            prompt = f"""You are a PROFESSIONAL cybersecurity expert and penetration test report writer.
 
-🔴🔴🔴 KRİTİK ÖNEM: ASLA "kritik bir güvenlik açığına rastlanmamıştır" yazma! 
-🔴🔴🔴 Aşağıdaki TOOL ÇIKTILARI ve BULGULAR çok önemlidir ve raporunda MUTLAKA kullanılmalıdır!
+🔴🔴🔴 CRITICAL REQUIREMENT: NEVER write "no critical vulnerabilities were found" or similar phrases!
+🔴🔴🔴 CRITICAL REQUIREMENT: NEVER write "no critical or high severity vulnerabilities were identified"!
+🔴🔴🔴 The TOOL OUTPUTS and FINDINGS below are MANDATORY and MUST be used in your report!
 
-**HEDEF SİSTEM:** {target}
-**TEST TARİHİ:** {datetime.now().strftime('%d.%m.%Y %H:%M')}
+🚨 IMPORTANT: Even if findings seem "low severity", you MUST:
+- Detail ALL tool outputs (pages, endpoints, forms, technologies, ports, directories)
+- Explain WHY each finding matters (attack surface, injection risks, misconfigurations)
+- Calculate risk based on the ATTACK SURFACE, not just exploits
+- 6+ pages with forms = injection risk = MEDIUM risk minimum
+- 10+ endpoints = large attack surface = MEDIUM/HIGH risk
+- Any exposed admin/config directories = HIGH/CRITICAL risk
+
+**TARGET SYSTEM:** {target}
+**TEST DATE:** {datetime.now().strftime('%d.%m.%Y %H:%M')}
 
 {tool_outputs_text}
 
@@ -2524,18 +2533,18 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
 
 {cve_text}
 
-**GÖREV:**
-Yukarıdaki TÜM VERİLERİ (ÖZELLİKLE TOOL ÇIKTILARINI VE BULGULARI) analiz ederek profesyonel bir penetrasyon testi raporu oluştur. 
+**TASK:**
+Analyze ALL DATA ABOVE (ESPECIALLY TOOL OUTPUTS AND FINDINGS) to create a professional penetration test report.
 
-🎯 KRİTİK TALİMATLAR (MUTLAKA UYGULA):
-1. ❌ ASLA "kritik bir güvenlik açığına rastlanmamıştır" yazma! Tool çıktıları ve bulgular VAR!
-2. ✅ Tool çıktılarındaki TEKNOLOJİLERİ, PORTLARI, ENDPOİNTLERİ, FORMLARI, SUBDOMAİNLERİ, DİZİNLERİ raporunda DETAYLI AÇIKLA
-3. ✅ Eğer 20+ endpoint varsa → YÜKSEK RİSK, saldırı yüzeyi geniş!
-4. ✅ Eğer 10+ form varsa → YÜKSEK INJECTİON RİSKİ, SQL Injection/XSS potansiyeli!
-5. ✅ Eğer kritik portlar (22, 3389, 21, 23) açıksa → KRİTİK RİSK, uzaktan erişim riski!
-6. ✅ Tespit edilen her teknoloji → zafiyet riski, güncelleme kontrolü gerekli!
-7. ✅ Bulgular bölümündeki HER bulguyu Yönetici Özetinde ve Risk Değerlendirmesinde kullan
-8. ✅ Risk seviyesi: Bulgu sayısına göre LOW/MEDIUM/HIGH/CRITICAL olarak belirle
+🎯 CRITICAL INSTRUCTIONS (MANDATORY):
+1. ❌ NEVER write "no critical vulnerabilities" or "no high severity vulnerabilities"! Tool outputs and findings ARE present!
+2. ✅ Detail ALL TECHNOLOGIES, PORTS, ENDPOINTS, FORMS, SUBDOMAINS, DIRECTORIES from tool outputs
+3. ✅ If 6+ pages with forms → MEDIUM RISK minimum (injection attack surface)
+4. ✅ If 10+ endpoints → HIGH RISK (large attack surface)
+5. ✅ If critical ports open (22, 3389, 21, 23) → CRITICAL RISK (remote access)
+6. ✅ Every detected technology → vulnerability risk (requires update checks)
+7. ✅ Use EVERY finding in Executive Summary and Risk Assessment
+8. ✅ Risk level: Based on finding count and attack surface (LOW/MEDIUM/HIGH/CRITICAL)
 
 Rapor şu bölümleri içermeli:
 
