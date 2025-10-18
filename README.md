@@ -24,9 +24,10 @@
 **Pentagent**, siber güvenlik uzmanları için geliştirilmiş, tamamen otonom bir penetrasyon testi platformudur:
 
 - 🤖 **AI Destekli Karar Alma** - GPT OSS 120B modeli ile akıllı test stratejileri
-- 🔍 **RAG Entegrasyonu** - 95,000+ CVE veritabanı ile anlık zafiyet analizi
-- 🎯 **Reranker Optimizasyonu** - BAAI/bge-reranker-base ile %30 daha isabetli sonuçlar
-- 📊 **Otomatik Raporlama** - PDF/TXT/JSON formatlarında profesyonel raporlar
+- 🔍 **RAG Entegrasyonu** - 95,000+ CVE veritabanı ile anlık zafiyet analizi (HuggingFace Space: [Pentagent Qdrant](https://huggingface.co/spaces/meryemarpaci/pentagent-qdrant))
+- 🎯 **Reranker Optimizasyonu** - mixedbread-ai/mxbai-rerank-base-v1 ile 10x score boost
+- 📊 **Dinamik Risk Skoru** - Tool çıktılarına dayalı akıllı risk hesaplama
+- 📊 **Otomatik Raporlama** - PDF/TXT/JSON/MD formatlarında LLM-destekli profesyonel raporlar
 - 🎨 **Modern Arayüz** - Real-time WebSocket güncellemeleri ile kullanıcı dostu UI
 - 🛠️ **30+ Güvenlik Aracı** - Kapsamlı zafiyet tespit ve doğrulama araçları
 
@@ -41,15 +42,19 @@
 
 ### 🔍 RAG (Retrieval-Augmented Generation) Sistemi
 - **95K+ CVE Veritabanı**: MITRE ve NVD kaynaklı güncel zafiyet bilgileri
+- **HuggingFace Space**: Deployed on [meryemarpaci/pentagent-qdrant](https://huggingface.co/spaces/meryemarpaci/pentagent-qdrant)
 - **Semantik Arama**: BGE-M3 embeddings ile anlam tabanlı CVE eşleştirme
-- **Reranker Entegrasyonu**: BAAI/bge-reranker-base ile sonuç kalitesi iyileştirmesi
+- **Reranker Entegrasyonu**: mixedbread-ai/mxbai-rerank-base-v1 ile 10x score boost
 - **Sorgu Optimizasyonu**: GPT OSS 120B ile kullanıcı sorgularının otomatik iyileştirilmesi
-- **Hızlı Yanıt**: Hybrid scoring (30% vector + 70% reranker) ile <500ms yanıt süresi
+- **Hızlı Yanıt**: Hybrid scoring (15% vector + 85% reranker) ile <500ms yanıt süresi
+- **Graceful Fallback**: Reranker API hataları için otomatik fallback mekanizması
 
 ### 📊 Raporlama Sistemi
-- **RAG-Entegreli Raporlar**: En alakalı 3 CVE otomatik olarak rapora eklenir
+- **RAG-Entegreli Raporlar**: En alakalı CVE'ler otomatik olarak rapora eklenir
+- **LLM-Enhanced Reports**: Gemini/Groq ile AI-destekli rapor oluşturma
+- **Dinamik Risk Skoru**: Tool çıktılarına göre (endpoints, forms, ports) akıllı skorlama
 - **CVSS Detayları**: Her CVE için CVSS skoru, vektör ve detaylı açıklama
-- **Çoklu Format**: PDF, TXT ve JSON formatlarında export
+- **Çoklu Format**: PDF, TXT, JSON ve Markdown formatlarında export
 - **OWASP Uyumlu**: OWASP Top 10 kategorilerine göre sınıflandırma
 - **Kurumsal Tasarım**: Profesyonel rapor şablonları
 
@@ -105,11 +110,17 @@ FastAPI Backend (Render.com)
     │   ├─ Verification Tools
     │   └─ Analysis Tools
     │
+    ├─ Report Generator
+    │   ├─ Dynamic Risk Score Calculator
+    │   ├─ LLM-Enhanced MD Reports
+    │   └─ Multi-Format Export (PDF/TXT/JSON/MD)
+    │
     └─ RAG Service
         ↓ REST API
-Qdrant Vector DB (HuggingFace Space)
+Qdrant Vector DB (HuggingFace Space: meryemarpaci/pentagent-qdrant)
     ├─ 95K+ CVE Embeddings (BGE-M3)
-    └─ Reranker (BAAI/bge-reranker-base)
+    ├─ Hybrid Search (Sparse + Dense)
+    └─ Reranker (mixedbread-ai/mxbai-rerank-base-v1)
 ```
 
 ### 🔄 RAG İş Akışı
@@ -117,10 +128,37 @@ Qdrant Vector DB (HuggingFace Space)
 ```
 1. Kullanıcı Sorgusu → GPT OSS 120B Optimizasyonu
 2. Optimize Sorgu → BGE-M3 Embedding
-3. Vector Search → Qdrant (Top 10 sonuç)
-4. Reranking → BAAI/bge-reranker-base
-5. Hybrid Scoring → 30% vector + 70% reranker
-6. Final Results → En alakalı 3-5 CVE
+3. Hybrid Search → Qdrant (Sparse 40% + Dense 60%, Top 20 sonuç)
+4. Reranking → mixedbread-ai/mxbai-rerank-base-v1 (10x score boost)
+5. Hybrid Scoring → 15% vector + 85% reranker (boosted)
+6. Final Results → En alakalı CVE'ler (CVSS detayları ile)
+7. Graceful Fallback → Reranker hatası durumunda orijinal sıralama
+```
+
+### 🎯 Risk Skoru Hesaplama (Yeni!)
+
+```
+Tool Çıktılarına Dayalı Dinamik Skorlama:
+├─ Severity Ağırlıkları
+│   ├─ Critical: +15
+│   ├─ High: +10
+│   ├─ Medium: +5
+│   └─ Low/Info: +2/+1
+│
+├─ Tool Çıktısı Bonusları
+│   ├─ 50+ endpoints → +30 (kritik saldırı yüzeyi)
+│   ├─ 10+ forms → +25 (injection riski)
+│   ├─ 20+ subdomains → +20 (geniş yüzey)
+│   ├─ 10+ open ports → +20
+│   └─ Critical dirs (admin, config) → +20
+│
+├─ Gerçek Zafiyet Bulguları
+│   └─ SQL/XSS/RCE → +20 each (max +50)
+│
+└─ Kritik Yol/Endpoint
+    └─ admin, login, api → +20 (5+ adet)
+
+Sonuç: 0-100 arası normalize skor, minimum 15 (bulgu varsa)
 ```
 
 ---
@@ -185,7 +223,7 @@ EMBEDDING_API_URL=https://your-embedding-space.hf.space/embed
 
 # Reranker (Opsiyonel - varsayılan değerler)
 USE_RERANKER=true
-RERANKER_MODEL=BAAI/bge-reranker-base
+RERANKER_MODEL=mixedbread-ai/mxbai-rerank-base-v1
 RERANKER_TOP_K=5
 
 # Server
@@ -343,12 +381,13 @@ report = response.json()
 
 ### Backend
 - **Framework:** FastAPI (async Python)
-- **AI Model:** GPT OSS 120B (Groq API)
-- **Vector Store:** Qdrant (HuggingFace Space)
-- **Embeddings:** BGE-M3 (BAAI/bge-m3)
-- **Reranker:** BAAI/bge-reranker-base (HuggingFace API)
-- **WebSocket:** Native FastAPI support
+- **AI Model:** GPT OSS 120B (Groq API) + Gemini fallback
+- **Vector Store:** Qdrant ([HuggingFace Space](https://huggingface.co/spaces/meryemarpaci/pentagent-qdrant))
+- **Embeddings:** BGE-M3 (BAAI/bge-m3, 1024-dim)
+- **Reranker:** mixedbread-ai/mxbai-rerank-base-v1 (10x score boost)
+- **WebSocket:** Native FastAPI support with error handling
 - **PDF Generation:** ReportLab
+- **LLM Reports:** Gemini/Groq for AI-enhanced markdown reports
 
 ### Frontend
 - **Framework:** React 18
@@ -360,11 +399,12 @@ report = response.json()
 - **Deploy:** Firebase Hosting
 
 ### Veritabanı & ML
-- **Vector DB:** Qdrant
-- **Embedding Model:** BAAI/bge-m3 (1024-dim)
-- **Reranker Model:** BAAI/bge-reranker-base
-- **LLM:** GPT OSS 120B (Groq)
-- **CVE Data:** MITRE + NVD
+- **Vector DB:** Qdrant ([Deployed on HuggingFace](https://huggingface.co/spaces/meryemarpaci/pentagent-qdrant))
+- **Embedding Model:** BAAI/bge-m3 (1024-dim, hybrid scoring)
+- **Reranker Model:** mixedbread-ai/mxbai-rerank-base-v1 (10x boost + fallback)
+- **LLM:** GPT OSS 120B (Groq) + Gemini Pro (fallback)
+- **CVE Data:** MITRE + NVD (95,000+ records)
+- **Risk Scoring:** Dynamic tool-based calculation
 
 ---
 
@@ -375,10 +415,13 @@ report = response.json()
 | RAG Yanıt Süresi | <500ms | Reranker dahil ortalama süre |
 | CVE Veritabanı | 95,000+ | MITRE ve NVD kaynakları |
 | Embedding Boyutu | 1024-dim | BGE-M3 vektör boyutu |
-| Reranker Accuracy | +30% | Vector search'e göre iyileştirme |
-| Hybrid Scoring | 30/70 | Vector vs Reranker ağırlığı |
+| Reranker Score Boost | 10x | mixedbread-ai model ile boost |
+| Hybrid Scoring | 15/85 | Vector (15%) vs Reranker (85%) ağırlığı |
+| Reranker Fallback | ✅ | Graceful degradation on API errors |
+| Risk Score Accuracy | Dynamic | Tool output-based calculation |
 | Concurrent Scans | 10+ | Aynı anda desteklenen tarama |
 | Tool Success Rate | ~85% | Ortalama başarı oranı |
+| LLM Token Optimization | 60% | Prompt size reduction (3000→1500 words) |
 
 ---
 
@@ -474,12 +517,16 @@ Katkılarınızı bekliyoruz! Lütfen aşağıdaki adımları izleyin:
 ## 📈 Roadmap
 
 ### v2.0 (Mevcut) ✅
-- [x] RAG sistemi entegrasyonu
-- [x] BAAI/bge-reranker-base optimizasyonu
+- [x] RAG sistemi entegrasyonu (HuggingFace Space)
+- [x] mixedbread-ai/mxbai-rerank-base-v1 optimizasyonu (10x boost)
 - [x] GPT OSS 120B model entegrasyonu
-- [x] Otomatik rapor oluşturma
+- [x] Dinamik risk skoru hesaplama (tool-based)
+- [x] LLM-enhanced markdown raporlar
+- [x] Otomatik rapor oluşturma (PDF/TXT/JSON/MD)
 - [x] 30+ güvenlik aracı
-- [x] WebSocket real-time updates
+- [x] WebSocket real-time updates + error handling
+- [x] Graceful fallback mekanizmaları (Reranker, LLM)
+- [x] Token optimization (60% azaltma)
 
 ### v2.1 (Planlanan) 🚧
 - [ ] Multi-target scanning
@@ -513,12 +560,15 @@ Bu proje Apache License 2.0 altında lisanslanmıştır. Detaylar için [LICENSE
 ## 🙏 Teşekkürler
 
 - **GPT OSS 120B** - AI reasoning modeli (Groq API üzerinden)
-- **Qdrant** - Vector database motoru
-- **BAAI** - BGE-M3 embeddings & bge-reranker-base
+- **Google Gemini** - Fallback LLM & report generation
+- **Qdrant** - Vector database motoru ([HuggingFace Space deployment](https://huggingface.co/spaces/meryemarpaci/pentagent-qdrant))
+- **BAAI** - BGE-M3 embeddings
+- **mixedbread-ai** - mxbai-rerank-base-v1 reranker model
 - **HuggingFace** - Model hosting & inference API
 - **NVD/MITRE** - CVE veri kaynağı
 - **FastAPI** - High-performance backend framework
 - **React** - Modern frontend framework
+- **Firebase** - Frontend hosting & authentication
 
 ---
 
