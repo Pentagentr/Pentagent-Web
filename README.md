@@ -13,7 +13,6 @@
 [Kurulum](#-kurulum) •
 [Kullanım](#-kullanım) •
 [Mimarı](#-mimari) •
-[Katkıda Bulun](#-katkıda-bulunma)
 
 </div>
 
