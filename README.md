@@ -51,12 +51,12 @@
 
 ### 📊 Raporlama Sistemi
 - **RAG-Entegreli Raporlar**: En alakalı CVE'ler otomatik olarak rapora eklenir
-- **LLM-Enhanced Reports**: Gemini/Groq ile AI-destekli rapor oluşturma
+- **LLM-Enhanced Reports**: LLM ile AI-destekli rapor oluşturma
 - **Dinamik Risk Skoru**: Tool çıktılarına göre (endpoints, forms, ports) akıllı skorlama
 - **CVSS Detayları**: Her CVE için CVSS skoru, vektör ve detaylı açıklama
 - **Çoklu Format**: PDF, TXT, JSON ve Markdown formatlarında export
 - **OWASP Uyumlu**: OWASP Top 10 kategorilerine göre sınıflandırma
-- **Kurumsal Tasarım**: Profesyonel rapor şablonları
+- **Kurumsal Tasarım**: Profesyonel raporlama
 
 ### 🛠️ Güvenlik Araçları (30+)
 **Keşif & Tarama:**
@@ -99,12 +99,12 @@
 React Frontend (Firebase Hosting)
     ↓ HTTPS / WebSocket
 FastAPI Backend (Render.com)
-    ├─ AI Orchestrator (GPT OSS 120B via Groq)
+    ├─ AI Orchestrator (GPT OSS 120B)
     │   ├─ Dynamic Tool Selection
     │   ├─ Strategy Planning
     │   └─ Error Recovery
     │
-    ├─ Security Tools (30+ modules)
+    ├─ Security Tools (25 modules)
     │   ├─ Recon Tools
     │   ├─ Scanning Tools
     │   ├─ Verification Tools
@@ -135,7 +135,7 @@ Qdrant Vector DB (HuggingFace Space: meryemarpaci/pentagent-qdrant)
 7. Graceful Fallback → Reranker hatası durumunda orijinal sıralama
 ```
 
-### 🎯 Risk Skoru Hesaplama (Yeni!)
+### 🎯 Risk Skoru Hesaplama (Yeni)
 
 ```
 Tool Çıktılarına Dayalı Dinamik Skorlama:
@@ -178,8 +178,8 @@ Sonuç: 0-100 arası normalize skor, minimum 15 (bulgu varsa)
 - Vite
 
 **API Keys:**
-- `GROQ_API_KEY` - GPT OSS 120B için (zorunlu)
-- `HUGGINGFACE_TOKEN` - RAG servisi için (opsiyonel ama önerilir)
+- `GROQ_API_KEY` - GPT OSS 120B için
+- `HUGGINGFACE_TOKEN` - RAG servisi için 
 
 ### 📦 Kurulum
 
@@ -311,7 +311,7 @@ firebase deploy --only hosting
 # Web arayüzünde
 1. http://localhost:5173 adresine git
 2. Giriş yap veya kayıt ol
-3. Chat sayfasında hedef gir: "example.com"
+3. Chat sayfasında hedef ve isteğini gir: "example.com sitesini taramanı istiyorum"
 4. AI otomatik olarak uygun araçları seçer ve taramayı başlatır
 ```
 
@@ -402,7 +402,7 @@ report = response.json()
 - **Vector DB:** Qdrant ([Deployed on HuggingFace](https://huggingface.co/spaces/meryemarpaci/pentagent-qdrant))
 - **Embedding Model:** BAAI/bge-m3 (1024-dim, hybrid scoring)
 - **Reranker Model:** mixedbread-ai/mxbai-rerank-base-v1 (10x boost + fallback)
-- **LLM:** GPT OSS 120B (Groq) + Gemini Pro (fallback)
+- **LLM:** GPT OSS 120B 
 - **CVE Data:** MITRE + NVD (95,000+ records)
 - **Risk Scoring:** Dynamic tool-based calculation
 
@@ -419,7 +419,6 @@ report = response.json()
 | Hybrid Scoring | 15/85 | Vector (15%) vs Reranker (85%) ağırlığı |
 | Reranker Fallback | ✅ | Graceful degradation on API errors |
 | Risk Score Accuracy | Dynamic | Tool output-based calculation |
-| Concurrent Scans | 10+ | Aynı anda desteklenen tarama |
 | Tool Success Rate | ~85% | Ortalama başarı oranı |
 | LLM Token Optimization | 60% | Prompt size reduction (3000→1500 words) |
 
@@ -478,39 +477,11 @@ Pentagent/
 
 ## 🔐 Güvenlik Notları
 
-⚠️ **ÖNEMLİ:** Pentagent yalnızca yasal yetkilendirme ile kullanılmalıdır.
-
 - ✅ Kendi sistemlerinizi test edin
 - ✅ Yazılı izin alınmış sistemleri test edin
 - ✅ CTF ve eğitim ortamlarında kullanın
 - ❌ İzinsiz sistemlere karşı kullanmayın
-- ❌ DoS/DDoS saldırıları yapmayın
 - ❌ Sistem kaynaklarını kötüye kullanmayın
-
-**API Key Güvenliği:**
-- API keylerini asla commit etmeyin
-- `.env` dosyasını `.gitignore`'a ekleyin
-- Production'da environment variables kullanın
-- API key rotasyonunu düzenli yapın
-
----
-
-## 🤝 Katkıda Bulunma
-
-Katkılarınızı bekliyoruz! Lütfen aşağıdaki adımları izleyin:
-
-1. Fork'layın
-2. Feature branch oluşturun (`git checkout -b feature/amazing-feature`)
-3. Değişikliklerinizi commit edin (`git commit -m 'feat: Add amazing feature'`)
-4. Branch'inizi push edin (`git push origin feature/amazing-feature`)
-5. Pull Request açın
-
-### Geliştirme Kuralları
-- Senior-level, modüler kod yazın
-- Duplicate kod/fonksiyon yazmayın
-- Best practice'lere uyun
-- Ortak kodları utils/helpers'a taşıyın
-- Yeterli yorum satırı ekleyin
 
 ---
 
@@ -560,7 +531,6 @@ Bu proje Apache License 2.0 altında lisanslanmıştır. Detaylar için [LICENSE
 ## 🙏 Teşekkürler
 
 - **GPT OSS 120B** - AI reasoning modeli (Groq API üzerinden)
-- **Google Gemini** - Fallback LLM & report generation
 - **Qdrant** - Vector database motoru ([HuggingFace Space deployment](https://huggingface.co/spaces/meryemarpaci/pentagent-qdrant))
 - **BAAI** - BGE-M3 embeddings
 - **mixedbread-ai** - mxbai-rerank-base-v1 reranker model
@@ -572,18 +542,6 @@ Bu proje Apache License 2.0 altında lisanslanmıştır. Detaylar için [LICENSE
 
 ---
 
-## 📞 İletişim & Destek
-
-- **GitHub Issues:** [github.com/Pentagentr/Pentagent-Web/issues](https://github.com/Pentagentr/Pentagent-Web/issues)
-- **Dokümantasyon:** [docs klasörüne bakın](docs/)
-- **Email:** security@pentagent.ai (demo amaçlı)
-
----
-
-<div align="center">
-
-**⭐ Projeyi beğendiyseniz yıldız vermeyi unutmayın! ⭐**
-
-Made with ❤️ by Security Researchers
+Made with by Pentagent
 
 </div>
