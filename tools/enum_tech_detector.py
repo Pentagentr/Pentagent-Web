@@ -376,6 +376,26 @@ class TechDetectorModule(MCPTool):
         if not SELENIUM_AVAILABLE:
             self.reasoning_log.append({"phase": "selenium_unavailable", "thought": "Selenium mevcut değil, bypass yapılamıyor."})
             return None
+        
+        # RENDER UYUMLU: Chrome binary kontrolü
+        import os
+        import shutil
+        
+        chrome_paths = [
+            '/usr/bin/google-chrome',
+            '/usr/bin/chromium',
+            '/usr/bin/chromium-browser',
+            shutil.which('google-chrome'),
+            shutil.which('chromium'),
+            shutil.which('chromium-browser')
+        ]
+        
+        chrome_available = any(path and os.path.exists(path) for path in chrome_paths if path)
+        
+        if not chrome_available:
+            logger.warning("Chrome binary bulunamadı (Render ortamı) - Selenium bypass atlanıyor")
+            self.reasoning_log.append({"phase": "selenium_skip", "thought": "Chrome binary bulunamadı - Selenium bypass atlandı."})
+            return None
             
         try:
             self.reasoning_log.append({"phase": "selenium_bypass", "thought": f"Selenium ile {url} bypass ediliyor."})
@@ -525,8 +545,14 @@ class TechDetectorModule(MCPTool):
                     tech_set.add(tech_name.lower())
             self.reasoning_log.append({"phase": "analysis_step", "thought": f"'builtwith' ile {len(tech_set)} teknoloji tespit edildi."})
             return tech_set
+        except UnicodeDecodeError as e:
+            # Gzip/compressed response hatası - sessizce atla
+            logger.warning(f"BuiltWith UTF-8 decode hatası (gzip response): {e}")
+            self.reasoning_log.append({"phase": "analysis_skip", "thought": "BuiltWith gzip response hatası - analiz atlandı."})
+            return set()
         except Exception as e:
             logger.warning(f"BuiltWith hatası: {e}")
+            self.reasoning_log.append({"phase": "analysis_error", "thought": f"BuiltWith hatası: {str(e)[:50]}"})
             return set()
 
     async def _analyze_error_pages(self, session: aiohttp.ClientSession, url: str) -> Set[str]:
@@ -637,6 +663,26 @@ class TechDetectorModule(MCPTool):
         
         if not SELENIUM_AVAILABLE:
             self.reasoning_log.append({"phase": "selenium_skip", "thought": "Selenium kütüphanesi bulunamadığı için JavaScript rendering atlandı."})
+            return detected_techs
+        
+        # RENDER UYUMLU: Chrome binary kontrolü
+        import os
+        import shutil
+        
+        chrome_paths = [
+            '/usr/bin/google-chrome',
+            '/usr/bin/chromium',
+            '/usr/bin/chromium-browser',
+            shutil.which('google-chrome'),
+            shutil.which('chromium'),
+            shutil.which('chromium-browser')
+        ]
+        
+        chrome_available = any(path and os.path.exists(path) for path in chrome_paths if path)
+        
+        if not chrome_available:
+            logger.warning("Chrome binary bulunamadı (Render ortamı) - Selenium analizi atlanıyor")
+            self.reasoning_log.append({"phase": "selenium_skip", "thought": "Chrome binary bulunamadı - Selenium analizi atlandı."})
             return detected_techs
             
         driver = None

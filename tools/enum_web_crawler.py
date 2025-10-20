@@ -93,7 +93,30 @@ class EnumWebCrawlerTool(MCPTool):
     def _crawl_sync(self, context: CrawlContext) -> CrawlContext:
         """
         Bu fonksiyon, Selenium tarama mantığını senkron olarak ve ayrı bir thread'de çalıştırır.
+        Render gibi ortamlarda Chrome binary olmadığı için direkt HTTP-based fallback kullanır.
         """
+        # RENDER UYUMLU: Chrome binary olmadığı durumlarda direkt HTTP-based fallback
+        import os
+        import shutil
+        
+        # Chrome binary kontrolü
+        chrome_paths = [
+            '/usr/bin/google-chrome',
+            '/usr/bin/chromium',
+            '/usr/bin/chromium-browser',
+            shutil.which('google-chrome'),
+            shutil.which('chromium'),
+            shutil.which('chromium-browser')
+        ]
+        
+        chrome_available = any(path and os.path.exists(path) for path in chrome_paths if path)
+        
+        if not chrome_available:
+            logger.warning("Chrome binary bulunamadı (Render ortamı tespit edildi)")
+            logger.info("Direkt HTTP-based crawling kullanılıyor...")
+            return self._http_based_crawl(context)
+        
+        # Chrome mevcut, Selenium ile devam et
         options = webdriver.ChromeOptions()
         options.add_argument("--headless")
         options.add_argument("--no-sandbox")

@@ -2424,108 +2424,92 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
         try:
             logger.info("🤖 LLM ile gelişmiş markdown raporu oluşturuluyor...")
             
-            # Tool çıktılarını metne çevir - DETAYLI
+            # Tool çıktılarını metne çevir - OPTİMİZE (TOKEN TASARRUFU)
             tool_outputs_text = ""
             if tool_outputs:
-                tool_outputs_text = "## TOOL ÇIKTILARI:\n\n"
-                for tool_name, tool_data in tool_outputs.items():
-                    tool_outputs_text += f"\n### {tool_name}:\n"
+                tool_outputs_text = "## TOOL ÇIKTILARI (ÖZET):\n\n"
+                for tool_name, tool_data in list(tool_outputs.items())[:15]:  # Maksimum 15 tool
+                    tool_outputs_text += f"\n**{tool_name}:** "
                     if isinstance(tool_data, dict):
                         if tool_data.get('success'):
-                            data = tool_data.get('data', {})
-                            # AI Summary varsa ekle
+                            # Sadece AI Summary ve önemli metrikleri ekle
                             if tool_data.get('ai_summary'):
-                                tool_outputs_text += f"**AI Özeti:** {tool_data['ai_summary']}\n\n"
+                                tool_outputs_text += f"{tool_data['ai_summary'][:150]}... "
                             
-                            # Data'yı özetleyerek ekle
+                            data = tool_data.get('data', {})
                             if isinstance(data, dict):
-                                tool_outputs_text += f"**Veri Noktaları:** {len(data)} key\n"
-                                tool_outputs_text += f"**Anahtarlar:** {', '.join(list(data.keys())[:10])}\n"
-                                
-                                # Önemli alanları detaylı göster
-                                important_keys = ['vulnerabilities', 'findings', 'technologies', 'open_ports', 
-                                                'subdomains', 'directories', 'endpoints', 'forms', 'parameters']
+                                # Sadece önemli alanların sayısını göster
+                                important_keys = ['vulnerabilities', 'findings', 'open_ports', 'endpoints', 'forms']
+                                metrics = []
                                 for key in important_keys:
                                     if key in data and data[key]:
                                         value = data[key]
                                         if isinstance(value, list):
-                                            tool_outputs_text += f"**{key}:** {len(value)} items\n"
-                                            # İlk 5 itemi göster
-                                            for item in value[:5]:
-                                                if isinstance(item, dict):
-                                                    item_str = ", ".join([f"{k}: {v}" for k, v in list(item.items())[:3]])
-                                                    tool_outputs_text += f"  - {item_str}\n"
-                                                else:
-                                                    tool_outputs_text += f"  - {str(item)[:100]}\n"
-                                        else:
-                                            tool_outputs_text += f"**{key}:** {str(value)[:200]}\n"
+                                            metrics.append(f"{len(value)} {key}")
+                                if metrics:
+                                    tool_outputs_text += f"({', '.join(metrics)})"
                             tool_outputs_text += "\n"
                         else:
                             error = tool_data.get('error', 'Unknown error')
-                            tool_outputs_text += f"**Hata:** {error}\n\n"
-                    else:
-                        tool_outputs_text += f"{str(tool_data)[:300]}...\n\n"
+                            tool_outputs_text += f"Hata: {error[:100]}\n"
             else:
                 tool_outputs_text = "Tool çıktıları bulunamadı.\n"
             
-            # Bulguları metne çevir - ÖNCELİKLE TOOL BULGULARI
+            # Bulguları metne çevir - OPTİMİZE (TOKEN TASARRUFU)
             findings_text = ""
             if findings:
-                # Tool bulgularını say
-                tool_findings_count = len([f for f in findings if 'endpoint' in f.get('title', '').lower() or 
-                                          'form' in f.get('title', '').lower() or 
-                                          'port' in f.get('title', '').lower() or
-                                          'teknoloji' in f.get('title', '').lower() or
-                                          'subdomain' in f.get('title', '').lower()])
+                # Severity'ye göre grupla
+                critical = [f for f in findings if f.get('severity') == 'critical']
+                high = [f for f in findings if f.get('severity') == 'high']
+                medium = [f for f in findings if f.get('severity') == 'medium']
                 
-                findings_text = f"## TESPİT EDİLEN BULGULAR ({len(findings)} bulgu, {tool_findings_count} tool bulgusu):\n\n"
-                findings_text += "🔴 DİKKAT: Aşağıdaki tool bulgularını raporunda MUTLAKA detaylı şekilde açıkla!\n\n"
+                findings_text = f"## BULGULAR ({len(findings)} toplam: {len(critical)} critical, {len(high)} high, {len(medium)} medium):\n\n"
                 
-                for i, finding in enumerate(findings, 1):
-                    findings_text += f"{i}. **{finding.get('title', 'Bilinmeyen Bulgu')}**\n"
-                    findings_text += f"   - Severity: {finding.get('severity', 'Unknown')}\n"
-                    findings_text += f"   - Açıklama: {finding.get('description', 'Açıklama yok')}\n"
-                    findings_text += f"   - Kanıt: {finding.get('evidence', 'Kanıt yok')[:200]}...\n"
-                    findings_text += f"   - Hedef: {finding.get('target', 'N/A')}\n"
-                    findings_text += f"   - CVE: {finding.get('cve_id', 'N/A')}\n"
-                    findings_text += f"   - CVSS: {finding.get('cvss_score', 'N/A')}\n\n"
+                # Sadece critical ve high severity bulguları detaylı göster
+                priority_findings = critical[:5] + high[:5]  # Maksimum 10 bulgu
+                if priority_findings:
+                    findings_text += "🔴 ÖNCELİKLİ BULGULAR:\n"
+                    for i, finding in enumerate(priority_findings, 1):
+                        findings_text += f"{i}. {finding.get('title', 'Bilinmeyen')} [{finding.get('severity', 'Unknown').upper()}] "
+                        findings_text += f"- {finding.get('description', '')[:100]}... "
+                        if finding.get('cvss_score'):
+                            findings_text += f"(CVSS: {finding.get('cvss_score')})"
+                        findings_text += "\n"
+                
+                # Diğer bulguları sadece sayı olarak göster
+                other_count = len(findings) - len(priority_findings)
+                if other_count > 0:
+                    findings_text += f"\n+ {other_count} ek bulgu (düşük/orta severity)\n"
             else:
-                findings_text = "❌ HATA: Hiç bulgu tespit edilmedi - bu mümkün değil!\n"
+                findings_text = "Bulgu bulunamadı.\n"
             
-            # CVE'leri metne çevir
+            # CVE'leri metne çevir - OPTİMİZE (TOKEN TASARRUFU)
             cve_text = ""
             if cve_results:
-                cve_text = "## CVE REFERANSLARI:\n\n"
-                for i, cve in enumerate(cve_results[:10], 1):
-                    if isinstance(cve, dict):
-                        cve_text += f"{i}. **{cve.get('cve_id', 'N/A')}**\n"
-                        cve_text += f"   - Severity: {cve.get('severity', 'N/A')}\n"
-                        cve_text += f"   - CVSS: {cve.get('base_score') or cve.get('cvss_score', 'N/A')}\n"
-                        cve_text += f"   - Açıklama: {cve.get('description', 'N/A')[:300]}...\n"
-                        cve_text += f"   - Yayın Tarihi: {cve.get('published_date', 'N/A')}\n\n"
+                # Sadece critical/high severity CVE'leri göster
+                priority_cves = [c for c in cve_results if isinstance(c, dict) and 
+                               c.get('severity', '').lower() in ['critical', 'high']][:5]
+                
+                if priority_cves:
+                    cve_text = "## YÜKSEK ÖNCELİKLİ CVE'LER:\n\n"
+                    for i, cve in enumerate(priority_cves, 1):
+                        cve_text += f"{i}. {cve.get('cve_id', 'N/A')} [{cve.get('severity', 'N/A')}] "
+                        cve_text += f"CVSS:{cve.get('base_score') or cve.get('cvss_score', 'N/A')} - "
+                        cve_text += f"{cve.get('description', 'N/A')[:150]}...\n"
+                    
+                    other_cve_count = len(cve_results) - len(priority_cves)
+                    if other_cve_count > 0:
+                        cve_text += f"\n+ {other_cve_count} ek CVE referansı\n"
+                else:
+                    cve_text = f"## CVE REFERANSLARI: {len(cve_results)} toplam CVE\n"
             else:
-                cve_text = "CVE referansı bulunamadı.\n"
+                cve_text = ""
             
             # Unified LLM kullanarak rapor oluştur
             from model_wrapper import UnifiedLLM
             model = UnifiedLLM()
             
-            prompt = f"""You are a PROFESSIONAL cybersecurity expert and penetration test report writer.
-
-🔴🔴🔴 CRITICAL REQUIREMENT: NEVER write "no critical vulnerabilities were found" or similar phrases!
-🔴🔴🔴 CRITICAL REQUIREMENT: NEVER write "no critical or high severity vulnerabilities were identified"!
-🔴🔴🔴 The TOOL OUTPUTS and FINDINGS below are MANDATORY and MUST be used in your report!
-
-🚨 IMPORTANT: Even if findings seem "low severity", you MUST:
-- Detail ALL tool outputs (pages, endpoints, forms, technologies, ports, directories)
-- Explain WHY each finding matters (attack surface, injection risks, misconfigurations)
-- Calculate risk based on the ATTACK SURFACE, not just exploits
-- 6+ pages with forms = injection risk = MEDIUM risk minimum
-- 10+ endpoints = large attack surface = MEDIUM/HIGH risk
-- Any exposed admin/config directories = HIGH/CRITICAL risk
-
-**TARGET SYSTEM:** {target}
-**TEST DATE:** {datetime.now().strftime('%d.%m.%Y %H:%M')}
+            prompt = f"""Professional pentest report for {target} (Test: {datetime.now().strftime('%d.%m.%Y')})
 
 {tool_outputs_text}
 
@@ -2533,46 +2517,33 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
 
 {cve_text}
 
-**TASK:** Create a concise professional pentest report using the data above.
+🎯 REQUIREMENTS:
+- Write in Turkish
+- Focus on FINDINGS and TOOL DATA
+- 6+ pages with forms → MEDIUM risk minimum
+- 10+ endpoints → HIGH attack surface
+- Explain security impact of ALL findings
+- Keep concise (max 1000 words)
 
-🎯 CRITICAL:
-1. ❌ NEVER write "no critical/high vulnerabilities"!
-2. ✅ Detail ALL tool outputs (endpoints, forms, ports, technologies)
-3. ✅ 6+ pages + forms → MEDIUM risk minimum
-4. ✅ 10+ endpoints → HIGH risk
-5. ✅ Critical ports (22,3389,21,23) → CRITICAL risk
-
-**Report Structure (Turkish, concise):**
+**Report Structure:**
 
 # PENETRASYON TESTİ RAPORU
 
 ## 1. YÖNETİCİ ÖZETİ
-- Güvenlik durumu (1-2 paragraf)
-- Risk skoru ve seviyesi
-- Top 3 kritik bulgu
-- Acil aksiyonlar
+- Güvenlik durumu (1 paragraf)
+- Risk skoru ve top 3 bulgu
 
-## 2. METODOLOJİ
-- Test kapsamı
-- Kullanılan araçlar (kısa liste)
+## 2. TEKNİK BULGULAR
+- List priority findings with severity, description, solution
 
-## 3. TEKNİK BULGULAR
-Her bulgu için:
-- Başlık, Severity, CVSS
-- Açıklama (kısa)
-- Kanıt
-- Çözüm
+## 3. TOOL ANALİZİ
+- Summarize tool outputs and security implications
 
-## 4. TOOL ÇIKTILARI
-🔴 List ALL tool data: endpoints count, forms count, ports, technologies
-🔴 Explain WHY each matters for security
-
-## 5. ÖNERİLER
+## 4. ÖNERİLER
 - Acil (0-48h)
 - Kısa vadeli (1-7 gün)
-- Uzun vadeli
 
-**KEEP IT CONCISE (max 1500 words) but DETAILED on findings!**"""
+**Write concisely but cover ALL data!**"""
 
             # LLM'den rapor al
             try:

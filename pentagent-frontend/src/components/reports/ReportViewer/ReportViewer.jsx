@@ -1196,24 +1196,6 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
         
         <div className="p-3 border-t border-platinum-500/10 space-y-2">
           <button 
-            onClick={() => handleDownload('pdf')}
-            disabled={downloading}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-platinum-500/10 hover:bg-platinum-500/20 text-platinum-400 rounded-lg transition-colors text-xs font-medium disabled:opacity-50"
-          >
-            {downloading ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                İndiriliyor...
-              </>
-            ) : (
-              <>
-                <Download className="w-3.5 h-3.5" />
-                PDF İndir
-              </>
-            )}
-          </button>
-          
-          <button 
             onClick={() => handleDownload('md')}
             disabled={downloading}
             className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition-colors text-xs font-medium disabled:opacity-50"
@@ -1226,11 +1208,10 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
             ) : (
               <>
                 <FileText className="w-3.5 h-3.5" />
-                Markdown İndir
+                Rapor İndir
               </>
             )}
           </button>
-          
         </div>
       </div>
       
