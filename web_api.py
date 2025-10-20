@@ -71,7 +71,7 @@ class ConnectionManager:
             if websocket in self.active_connections:
                 # WebSocket bağlantı durumunu kontrol et
                 try:
-                await websocket.send_text(message)
+                    await websocket.send_text(message)
                 except RuntimeError as re:
                     # "WebSocket is not connected" hatası
                     logger.warning(f"WebSocket bağlantısı kapalı: {re}")
