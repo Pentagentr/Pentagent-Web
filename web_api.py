@@ -1493,7 +1493,7 @@ async def generate_security_report(request: Dict[str, Any]):
                     if isinstance(value, dict):
                         # Success varsa data'dan çıkar
                         if value.get('success'):
-                        tool_data = value.get('data', {})
+                            tool_data = value.get('data', {})
                             
                             # Tool data içinden bulgu oluştur - DETAYLI
                             if isinstance(tool_data, dict) and tool_data:
@@ -1504,7 +1504,7 @@ async def generate_security_report(request: Dict[str, Any]):
                                     # Critical directories
                                     if dir_findings.get('critical'):
                                         for item in dir_findings['critical']:
-                        finding = {
+                                            finding = {
                                                 'title': f'Kritik Dizin: {item.get("path", "N/A")}',
                                                 'severity': 'critical',
                                                 'description': f'Kritik dizin tespit edildi: {item.get("path")} ({item.get("status_code")})',
