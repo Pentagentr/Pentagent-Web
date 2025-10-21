@@ -221,10 +221,26 @@ class EnumWebCrawlerTool(MCPTool):
         logger.info("HTTP-based crawling başlatılıyor...")
         self._add_reasoning(context.ai_reasoning_log, "fallback", "Selenium kullanılamadı, HTTP-based crawling kullanılıyor")
         
-        # Session oluştur
+        # Session oluştur - DNS çözümleme için optimize edilmiş
         session = requests.Session()
-        retry = Retry(total=3, backoff_factor=0.3)
-        adapter = HTTPAdapter(max_retries=retry)
+        
+        # Retry stratejisi - DNS hatalarını da kapsar
+        retry = Retry(
+            total=5,  # Toplam deneme sayısı
+            backoff_factor=1,  # Her denemede bekleme süresi artışı
+            status_forcelist=[429, 500, 502, 503, 504],  # Retry yapılacak HTTP kodları
+            allowed_methods=["HEAD", "GET", "OPTIONS"],  # Retry yapılacak methodlar
+            raise_on_status=False  # HTTP hata kodlarında exception fırlatma
+        )
+        
+        # HTTPAdapter - connection pool ve timeout ayarları
+        adapter = HTTPAdapter(
+            max_retries=retry,
+            pool_connections=50,  # Connection pool size artırıldı
+            pool_maxsize=50,  # Maksimum pool size artırıldı
+            pool_block=False  # Pool dolu olduğunda bloke etme
+        )
+        
         session.mount('http://', adapter)
         session.mount('https://', adapter)
         session.headers.update({
@@ -241,7 +257,8 @@ class EnumWebCrawlerTool(MCPTool):
                 continue
             
             try:
-                response = session.get(current_url, timeout=10)
+                # Timeout artırıldı - DNS çözümleme için daha fazla süre
+                response = session.get(current_url, timeout=30)
                 if response.status_code == 200:
                     crawled_urls.add(current_url)
                     context.discovered_paths.add(urlparse(current_url).path or '/')
