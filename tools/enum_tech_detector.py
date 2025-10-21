@@ -1323,23 +1323,55 @@ class TechDetectorModule(MCPTool):
                 ai_reasoning=self.reasoning_log,
                 error="Geçerli bir 'url' veya 'target' parametresi zorunludur."
             )
-        if not re.match(r'^https?://', url): 
-            url = 'http://' + url
+        
+        # URL normalizasyonu - hem https hem http dene
+        urls_to_try = []
+        if not re.match(r'^https?://', url):
+            # Protokol yoksa hem https hem http dene
+            urls_to_try = [f'https://{url}', f'http://{url}']
+            self.reasoning_log.append({"phase": "url_normalize", "thought": f"Protokol belirtilmemiş, hem HTTPS hem HTTP denenecek: {urls_to_try}"})
+        else:
+            urls_to_try = [url]
+            self.reasoning_log.append({"phase": "url_normalize", "thought": f"Protokol mevcut: {url}"})
 
         headers = {'User-Agent': 'Pentagent Security Scanner/1.0'}
-        connector = aiohttp.TCPConnector(verify_ssl=False)
-        async with aiohttp.ClientSession(headers=headers, connector=connector) as session:
-            # Multiple strategies ile içerik al
-            strategies = ["default", "mobile", "bot", "api"]
+        
+        # DNS çözümleme için optimize edilmiş TCPConnector
+        timeout_config = aiohttp.ClientTimeout(total=60, connect=30, sock_connect=30, sock_read=30)
+        connector = aiohttp.TCPConnector(
+            verify_ssl=False, 
+            ttl_dns_cache=300,
+            limit=100,
+            force_close=False,
+            enable_cleanup_closed=True
+        )
+        
+        async with aiohttp.ClientSession(headers=headers, connector=connector, timeout=timeout_config) as session:
             content_data = None
             
-            for strategy in strategies:
-                content_data = await self._fetch_url_content(session, url, strategy)
+            # Her URL'i dene (https önce, sonra http)
+            for test_url in urls_to_try:
+                self.reasoning_log.append({"phase": "url_attempt", "thought": f"URL deneniyor: {test_url}"})
+                
+                # Multiple strategies ile içerik al
+                strategies = ["default", "mobile", "bot", "api"]
+                
+                for strategy in strategies:
+                    content_data = await self._fetch_url_content(session, test_url, strategy)
+                    if content_data and content_data.get("content"):
+                        self.reasoning_log.append({"phase": "strategy_success", "thought": f"{test_url} için {strategy} stratejisi başarılı."})
+                        url = test_url  # Başarılı URL'i kullan
+                        break
+                    else:
+                        self.reasoning_log.append({"phase": "strategy_failed", "thought": f"{test_url} için {strategy} stratejisi başarısız."})
+                
+                # Content bulunduysa döngüyü kır
                 if content_data and content_data.get("content"):
-                    self.reasoning_log.append({"phase": "strategy_success", "thought": f"{strategy} stratejisi ile başarılı içerik alındı."})
                     break
-                else:
-                    self.reasoning_log.append({"phase": "strategy_failed", "thought": f"{strategy} stratejisi başarısız, sonraki strateji deneniyor."})
+            
+            # Hiçbir URL çalışmadıysa
+            if not content_data or not content_data.get("content"):
+                self.reasoning_log.append({"phase": "all_failed", "thought": f"Tüm URL ve stratejiler başarısız, basic detection'a geçiliyor."})
             
             if not content_data:
                 # Son çare: Basic URL detection kullan

@@ -80,9 +80,17 @@ class SubdomainBruteforceModule(MCPTool):
         self._add_reasoning(self.reasoning_log, "wordlist_generation", f"{len(wordlist)} kelime ile wordlist oluşturuldu.")
         
         # Bruteforce işlemini başlat - BATCH PROCESSING ile
+        # DNS çözümleme için optimize edilmiş connector
+        connector = aiohttp.TCPConnector(
+            limit=threads, 
+            limit_per_host=threads,
+            ttl_dns_cache=300,
+            force_close=False,
+            enable_cleanup_closed=True
+        )
         async with aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=timeout),
-            connector=aiohttp.TCPConnector(limit=threads, limit_per_host=threads)
+            timeout=aiohttp.ClientTimeout(total=timeout, connect=30, sock_connect=30),
+            connector=connector
         ) as session:
             # Batch processing - küçük gruplar halinde işle
             batch_size = min(threads * 2, 10)  # Maksimum 10 subdomain per batch

@@ -274,7 +274,21 @@ class EnumDirectoryBruteforcerTool(MCPTool):
         self._add_reasoning(context.ai_reasoning_log, "initialization", f"Hedef {context.base_url} için dizin keşfi başlatılıyor. Metod: Akıllı Baseline Analizi.")
 
         try:
-            async with aiohttp.ClientSession(headers={"User-Agent": random.choice(USER_AGENTS)}) as session:
+            # DNS çözümleme için optimize edilmiş connector
+            connector = aiohttp.TCPConnector(
+                ttl_dns_cache=300,
+                force_close=False,
+                enable_cleanup_closed=True,
+                verify_ssl=False,
+                limit=context.threads,
+                limit_per_host=context.threads
+            )
+            timeout_config = aiohttp.ClientTimeout(total=60, connect=30, sock_connect=30)
+            async with aiohttp.ClientSession(
+                headers={"User-Agent": random.choice(USER_AGENTS)},
+                connector=connector,
+                timeout=timeout_config
+            ) as session:
                 context.baseline = await self._establish_baseline(session, context.base_url)
                 if not context.baseline:
                      self._add_reasoning(context.ai_reasoning_log, "warning", "Baseline tespiti yapılamadı. Sonuçlar yanıltıcı pozitifler içerebilir.")

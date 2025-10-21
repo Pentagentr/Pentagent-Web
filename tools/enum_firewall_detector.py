@@ -222,7 +222,19 @@ class EnumFirewallDetectorTool(MCPTool):
         self._add_reasoning(context.ai_reasoning_log, "initialization", f"Hedef {url} için bütünsel güvenlik duruşu analizi başlatılıyor.")
 
         try:
-            async with aiohttp.ClientSession(headers={"User-Agent": "Pentagent/1.0"}) as session:
+            # DNS çözümleme için optimize edilmiş connector
+            connector = aiohttp.TCPConnector(
+                ttl_dns_cache=300,
+                force_close=False,
+                enable_cleanup_closed=True,
+                verify_ssl=False
+            )
+            timeout_config = aiohttp.ClientTimeout(total=60, connect=30, sock_connect=30)
+            async with aiohttp.ClientSession(
+                headers={"User-Agent": "Pentagent/1.0"}, 
+                connector=connector,
+                timeout=timeout_config
+            ) as session:
                 await self._passive_scan(session, context)
                 await self._active_probe(session, context)
                 await self._rate_limit_test(session, context)
