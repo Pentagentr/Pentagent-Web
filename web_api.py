@@ -259,76 +259,47 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info("Bağlantı durumu mesajı gönderildi")
         
         while True:
-            # Client'tan mesaj bekle
-            data = await websocket.receive_text()
-            message = json.loads(data)
-            logger.info(f"WebSocket mesajı alındı: {message.get('type', 'unknown')}")
-            
-            # Mesaj tipine göre işle
-            if message.get("type") == "ping":
-                logger.info("Ping mesajı alındı, pong gönderiliyor")
-                await manager.send_personal_message(
-                    json.dumps({"type": "pong", "timestamp": datetime.now().isoformat()}),
-                    websocket
-                )
-            elif message.get("type") == "start_scan":
-                # WebSocket üzerinden scan başlat
-                target = message.get("target", "")
-                task = message.get("task", "")
+            try:
+                # Client'tan mesaj bekle
+                data = await websocket.receive_text()
+                message = json.loads(data)
+                logger.info(f"WebSocket mesajı alındı: {message.get('type', 'unknown')}")
                 
-                logger.info(f"Scan başlatma isteği: target={target}, task={task}")
-                
-                # TARGET VAR MI KONTROL ET
-                if target and target.strip():
-                    # TARGET VAR - Normal scan başlat
-                    scan_id = f"ws_scan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                    
-                    # Scan başlatma mesajı
-                    scan_started = {
-                        "type": "scan_started",
-                        "scan_id": scan_id,
-                        "target": target,
-                        "task": task,
-                        "timestamp": datetime.now().strftime("%H:%M:%S")
-                    }
-                    
+                # Mesaj tipine göre işle
+                if message.get("type") == "ping":
+                    logger.info("Ping mesajı alındı, pong gönderiliyor")
                     await manager.send_personal_message(
-                        json.dumps(scan_started),
+                        json.dumps({"type": "pong", "timestamp": datetime.now().isoformat()}),
                         websocket
                     )
-                    logger.info(f"Scan başlatıldı: {scan_id}")
+                elif message.get("type") == "start_scan":
+                    # WebSocket üzerinden scan başlat
+                    target = message.get("target", "")
+                    task = message.get("task", "")
                     
-                    async def ws_status_callback(msg: str, status_type: str = "info"):
-                        status_data = {
-                            "type": "scan_status",
+                    logger.info(f"Scan başlatma isteği: target={target}, task={task}")
+                    
+                    # TARGET VAR MI KONTROL ET
+                    if target and target.strip():
+                        # TARGET VAR - Normal scan başlat
+                        scan_id = f"ws_scan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                        
+                        # Scan başlatma mesajı
+                        scan_started = {
+                            "type": "scan_started",
                             "scan_id": scan_id,
-                            "timestamp": datetime.now().strftime("%H:%M:%S"),
-                            "message": msg,
-                            "status_type": status_type
+                            "target": target,
+                            "task": task,
+                            "timestamp": datetime.now().strftime("%H:%M:%S")
                         }
-                        await manager.send_personal_message(json.dumps(status_data), websocket)
-                    
-                    # Async scan başlat
-                    asyncio.create_task(run_scan_async(scan_id, target, task, ws_status_callback))
-                    logger.info("Async scan task başlatıldı")
-                else:
-                    # TARGET YOK - Sadece AI yanıt ver
-                    logger.info(f"Target yok, AI yanıt veriliyor: {task}")
-                    
-                    scan_id = f"ws_chat_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                    
-                    async def ws_ai_callback(msg: str, status_type: str = "info"):
-                        """AI yanıtları için callback"""
-                        if status_type == "ai_response":
-                            # AI yanıtını direkt gönder
-                            ai_response_data = {
-                                "type": "ai_response",
-                                "message": msg,
-                                "timestamp": datetime.now().strftime("%H:%M:%S")
-                            }
-                            await manager.send_personal_message(json.dumps(ai_response_data), websocket)
-                        else:
-                            # Diğer mesajlar
+                        
+                        await manager.send_personal_message(
+                            json.dumps(scan_started),
+                            websocket
+                        )
+                        logger.info(f"Scan başlatıldı: {scan_id}")
+                        
+                        async def ws_status_callback(msg: str, status_type: str = "info"):
                             status_data = {
                                 "type": "scan_status",
                                 "scan_id": scan_id,
@@ -337,18 +308,52 @@ async def websocket_endpoint(websocket: WebSocket):
                                 "status_type": status_type
                             }
                             await manager.send_personal_message(json.dumps(status_data), websocket)
-                    
-                    # Async AI yanıt al
-                    asyncio.create_task(run_scan_async(scan_id, "", task, ws_ai_callback))
-                    logger.info("AI yanıt task başlatıldı")
+                        
+                        # Async scan başlat
+                        asyncio.create_task(run_scan_async(scan_id, target, task, ws_status_callback))
+                        logger.info("Async scan task başlatıldı")
+                    else:
+                        # TARGET YOK - Sadece AI yanıt ver
+                        logger.info(f"Target yok, AI yanıt veriliyor: {task}")
+                        
+                        scan_id = f"ws_chat_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                        
+                        async def ws_ai_callback(msg: str, status_type: str = "info"):
+                            """AI yanıtları için callback"""
+                            if status_type == "ai_response":
+                                # AI yanıtını direkt gönder
+                                ai_response_data = {
+                                    "type": "ai_response",
+                                    "message": msg,
+                                    "timestamp": datetime.now().strftime("%H:%M:%S")
+                                }
+                                await manager.send_personal_message(json.dumps(ai_response_data), websocket)
+                            else:
+                                # Diğer mesajlar
+                                status_data = {
+                                    "type": "scan_status",
+                                    "scan_id": scan_id,
+                                    "timestamp": datetime.now().strftime("%H:%M:%S"),
+                                    "message": msg,
+                                    "status_type": status_type
+                                }
+                                await manager.send_personal_message(json.dumps(status_data), websocket)
+                        
+                        # Async AI yanıt al
+                        asyncio.create_task(run_scan_async(scan_id, "", task, ws_ai_callback))
+                        logger.info("AI yanıt task başlatıldı")
+            except RuntimeError as re:
+                # WebSocket bağlantısı kesildiğinde oluşan hata
+                logger.info(f"WebSocket bağlantısı kapatıldı (RuntimeError): {re}")
+                break
             
     except WebSocketDisconnect:
         logger.info("WebSocket bağlantısı kapatıldı")
-        manager.disconnect(websocket)
     except Exception as e:
         logger.error(f"WebSocket hatası: {e}")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
+    finally:
         manager.disconnect(websocket)
 
 # ==================== RAG QUERY OPTIMIZATION ====================
