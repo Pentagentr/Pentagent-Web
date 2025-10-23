@@ -638,11 +638,15 @@ async def generate_security_report(request: Dict[str, Any]):
         target = request.get("target", "Unknown Target")
         scan_results = request.get("scan_results", {})
         cve_results = request.get("cve_results", [])
+        llm_query = request.get("llm_query", "")  # LLM'in oluşturduğu sorgu
+        scan_summary = request.get("scan_summary", "")  # Tarama özeti
         
         if not scan_results:
             raise HTTPException(status_code=400, detail="scan_results gerekli")
         
         logger.info(f"Rapor oluşturuluyor - Target: {target}, CVE count: {len(cve_results)}")
+        logger.info(f"LLM Query: {llm_query[:100] if llm_query else 'Yok'}...")
+        logger.info(f"Scan Summary: {scan_summary[:100] if scan_summary else 'Yok'}...")
         
         # ReportGenerator'ı import et
         from agent_core.report_generator import ReportGenerator
@@ -1397,7 +1401,9 @@ async def generate_security_report(request: Dict[str, Any]):
                 target=target,
                 cve_results=cve_findings,
                 tool_outputs=all_tool_outputs,
-                scan_results=scan_results
+                scan_results=scan_results,
+                llm_query=llm_query,  # LLM sorgusu
+                scan_summary=scan_summary  # Tarama özeti
             )
             
             # LLM raporunu da kaydet

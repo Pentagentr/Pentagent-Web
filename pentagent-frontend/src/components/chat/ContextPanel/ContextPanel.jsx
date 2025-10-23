@@ -128,7 +128,9 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
         scanResults: scanResults,
         cveResults: topCVEs,
         target: scanResults.target || 'Unknown Target',
-        generatedAt: new Date().toISOString()
+        generatedAt: new Date().toISOString(),
+        llmQuery: llmQuery, // LLM'in oluşturduğu query
+        scanSummary: scanSummary // Tarama özeti (LLM'e gönderilecek)
       };
       
       console.log('💾 reportData:', reportData); // DEBUG
@@ -197,24 +199,11 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
                 <span>LLM tarama sonuçlarını analiz ediyor...</span>
               </div>
             ) : llmQuery ? (
-              <>
-                <div className="bg-obsidian-950/70 p-3 rounded-lg border border-purple-500/20 mb-2">
-                  <p className="text-xs text-purple-200 font-mono leading-relaxed">
-                    "{llmQuery}"
-                  </p>
-                </div>
-                {scanSummary && (
-                  <div className="pt-2 border-t border-purple-500/10">
-                    <div className="flex items-center gap-2 mb-1">
-                      <FileText className="w-3 h-3 text-blue-400" />
-                      <span className="text-[10px] font-medium text-blue-300">Tarama Özeti</span>
-                    </div>
-                    <p className="text-[10px] text-text-secondary leading-relaxed">
-                      {scanSummary}
-                    </p>
-                  </div>
-                )}
-              </>
+              <div className="bg-obsidian-950/70 p-3 rounded-lg border border-purple-500/20">
+                <p className="text-xs text-purple-200 font-mono leading-relaxed">
+                  "{llmQuery}"
+                </p>
+              </div>
             ) : null}
           </div>
         )}
@@ -270,8 +259,7 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
                   Tekrar Dene
                 </button>
               </div>
-            ) : false && cveResults.length > 0 ? (
-              /* CVE bulgular gizlendi - sadece LLM'e rapor oluştururken verilecek */
+            ) : cveResults.length > 0 ? (
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="text-xs font-medium text-platinum">

@@ -2416,10 +2416,14 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
             logger.error(f"AI rapor oluşturma hatası: {e}")
             return self._generate_fallback_ai_report(state, scan_results, cve_results)
 
-    def generate_llm_enhanced_report(self, findings: List[Dict[str, Any]], target: str, cve_results: List[Dict[str, Any]], tool_outputs: Dict[str, Any], scan_results: Dict[str, Any]) -> str:
+    def generate_llm_enhanced_report(self, findings: List[Dict[str, Any]], target: str, cve_results: List[Dict[str, Any]], tool_outputs: Dict[str, Any], scan_results: Dict[str, Any], llm_query: str = "", scan_summary: str = "") -> str:
         """
         LLM ile zenginleştirilmiş rapor oluştur - TÜM TOOL ÇIKTILARI İLE.
         Web API'den çağrılır.
+        
+        Args:
+            llm_query: LLM'in tarama sonuçlarından oluşturduğu CVE sorgusu
+            scan_summary: Tarama özeti (UI'da gözükmez, sadece LLM'e gönderilir)
         """
         try:
             logger.info("🤖 LLM ile gelişmiş markdown raporu oluşturuluyor...")
@@ -2509,8 +2513,15 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
             from model_wrapper import UnifiedLLM
             model = UnifiedLLM()
             
+            # Tarama özeti varsa ekle (UI'da gözükmez, sadece LLM context için)
+            scan_context = ""
+            if scan_summary:
+                scan_context = f"\n## TARAMA ÖZETİ:\n{scan_summary}\n"
+            if llm_query:
+                scan_context += f"\n**CVE Sorgusu:** {llm_query}\n"
+            
             prompt = f"""Professional pentest report for {target} (Test: {datetime.now().strftime('%d.%m.%Y')})
-
+{scan_context}
 {tool_outputs_text}
 
 {findings_text}

@@ -69,6 +69,8 @@ const Reports = () => {
           target: pendingReport.target,
           scan_results: pendingReport.scanResults,
           cve_results: pendingReport.cveResults,
+          llm_query: pendingReport.llmQuery, // LLM sorgusu
+          scan_summary: pendingReport.scanSummary, // Tarama özeti (LLM'e gönderilecek)
         }),
       });
 
