@@ -233,7 +233,7 @@ const CVEModal = ({ cve, onClose }) => {
                   References ({references.length})
                 </h3>
               </div>
-              <div className="space-y-2">
+              <div className="max-h-64 overflow-y-auto space-y-2 pr-2 scrollbar-thin scrollbar-thumb-purple-500/30 scrollbar-track-transparent">
                 {references.map((ref, index) => {
                   const url = typeof ref === 'string' ? ref : ref.url || ref.link;
                   const name = typeof ref === 'object' ? ref.name || ref.source : null;
@@ -251,7 +251,7 @@ const CVEModal = ({ cve, onClose }) => {
                         {name && (
                           <p className="text-xs text-platinum font-medium mb-0.5">{name}</p>
                         )}
-                        <p className="text-[10px] text-text-tertiary truncate group-hover:text-purple-400 transition-colors">
+                        <p className="text-[10px] text-text-tertiary break-all group-hover:text-purple-400 transition-colors">
                           {url}
                         </p>
                       </div>

@@ -268,8 +268,9 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
                         {cve.description}
                       </p>
 
-                      {/* Link */}
-                      <div className="pt-2 border-t border-purple-500/10">
+                      {/* References Section */}
+                      <div className="pt-2 border-t border-purple-500/10 space-y-2">
+                        {/* NVD Link */}
                         <a
                           href={`https://nvd.nist.gov/vuln/detail/${cve.cve_id}`}
                           target="_blank"
@@ -279,6 +280,30 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
                           <ExternalLink className="w-3 h-3" />
                           <span>View on NVD</span>
                         </a>
+                        
+                        {/* Additional References */}
+                        {cve.references && cve.references.length > 0 && (
+                          <div className="space-y-1">
+                            <p className="text-[10px] font-medium text-text-tertiary">Referanslar:</p>
+                            <div className="max-h-20 overflow-y-auto space-y-0.5 pr-1 scrollbar-thin scrollbar-thumb-purple-500/20 scrollbar-track-transparent">
+                              {cve.references.slice(0, 5).map((ref, idx) => (
+                                <a
+                                  key={idx}
+                                  href={ref.url || ref}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-start gap-1 text-[9px] text-blue-400 hover:text-blue-300 transition-colors break-all"
+                                >
+                                  <ExternalLink className="w-2.5 h-2.5 mt-0.5 flex-shrink-0" />
+                                  <span className="line-clamp-1">{ref.url || ref}</span>
+                                </a>
+                              ))}
+                              {cve.references.length > 5 && (
+                                <p className="text-[9px] text-text-tertiary italic">+{cve.references.length - 5} daha fazla</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
