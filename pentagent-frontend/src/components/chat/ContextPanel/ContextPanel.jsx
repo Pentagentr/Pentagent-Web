@@ -270,7 +270,8 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
                   Tekrar Dene
                 </button>
               </div>
-            ) : cveResults.length > 0 ? (
+            ) : false && cveResults.length > 0 ? (
+              /* CVE bulgular gizlendi - sadece LLM'e rapor oluştururken verilecek */
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="text-xs font-medium text-platinum">
