@@ -250,7 +250,7 @@ class RAGService:
             
             # RERANKER MODEL - Config'den al (BAAI/bge-reranker-base default)
             reranker_model = config.RERANKER_MODEL
-            inference_url = f"https://api-inference.huggingface.co/models/{reranker_model}"
+            inference_url = f"https://router.huggingface.co/hf-inference/models/{reranker_model}"
             
             logger.info(f"🎯 Reranker model kullanılıyor: {reranker_model}")
             

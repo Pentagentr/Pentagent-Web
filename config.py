@@ -59,13 +59,13 @@ class Config:
         self.GROQ_MODEL_ALIAS = os.getenv('GROQ_MODEL_ALIAS', '')
         # HuggingFace (optional)
         self.HUGGINGFACE_TOKEN = os.getenv('HUGGINGFACE_TOKEN', '')
-        self.HF_MODEL_URL = os.getenv('HF_MODEL_URL', 'https://api-inference.huggingface.co/models/meta-llama/Llama-3.2-3B-Instruct')
+        self.HF_MODEL_URL = os.getenv('HF_MODEL_URL', 'https://router.huggingface.co/hf-inference/models/meta-llama/Llama-3.2-3B-Instruct')
         
         # Reranker Configuration - mixedbread-ai/mxbai-rerank-base-v1 (DAHA İYİ)
         self.USE_RERANKER = os.getenv('USE_RERANKER', 'true').lower() == 'true'
         # BAAI/bge-reranker-base yerine mixedbread-ai/mxbai-rerank-base-v1 kullanıyoruz (daha iyi)
         self.RERANKER_MODEL = os.getenv('RERANKER_MODEL', 'mixedbread-ai/mxbai-rerank-base-v1')
-        self.RERANKER_API_URL = f'https://api-inference.huggingface.co/models/{self.RERANKER_MODEL}'
+        self.RERANKER_API_URL = f'https://router.huggingface.co/hf-inference/models/{self.RERANKER_MODEL}'
         self.RERANKER_TOP_K = int(os.getenv('RERANKER_TOP_K', '5'))  # Rerank için kaç sonuç alınacak
 
 # Global configuration instance

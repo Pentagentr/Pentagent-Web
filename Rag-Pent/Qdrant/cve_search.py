@@ -183,7 +183,7 @@ class CVESearchEngine:
                     self._use_custom_endpoint = True
                     logger.info(f"✅ Custom HF Space endpoint kullanılacak: {custom_endpoint}")
                 else:
-                    self._hf_api_url = "https://api-inference.huggingface.co/models/BAAI/bge-m3"
+                    self._hf_api_url = "https://router.huggingface.co/hf-inference/models/BAAI/bge-m3"
                     self._use_custom_endpoint = False
                     logger.info("Public HF Inference API kullanılacak (sparse approximation)")
             elif HAS_LOCAL_MODEL:

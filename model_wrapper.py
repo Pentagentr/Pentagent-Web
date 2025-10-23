@@ -55,7 +55,7 @@ class UnifiedLLM:
     def _init_huggingface(self) -> None:
         self._hf_url = os.getenv(
             "HF_MODEL_URL",
-            "https://api-inference.huggingface.co/models/meta-llama/Llama-3.2-3B-Instruct",
+            "https://router.huggingface.co/hf-inference/models/meta-llama/Llama-3.2-3B-Instruct",
         )
         self._hf_token = os.getenv("HUGGINGFACE_TOKEN")
         if not self._hf_token:

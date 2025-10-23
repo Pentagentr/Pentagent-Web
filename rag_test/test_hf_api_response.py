@@ -13,7 +13,7 @@ import os
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
 # HF API URL
-HF_API_URL = "https://api-inference.huggingface.co/models/BAAI/bge-m3"
+HF_API_URL = "https://router.huggingface.co/hf-inference/models/BAAI/bge-m3"
 
 # Test query
 test_query = "SQL injection vulnerability"
