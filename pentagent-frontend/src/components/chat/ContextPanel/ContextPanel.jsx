@@ -210,39 +210,6 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
         
         {activeTab === 'cve' && (
           <>
-            {/* CVE Suggestions */}
-            {(llmQuery || cveLoading) && false && (
-              <div className="bg-obsidian-900/30 border border-purple-500/10 rounded-lg p-3 mb-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <Brain className="w-3 h-3 text-purple-400" />
-                  <span className="text-xs font-medium text-purple-400">AI Query</span>
-                </div>
-                {cveLoading ? (
-                  <div className="flex items-center gap-2 text-xs text-text-tertiary">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    <span>Query oluşturuluyor...</span>
-                  </div>
-                ) : llmQuery ? (
-                  <>
-                    <p className="text-xs text-text-secondary font-mono bg-obsidian-950/50 p-2 rounded border border-purple-500/10 mb-2">
-                      "{llmQuery}"
-                    </p>
-                    {scanSummary && (
-                      <div className="pt-2 border-t border-purple-500/10">
-                        <div className="flex items-center gap-2 mb-1">
-                          <FileText className="w-3 h-3 text-platinum-400" />
-                          <span className="text-[10px] font-medium text-platinum-400">Tarama Özeti</span>
-                        </div>
-                        <p className="text-[10px] text-text-tertiary line-clamp-2">
-                          {scanSummary}
-                        </p>
-                      </div>
-                    )}
-                  </>
-                ) : null}
-              </div>
-            )}
-
             {cveLoading ? (
               <div className="flex flex-col items-center justify-center py-8 space-y-3">
                 <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />

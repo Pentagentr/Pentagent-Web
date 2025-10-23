@@ -1126,62 +1126,152 @@ class RAGService:
             return f"{target} web application security vulnerability"
     
     def _summarize_scan_results(self, scan_results: Dict[str, Any]) -> str:
-        """Scan sonuçlarını LLM için özet haline getirir - GERÇEK SCAN FORMATI."""
+        """
+        Scan sonuçlarını LLM için KAPSAMLI özet haline getirir.
+        TÜM TOOL ÇIKTILARI, BULGULAR, TEKNOLOJİLER detaylı şekilde.
+        """
         summary_parts = []
-        
-        # Scan sonuçları genellikle tool_name: {result} formatında geliyor
-        # Örnek: {"ssl_scan": {...}, "subdomain_enum": {...}, "port_scan": {...}}
         
         # Target
         target = scan_results.get("target", "")
         if target:
-            summary_parts.append(f"Target: {target}")
+            summary_parts.append(f"🎯 HEDEF: {target}\n")
         
-        # Her tool sonucunu analiz et
-        for tool_name, tool_result in scan_results.items():
-            if tool_name == "target" or not isinstance(tool_result, dict):
-                continue
-                
-            # Vulnerability/findings anahtarlarını ara
-            findings = None
-            if isinstance(tool_result, dict):
-                findings = tool_result.get("vulnerabilities") or tool_result.get("findings") or tool_result.get("results")
+        # Context summary'den bilgileri al
+        context = scan_results.get("context_summary", {})
+        if context:
+            summary_parts.append("📊 TARAMA CONTEXT:")
             
-            if findings and isinstance(findings, (list, dict)):
-                if isinstance(findings, dict):
-                    # Dict formatındaki findings'i listeye çevir
-                    findings_text = f"{tool_name}: " + ", ".join([f"{k}={v}" for k, v in list(findings.items())[:3]])
-                    summary_parts.append(findings_text)
-                else:
-                    # List formatındaki findings
-                    findings_text = f"{tool_name}: " + ", ".join([str(f) for f in findings[:3]])
-                    summary_parts.append(findings_text)
-            elif tool_result:
-                # Genel tool sonucu
-                result_str = str(tool_result)[:100]  # İlk 100 karakter
-                summary_parts.append(f"{tool_name}: {result_str}")
+            # Teknolojiler
+            if context.get("technologies"):
+                techs = context["technologies"]
+                summary_parts.append(f"  • Tespit Edilen Teknolojiler ({len(techs)}): {', '.join(techs[:10])}")
+            
+            # Açık portlar
+            if context.get("open_ports"):
+                ports = context["open_ports"]
+                summary_parts.append(f"  • Açık Portlar ({len(ports)}): {', '.join(map(str, ports[:20]))}")
+            
+            # Servisler
+            if context.get("services"):
+                services = context["services"]
+                summary_parts.append(f"  • Aktif Servisler ({len(services)}): {', '.join(services[:10])}")
+            
+            # Subdomain'ler
+            if context.get("subdomains"):
+                subs = context["subdomains"]
+                summary_parts.append(f"  • Subdomain'ler ({len(subs)}): {', '.join(subs[:10])}")
+            
+            # Formlar
+            if context.get("forms"):
+                forms = context["forms"]
+                summary_parts.append(f"  • Keşfedilen Formlar: {len(forms)} adet")
+            
+            # Parametreler
+            if context.get("parameters"):
+                params = context["parameters"]
+                summary_parts.append(f"  • URL Parametreleri ({len(params)}): {', '.join(params[:15])}")
+            
+            # Endpoint'ler
+            if context.get("endpoints"):
+                eps = context["endpoints"]
+                summary_parts.append(f"  • API Endpoint'ler ({len(eps)}): {', '.join(eps[:10])}")
+            
+            summary_parts.append("")  # Boş satır
         
-        # Technologies - tool sonuçlarından çıkar
-        tech_result = scan_results.get("enum_tech_detector") or scan_results.get("tech_detection")
-        if tech_result and isinstance(tech_result, dict):
-            technologies = tech_result.get("technologies") or tech_result.get("detected_technologies")
-            if technologies:
-                if isinstance(technologies, list):
-                    tech_list = ", ".join([str(t) for t in technologies[:3]])
-                else:
-                    tech_list = str(technologies)[:100]
-                summary_parts.append(f"Technologies: {tech_list}")
+        # Her tool sonucunu DETAYLI analiz et
+        summary_parts.append("🔍 TOOL SONUÇLARI:")
+        for tool_name, tool_result in scan_results.items():
+            if tool_name in ["target", "context_summary", "execution_summary"] or not isinstance(tool_result, dict):
+                continue
+            
+            tool_summary = []
+            
+            # Web Crawler
+            if "web_crawler" in tool_name or "enum_web_crawler" in tool_name:
+                if tool_result.get("forms"):
+                    tool_summary.append(f"{len(tool_result['forms'])} form")
+                if tool_result.get("endpoints"):
+                    tool_summary.append(f"{len(tool_result['endpoints'])} endpoint")
+                if tool_result.get("parameters"):
+                    tool_summary.append(f"{len(tool_result['parameters'])} parametre")
+                if tool_result.get("pages"):
+                    tool_summary.append(f"{len(tool_result['pages'])} sayfa")
+            
+            # Port Scanner
+            elif "port" in tool_name:
+                if tool_result.get("open_ports"):
+                    ports = tool_result["open_ports"]
+                    tool_summary.append(f"{len(ports)} açık port: {', '.join(map(str, ports[:10]))}")
+            
+            # Tech Detector
+            elif "tech" in tool_name:
+                if tool_result.get("technologies"):
+                    techs = tool_result["technologies"]
+                    tool_summary.append(f"{len(techs)} teknoloji: {', '.join(techs[:8])}")
+            
+            # SSL Scanner
+            elif "ssl" in tool_name:
+                if tool_result.get("vulnerabilities"):
+                    tool_summary.append(f"{len(tool_result['vulnerabilities'])} SSL zafiyeti")
+                if tool_result.get("certificate_info"):
+                    tool_summary.append("SSL sertifika analizi")
+            
+            # Subdomain Enum
+            elif "subdomain" in tool_name:
+                if tool_result.get("subdomains"):
+                    subs = tool_result["subdomains"]
+                    tool_summary.append(f"{len(subs)} subdomain: {', '.join(subs[:8])}")
+            
+            # Directory Bruteforce
+            elif "directory" in tool_name or "bruteforce" in tool_name:
+                if tool_result.get("directories"):
+                    dirs = tool_result["directories"]
+                    tool_summary.append(f"{len(dirs)} dizin: {', '.join(dirs[:8])}")
+            
+            # Admin Panel Detector
+            elif "panel" in tool_name or "admin" in tool_name:
+                if tool_result.get("discovered_panels"):
+                    panels = tool_result["discovered_panels"]
+                    tool_summary.append(f"{len(panels)} panel: {', '.join(panels[:5])}")
+            
+            # Vulnerability Scanners
+            elif any(v in tool_name for v in ["xss", "sqli", "lfi", "verify"]):
+                if tool_result.get("vulnerabilities"):
+                    vulns = tool_result["vulnerabilities"]
+                    tool_summary.append(f"{len(vulns)} zafiyet tespit edildi")
+            
+            # Genel tool sonucu
+            else:
+                if tool_result.get("vulnerabilities"):
+                    tool_summary.append(f"{len(tool_result['vulnerabilities'])} zafiyet")
+                if tool_result.get("findings"):
+                    tool_summary.append(f"{len(tool_result['findings'])} bulgu")
+                if tool_result.get("success") and tool_result.get("data"):
+                    data = tool_result["data"]
+                    if isinstance(data, dict):
+                        tool_summary.append(f"{len(data)} veri noktası")
+            
+            if tool_summary:
+                summary_parts.append(f"  • {tool_name}: {', '.join(tool_summary)}")
         
-        # Port scan sonuçları
-        port_result = scan_results.get("port_scan") or scan_results.get("recon_port_scanner")
-        if port_result and isinstance(port_result, dict):
-            open_ports = port_result.get("open_ports") or port_result.get("ports")
-            if open_ports:
-                ports_str = str(open_ports)[:100]
-                summary_parts.append(f"Open Ports: {ports_str}")
+        summary_parts.append("")  # Boş satır
         
-        result = "\n".join(summary_parts) if summary_parts else "No detailed scan results available"
-        logger.info(f"📋 Scan Summary: {result[:200]}...")
+        # Execution summary'den genel bilgiler
+        exec_summary = scan_results.get("execution_summary", {})
+        if exec_summary:
+            summary_parts.append("📈 TARAMA İSTATİSTİKLERİ:")
+            if exec_summary.get("tools_executed"):
+                tools = exec_summary["tools_executed"]
+                summary_parts.append(f"  • Çalıştırılan Tool Sayısı: {len(tools)}")
+            if exec_summary.get("successful_tools"):
+                success = exec_summary["successful_tools"]
+                summary_parts.append(f"  • Başarılı Tool Sayısı: {len(success)}")
+            if exec_summary.get("total_findings"):
+                summary_parts.append(f"  • Toplam Bulgu: {exec_summary['total_findings']}")
+        
+        result = "\n".join(summary_parts) if summary_parts else "Tarama sonuçları bulunamadı"
+        logger.info(f"📋 KAPSAMLI Scan Summary oluşturuldu: {len(result)} karakter")
         return result
     
     def _generate_query_from_scan(self, scan_results: Dict[str, Any]) -> str:
