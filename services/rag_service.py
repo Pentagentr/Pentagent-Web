@@ -467,11 +467,10 @@ class RAGService:
                 metadata = r.metadata or {}
                 references = metadata.get('references', [])
                 
-                # Debug: References kontrolü
-                if references:
-                    logger.info(f"🔗 {r.cve_id} için {len(references)} referans bulundu")
-                else:
-                    logger.warning(f"⚠️ {r.cve_id} için referans YOK!")
+                # DEBUG: References kontrol
+                logger.info(f"🔗 CVE {r.cve_id}: {len(references) if references else 0} referans bulundu")
+                if references and len(references) > 0:
+                    logger.info(f"   İlk referans: {references[0] if isinstance(references[0], str) else references[0].get('url', 'N/A')}")
                 
                 cve_results.append(CVEResult(
                     cve_id=r.cve_id,
