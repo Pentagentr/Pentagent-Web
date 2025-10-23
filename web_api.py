@@ -163,11 +163,36 @@ async def start_scan(request: Dict[str, Any]):
         if not groq_api_key or groq_api_key == '':
             raise HTTPException(status_code=503, detail="GROQ_API_KEY yapılandırılmamış")
         
-        target = request.get("target", "")
+        target = request.get("target", "").strip()
         task = request.get("task", "")
         
         if not target:
             raise HTTPException(status_code=400, detail="Target gerekli")
+        
+        # Basit URL format kontrolü
+        import re
+        from urllib.parse import urlparse
+        
+        # URL'den hostname çıkar
+        if target.startswith(('http://', 'https://')):
+            parsed = urlparse(target)
+            hostname = parsed.netloc
+        else:
+            hostname = target.split('/')[0].split(':')[0]
+        
+        # Hostname boş mu?
+        if not hostname or len(hostname) < 3:
+            raise HTTPException(
+                status_code=400, 
+                detail="❌ Geçersiz URL\n\nLütfen geçerli bir domain girin.\n\n✅ Örnek: https://example.com"
+            )
+        
+        # Basit domain formatı kontrolü
+        if not re.match(r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$', hostname):
+            raise HTTPException(
+                status_code=400,
+                detail="❌ Geçersiz Domain Formatı\n\nDomain geçersiz karakterler içeriyor.\n\n✅ Örnek: example.com"
+            )
         
         # Scan ID oluştur
         scan_id = f"scan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -195,6 +220,9 @@ async def start_scan(request: Dict[str, Any]):
             "message": "Scan başlatıldı"
         }
         
+    except HTTPException:
+        # HTTPException'ı olduğu gibi fırlat (400, 503 vb.)
+        raise
     except Exception as e:
         logger.error(f"Scan başlatma hatası: {e}")
         raise HTTPException(status_code=500, detail=str(e))

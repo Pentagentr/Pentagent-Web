@@ -286,9 +286,21 @@ class PentagentAPI {
       console.log('REST API response status:', response.status);
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('REST API error response:', errorText);
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+        let errorDetail = '';
+        try {
+          const errorData = await response.json();
+          errorDetail = errorData.detail || errorData.message || 'Unknown error';
+        } catch {
+          errorDetail = await response.text();
+        }
+        
+        console.error('REST API error response:', errorDetail);
+        
+        // Error objesine detail field'ı ekle
+        const error = new Error(errorDetail);
+        error.detail = errorDetail;
+        error.status = response.status;
+        throw error;
       }
 
       const result = await response.json();

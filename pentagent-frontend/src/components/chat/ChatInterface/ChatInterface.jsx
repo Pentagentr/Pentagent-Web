@@ -290,9 +290,13 @@ const ChatInterface = () => {
         })
         .catch(error => {
           console.error('REST API scan failed:', error);
+          
+          // Hata mesajını detail veya message'dan al
+          const errorMessage = error?.detail || error?.message || 'Unknown error';
+          
           addMessage({
             type: 'system',
-            content: `❌ Scan başlatılamadı: ${error?.message || 'Unknown error'}`,
+            content: errorMessage,
             timestamp: getTurkeyTime()
           });
           setIsTyping(false);
