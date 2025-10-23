@@ -30,6 +30,20 @@ const ChatInterface = () => {
   
   const apiRef = useRef(new PentagentAPI());
 
+  // Türkiye saati için timestamp oluştur (UTC+3)
+  const getTurkeyTime = (timestamp) => {
+    if (timestamp) {
+      // Eğer timestamp string ise parse et
+      const date = new Date(timestamp);
+      if (!isNaN(date)) {
+        return date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      }
+      return timestamp;
+    }
+    // Yeni timestamp oluştur - Türkiye saati
+    return new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  };
+
   // WebSocket mesaj handler
   const handleWebSocketMessage = (data) => {
     console.log('WebSocket mesajı:', data);
@@ -47,7 +61,7 @@ const ChatInterface = () => {
         addMessage({
           type: 'ai',
           content: data.message,
-          timestamp: data.timestamp || new Date().toLocaleTimeString()
+          timestamp: getTurkeyTime(data.timestamp)
         });
         setIsTyping(false);
         break;
@@ -60,14 +74,14 @@ const ChatInterface = () => {
           addMessage({
             type: 'ai_thinking',
             content: data.message,
-            timestamp: data.timestamp,
+            timestamp: getTurkeyTime(data.timestamp),
             status: data.status_type
           });
         } else if (data.status_type === 'ai_reasoning' && isRealScan) {
           addMessage({
             type: 'ai_reasoning',
             content: data.message,
-            timestamp: data.timestamp,
+            timestamp: getTurkeyTime(data.timestamp),
             status: data.status_type
           });
         } else if (data.status_type === 'tool_start' && isRealScan) {
@@ -76,7 +90,7 @@ const ChatInterface = () => {
             toolName: data.message.replace('🔧 ', '').replace(' başlatılıyor...', ''),
             status: 'running',
             progress: 0,
-            timestamp: data.timestamp,
+            timestamp: getTurkeyTime(data.timestamp),
             results: []
           });
         } else if (data.status_type === 'tool_complete' && isRealScan) {
@@ -223,7 +237,7 @@ const ChatInterface = () => {
     addMessage({
       type: 'user',
       content: message,
-      timestamp: new Date().toLocaleTimeString(),
+      timestamp: getTurkeyTime(),
       avatar: 'U'
     });
     
@@ -268,7 +282,7 @@ const ChatInterface = () => {
           addMessage({
             type: 'system',
             content: `✅ Scan başlatıldı (REST API): ${result.scan_id || 'Unknown'}`,
-            timestamp: new Date().toLocaleTimeString()
+            timestamp: getTurkeyTime()
           });
           
           // REST API ile başlatılan scan için WebSocket'i dinlemeye başla
@@ -279,7 +293,7 @@ const ChatInterface = () => {
           addMessage({
             type: 'system',
             content: `❌ Scan başlatılamadı: ${error?.message || 'Unknown error'}`,
-            timestamp: new Date().toLocaleTimeString()
+            timestamp: getTurkeyTime()
           });
           setIsTyping(false);
         });
