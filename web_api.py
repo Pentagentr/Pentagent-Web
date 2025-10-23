@@ -194,6 +194,17 @@ async def start_scan(request: Dict[str, Any]):
                 detail="❌ Geçersiz Domain Formatı\n\nDomain geçersiz karakterler içeriyor.\n\n✅ Örnek: example.com"
             )
         
+        # DNS kontrolü - Domain var mı?
+        import socket
+        try:
+            socket.gethostbyname(hostname)
+            logger.info(f"✅ DNS başarılı: {hostname}")
+        except socket.gaierror:
+            raise HTTPException(
+                status_code=400,
+                detail=f"❌ Domain Bulunamadı: {hostname}\n\nBu domain DNS kayıtlarında bulunamadı.\n\n💡 Kontrol edin:\n  • Domain adını doğru yazdınız mı?\n  • Domain gerçekten var mı?\n\n✅ Örnek: https://example.com"
+            )
+        
         # Scan ID oluştur
         scan_id = f"scan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
