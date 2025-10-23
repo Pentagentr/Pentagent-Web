@@ -248,11 +248,12 @@ class RAGService:
             
             logger.info(f"📝 {len(documents)} document reranker formatında hazırlandı")
             
-            # RERANKER MODEL - Config'den al (BAAI/bge-reranker-base default)
+            # RERANKER MODEL ve URL - Config'den al
             reranker_model = config.RERANKER_MODEL
-            inference_url = f"https://router.huggingface.co/hf-inference/models/{reranker_model}"
+            inference_url = config.RERANKER_API_URL  # YENİ HuggingFace Inference Providers API
             
-            logger.info(f"🎯 Reranker model kullanılıyor: {reranker_model}")
+            logger.info(f"🎯 Reranker model: {reranker_model}")
+            logger.info(f"🔗 Endpoint: {inference_url}")
             
             # Token kontrolü
             if not config.HUGGINGFACE_TOKEN:
