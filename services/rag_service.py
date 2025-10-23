@@ -1249,7 +1249,7 @@ class RAGService:
                     tool_summary.append(f"{len(vulns)} zafiyet tespit edildi")
             
             # Genel tool sonucu
-                else:
+            else:
                 if tool_result.get("vulnerabilities"):
                     tool_summary.append(f"{len(tool_result['vulnerabilities'])} zafiyet")
                 if tool_result.get("findings"):
