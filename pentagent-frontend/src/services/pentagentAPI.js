@@ -11,7 +11,11 @@ class PentagentAPI {
     
     // Environment-aware URL configuration
     const isDevelopment = import.meta.env.DEV;
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    
+    // Production: Render backend, Development: localhost
+    const apiUrl = isDevelopment 
+      ? 'http://localhost:8000' 
+      : (import.meta.env.VITE_API_URL || 'https://pentagent-web.onrender.com');
     
     this.baseURL = apiUrl;
     

@@ -58,7 +58,10 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
   const handleDownload = async (format = 'pdf') => {
     try {
       setDownloading(true);
-      const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const isDevelopment = import.meta.env.DEV;
+      const baseURL = isDevelopment 
+        ? 'http://localhost:8000' 
+        : (import.meta.env.VITE_API_URL || 'https://pentagent-web.onrender.com');
       const response = await fetch(`${baseURL}/api/reports/${report.report_id}/download?format=${format}`);
       
       if (!response.ok) throw new Error('Rapor indirilemedi');
