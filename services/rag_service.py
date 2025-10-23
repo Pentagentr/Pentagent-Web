@@ -465,6 +465,14 @@ class RAGService:
             for r in results:
                 # Metadata'dan tüm bilgileri çıkar
                 metadata = r.metadata or {}
+                references = metadata.get('references', [])
+                
+                # Debug: References kontrolü
+                if references:
+                    logger.info(f"🔗 {r.cve_id} için {len(references)} referans bulundu")
+                else:
+                    logger.warning(f"⚠️ {r.cve_id} için referans YOK!")
+                
                 cve_results.append(CVEResult(
                     cve_id=r.cve_id,
                     score=r.score,
@@ -474,7 +482,7 @@ class RAGService:
                     description=r.description,
                     published_date=r.published_date,
                     modified_date=metadata.get('modified_date'),
-                    references=metadata.get('references', []),
+                    references=references,
                     cwe_id=metadata.get('cwe_id'),
                     vendor=metadata.get('vendor'),
                     product=metadata.get('product'),
@@ -1184,7 +1192,7 @@ class RAGService:
         for tool_name, tool_result in scan_results.items():
             if tool_name in ["target", "context_summary", "execution_summary"] or not isinstance(tool_result, dict):
                 continue
-            
+                
             tool_summary = []
             
             # Web Crawler
@@ -1242,7 +1250,7 @@ class RAGService:
                     tool_summary.append(f"{len(vulns)} zafiyet tespit edildi")
             
             # Genel tool sonucu
-            else:
+                else:
                 if tool_result.get("vulnerabilities"):
                     tool_summary.append(f"{len(tool_result['vulnerabilities'])} zafiyet")
                 if tool_result.get("findings"):

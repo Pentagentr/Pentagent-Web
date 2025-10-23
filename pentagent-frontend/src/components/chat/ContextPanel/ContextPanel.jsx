@@ -80,6 +80,16 @@ const ContextPanel = ({ isOpen, conversationId, onToggle, scanResults }) => {
       console.log('📝 LLM Query:', data.llm_query); // DEBUG
       console.log('📊 Scan Summary:', data.scan_summary); // DEBUG
       
+      // Debug: Her CVE'nin references alanını kontrol et
+      if (data.results && data.results.length > 0) {
+        data.results.forEach((cve, idx) => {
+          console.log(`🔗 CVE ${idx + 1} (${cve.cve_id}): ${cve.references ? cve.references.length : 0} referans`);
+          if (cve.references && cve.references.length > 0) {
+            console.log('   References:', cve.references.slice(0, 2)); // İlk 2 referansı göster
+          }
+        });
+      }
+      
       setCveResults(data.results || []);
       setLlmQuery(data.llm_query || '');
       setScanSummary(data.scan_summary || '');
