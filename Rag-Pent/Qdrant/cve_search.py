@@ -254,6 +254,7 @@ class CVESearchEngine:
         """
         HuggingFace Inference API ile query'yi vektörleştirir.
         Custom endpoint (native sparse) veya public API (approximation) kullanır.
+        ✅ ROBUST ERROR HANDLING - Sistem crash'ini engeller
         
         Args:
             query: Arama sorgusu
@@ -264,23 +265,62 @@ class CVESearchEngine:
         try:
             # Custom endpoint kullanıyorsa (Native sparse support)
             if getattr(self, '_use_custom_endpoint', False):
-                return self._encode_with_custom_endpoint(query)
+                try:
+                    return self._encode_with_custom_endpoint(query)
+                except Exception as custom_error:
+                    logger.error(f"❌ Custom endpoint başarısız: {custom_error}")
+                    logger.info("🔄 PUBLIC HF API'ye geçiliyor (fallback)")
+                    # Fallback: public API kullan
+                    return self._encode_with_public_hf_api(query)
             
-            # Public HF API (sadece dense, sparse approximation)
+            # Public HF API direkt çağır
+            return self._encode_with_public_hf_api(query)
+            
+        except Exception as e:
+            logger.error(f"❌ HuggingFace API encoding hatası: {e}")
+            # Son fallback: text-based sparse vector
+            logger.warning("⚠️ Text-based fallback kullanılıyor")
+            words = query.lower().split()
+            sparse_vec = models.SparseVector(
+                indices=list(range(len(words))),
+                values=[1.0] * len(words)
+            )
+            # Dummy dense vector (0'larla doldur)
+            dense_vec = [0.0] * 1024
+            logger.info("✅ Fallback encoding tamamlandı (text-based)")
+            return dense_vec, sparse_vec
+    
+    def _encode_with_public_hf_api(self, query: str) -> Tuple[List[float], models.SparseVector]:
+        """
+        Public HuggingFace Inference API ile encoding (sparse approximation)
+        ✅ YENİ ENDPOINT: router.huggingface.co/hf-inference/
+        
+        Args:
+            query: Arama sorgusu
+            
+        Returns:
+            (dense_vector, sparse_vector) tuple
+        """
+        try:
+            # Public HF API (YENİ ENDPOINT)
+            public_api_url = "https://router.huggingface.co/hf-inference/models/BAAI/bge-m3"
+            
             headers = {}
             if self._hf_token:
                 headers["Authorization"] = f"Bearer {self._hf_token}"
             
-            # HuggingFace Inference API'ye istek
+            logger.info(f"📡 Public HF API çağrısı: {public_api_url}")
+            
+            # HuggingFace Inference API'ye istek (timeout: 60s)
             response = requests.post(
-                self._hf_api_url,
+                public_api_url,
                 headers=headers,
                 json={"inputs": query, "options": {"wait_for_model": True}},
-                timeout=30
+                timeout=60
             )
             
             if response.status_code != 200:
-                raise Exception(f"HF API error: {response.status_code} - {response.text}")
+                raise Exception(f"HF API error: {response.status_code} - {response.text[:200]}")
             
             # Dense vector al
             dense_vec = response.json()
@@ -296,17 +336,19 @@ class CVESearchEngine:
                 values=sparse_values
             )
             
-            logger.info("HuggingFace public API ile encoding tamamlandı (sparse approximation)")
+            logger.info("✅ Public HF API encoding tamamlandı (sparse approximation)")
             return dense_vec, sparse_vec
             
         except Exception as e:
-            logger.error(f"HuggingFace API encoding hatası: {e}")
+            logger.error(f"❌ Public HF API encoding hatası: {e}")
             raise
     
     def _encode_with_custom_endpoint(self, query: str) -> Tuple[List[float], models.SparseVector]:
         """
         Custom HF Space endpoint ile query'yi vektörleştirir.
         ✅ NATIVE SPARSE SUPPORT (BGE-M3 lexical_weights)
+        ✅ RETRY MECHANISM (exponential backoff)
+        ✅ FALLBACK TO PUBLIC API
         
         Args:
             query: Arama sorgusu
@@ -314,46 +356,78 @@ class CVESearchEngine:
         Returns:
             (dense_vector, sparse_vector) tuple
         """
-        try:
-            # Custom endpoint request
-            response = requests.post(
-                self._hf_api_url,
-                json={
-                    "inputs": query,
-                    "return_dense": True,
-                    "return_sparse": True,
-                    "return_colbert_vecs": False
-                },
-                timeout=30
-            )
-            
-            if response.status_code != 200:
-                raise Exception(f"Custom endpoint error: {response.status_code} - {response.text}")
-            
-            data = response.json()
-            
-            # Dense vector
-            dense_vec = data.get("dense_vecs")
-            if not dense_vec:
-                raise Exception("Dense vector not found in response")
-            
-            # ✅ NATIVE sparse vector (BGE-M3 lexical_weights)
-            lexical_weights = data.get("lexical_weights")
-            if not lexical_weights:
-                raise Exception("Lexical weights not found in response")
-            
-            # Convert to SparseVector
-            sparse_vec = models.SparseVector(
-                indices=[int(k) for k in lexical_weights.keys()],
-                values=list(lexical_weights.values())
-            )
-            
-            logger.info(f"✅ Custom endpoint encoding tamamlandı (NATIVE sparse: {len(sparse_vec.indices)} tokens)")
-            return dense_vec, sparse_vec
-            
-        except Exception as e:
-            logger.error(f"Custom endpoint encoding hatası: {e}")
-            raise
+        max_retries = 2
+        timeout_seconds = 90  # 30s → 90s (HuggingFace Space için)
+        
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"📡 Custom endpoint çağrısı (deneme {attempt + 1}/{max_retries}, timeout: {timeout_seconds}s)")
+                
+                # Custom endpoint request
+                response = requests.post(
+                    self._hf_api_url,
+                    json={
+                        "inputs": query,
+                        "return_dense": True,
+                        "return_sparse": True,
+                        "return_colbert_vecs": False
+                    },
+                    timeout=timeout_seconds
+                )
+                
+                # Token hatası (401) - direkt fallback public API'ye geç
+                if response.status_code == 401:
+                    logger.error(f"❌ Custom endpoint 401 - Token hatası, PUBLIC API'ye geçiliyor")
+                    return self._encode_with_public_hf_api(query)
+                
+                if response.status_code != 200:
+                    raise Exception(f"Custom endpoint error: {response.status_code} - {response.text}")
+                
+                data = response.json()
+                
+                # Dense vector
+                dense_vec = data.get("dense_vecs")
+                if not dense_vec:
+                    raise Exception("Dense vector not found in response")
+                
+                # ✅ NATIVE sparse vector (BGE-M3 lexical_weights)
+                lexical_weights = data.get("lexical_weights")
+                if not lexical_weights:
+                    raise Exception("Lexical weights not found in response")
+                
+                # Convert to SparseVector
+                sparse_vec = models.SparseVector(
+                    indices=[int(k) for k in lexical_weights.keys()],
+                    values=list(lexical_weights.values())
+                )
+                
+                logger.info(f"✅ Custom endpoint encoding tamamlandı (NATIVE sparse: {len(sparse_vec.indices)} tokens)")
+                return dense_vec, sparse_vec
+                
+            except requests.exceptions.Timeout:
+                logger.error(f"⏱️ Custom endpoint TIMEOUT ({timeout_seconds}s) - deneme {attempt + 1}/{max_retries}")
+                if attempt < max_retries - 1:
+                    import time
+                    wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                    logger.info(f"⏳ {wait_time}s bekleniyor...")
+                    time.sleep(wait_time)
+                else:
+                    logger.error(f"❌ Custom endpoint tüm denemeler başarısız - FALLBACK PUBLIC API")
+                    return self._encode_with_public_hf_api(query)
+            except Exception as e:
+                logger.error(f"❌ Custom endpoint hatası (deneme {attempt + 1}): {e}")
+                if attempt < max_retries - 1:
+                    import time
+                    wait_time = 2 ** attempt
+                    logger.info(f"⏳ {wait_time}s bekleniyor...")
+                    time.sleep(wait_time)
+                else:
+                    logger.error(f"❌ Custom endpoint tüm denemeler başarısız - FALLBACK PUBLIC API")
+                    return self._encode_with_public_hf_api(query)
+        
+        # Buraya gelirse fallback
+        logger.error("❌ Custom endpoint başarısız - PUBLIC API kullanılıyor")
+        return self._encode_with_public_hf_api(query)
     
     def _analyze_query_intelligence(self, query: str) -> dict:
         """

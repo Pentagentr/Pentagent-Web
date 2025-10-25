@@ -3,7 +3,7 @@ RAG Servis Modülü
 CVE RAG sistemi ile entegrasyon için servis
 Qdrant üzerinden CVE araması yapar
 LLM ile optimize query oluşturma
-BAAI/bge-reranker-base ile sonuç reranking
+mixedbread-ai/mxbai-rerank-xsmall-v1 ile sonuç reranking (hafif ve hızlı)
 """
 
 import logging
@@ -289,7 +289,7 @@ class RAGService:
                     inference_url,
                     headers=headers,
                     json=payload,
-                    timeout=aiohttp.ClientTimeout(total=30)
+                    timeout=aiohttp.ClientTimeout(total=60, connect=15)
                 ) as response:
                     if response.status == 403:
                         error_text = await response.text()
@@ -379,11 +379,15 @@ class RAGService:
                         raise Exception("Reranker yanıtı işlenemedi")
                         
         except asyncio.TimeoutError:
-            logger.error("❌ Reranker TIMEOUT (30s)")
-            logger.warning("⚠️ Orijinal sıralama kullanılıyor")
+            logger.error("❌ Reranker TIMEOUT (60s)")
+            logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
+            return results
+        except aiohttp.ClientError as e:
+            logger.error(f"❌ Reranker bağlantı hatası: {e}")
+            logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
             return results
         except Exception as e:
-            logger.warning(f"⚠️ RERANKER BAŞARISIZ: {e}")
+            logger.warning(f"⚠️ RERANKER BAŞARISIZ: {type(e).__name__} - {e}")
             logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
             return results
     
@@ -519,16 +523,20 @@ class RAGService:
                     logger.info(f"✅ Reranking tamamlandı, en iyi {len(reranked_results)} sonuç döndürülüyor")
                     return reranked_results
                     
+                except asyncio.TimeoutError:
+                    logger.error(f"⏱️ Reranker TIMEOUT - orijinal sonuçlar döndürülüyor")
+                    return cve_results[:limit]
                 except Exception as e:
-                    logger.error(f"Reranker çalıştırma hatası: {e}")
-                    logger.info("Reranker başarısız, orijinal sonuçlar döndürülüyor")
+                    logger.error(f"❌ Reranker çalıştırma hatası: {type(e).__name__} - {e}")
+                    logger.info("⚠️ Reranker başarısız, orijinal sonuçlar döndürülüyor")
                     return cve_results[:limit]
             else:
                 # Reranker kullanılmıyor, direkt döndür
                 return cve_results[:limit]
             
         except Exception as e:
-            logger.error(f"CVE arama hatası: {e}")
+            logger.error(f"❌ CVE arama hatası: {type(e).__name__} - {e}")
+            logger.warning("⚠️ Boş sonuç döndürülüyor (sistem çökmesi engellendi)")
             return []
     
     def get_cve_by_id(self, cve_id: str) -> Optional[CVEResult]:
