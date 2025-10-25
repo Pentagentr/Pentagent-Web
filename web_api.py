@@ -409,19 +409,34 @@ async def websocket_endpoint(websocket: WebSocket):
                         # Async AI yanıt al
                         asyncio.create_task(run_scan_async(scan_id, "", task, ws_ai_callback))
                         logger.info("AI yanıt task başlatıldı")
+            except WebSocketDisconnect:
+                # WebSocket client disconnected
+                logger.info("WebSocket client disconnected (normal)")
+                break
             except RuntimeError as re:
                 # WebSocket bağlantısı kesildiğinde oluşan hata
                 logger.info(f"WebSocket bağlantısı kapatıldı (RuntimeError): {re}")
                 break
+            except Exception as e:
+                # Diğer hatalar - log et ama devam et
+                logger.error(f"❌ WebSocket message loop hatası: {type(e).__name__} - {e}")
+                # DEVAM ET - sistemi crash ettirme!
+                break
             
     except WebSocketDisconnect:
-        logger.info("WebSocket bağlantısı kapatıldı")
+        logger.info("✅ WebSocket bağlantısı normal şekilde kapatıldı")
+    except RuntimeError as re:
+        logger.info(f"✅ WebSocket runtime error (normal disconnect): {re}")
     except Exception as e:
-        logger.error(f"WebSocket hatası: {e}")
+        logger.error(f"❌ WebSocket endpoint hatası: {type(e).__name__} - {e}")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
+        # HATA YAKALA - Sistemi crash ettirme!
     finally:
-        manager.disconnect(websocket)
+        try:
+            manager.disconnect(websocket)
+        except Exception as disc_err:
+            logger.error(f"❌ Disconnect hatası: {disc_err}")
 
 # ==================== RAG QUERY OPTIMIZATION ====================
 

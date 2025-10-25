@@ -317,8 +317,8 @@ class TechDetectorModule(MCPTool):
                     return await self._basic_url_detection(url)
                     
         except asyncio.TimeoutError as e:
-            logger.error(f"⏱️ URL timeout hatası {url}: Bağlantı zaman aşımına uğradı (30s)")
-            self.reasoning_log.append({"phase": "fetch_timeout", "thought": f"{url} adresine timeout (30s), Basic URL detection'a geçiliyor."})
+            logger.error(f"⏱️ URL timeout hatası {url}: Bağlantı zaman aşımına uğradı (60s)")
+            self.reasoning_log.append({"phase": "fetch_timeout", "thought": f"{url} adresine timeout (60s), Basic URL detection'a geçiliyor."})
             return await self._basic_url_detection(url)
         except aiohttp.ClientError as e:
             logger.error(f"🌐 URL bağlantı hatası {url}: {type(e).__name__} - {str(e)}")
@@ -543,17 +543,38 @@ class TechDetectorModule(MCPTool):
         return detected_techs
 
     def _parse_from_builtwith(self, url: str) -> Set[str]:
+        """
+        BuiltWith ile teknoloji tespiti - TIMEOUT KORUMASLI
+        ⚠️ BuiltWith kendi socket timeout'unu kullanır (120s default)
+        """
         if not BUILTWITH_AVAILABLE:
             self.reasoning_log.append({"phase": "analysis_skip", "thought": "'builtwith' kütüphanesi bulunamadığı için Wappalyzer analizi atlandı."})
             return set()
+        
+        # BuiltWith'i tamamen devre dışı bırak - çok yavaş ve timeout veriyor
+        logger.warning("⚠️ BuiltWith analizi devre dışı (timeout sorunları nedeniyle)")
+        self.reasoning_log.append({"phase": "analysis_skip", "thought": "BuiltWith analizi devre dışı bırakıldı (timeout sorunları)."})
+        return set()
+        
+        # Aşağıdaki kod artık çalışmayacak - ama koruyalım
         try:
-            tech_dict = builtwith.builtwith(url)
-            tech_set = set()
-            for categories in tech_dict.values():
-                for tech_name in categories:
-                    tech_set.add(tech_name.lower())
-            self.reasoning_log.append({"phase": "analysis_step", "thought": f"'builtwith' ile {len(tech_set)} teknoloji tespit edildi."})
-            return tech_set
+            # Socket timeout ayarla (BuiltWith için)
+            import socket
+            original_timeout = socket.getdefaulttimeout()
+            socket.setdefaulttimeout(30)  # 30 saniye socket timeout
+            
+            try:
+                tech_dict = builtwith.builtwith(url)
+                tech_set = set()
+                for categories in tech_dict.values():
+                    for tech_name in categories:
+                        tech_set.add(tech_name.lower())
+                self.reasoning_log.append({"phase": "analysis_step", "thought": f"'builtwith' ile {len(tech_set)} teknoloji tespit edildi."})
+                return tech_set
+            finally:
+                # Socket timeout'u geri al
+                socket.setdefaulttimeout(original_timeout)
+                
         except UnicodeDecodeError as e:
             # Gzip/compressed response hatası - sessizce atla
             logger.warning(f"BuiltWith UTF-8 decode hatası (gzip response): {type(e).__name__}")
@@ -563,6 +584,11 @@ class TechDetectorModule(MCPTool):
             # Connection timeout ve network hatalarını yakala
             logger.warning(f"⏱️ BuiltWith network hatası: {type(e).__name__} - {str(e)[:100]}")
             self.reasoning_log.append({"phase": "analysis_network_error", "thought": f"BuiltWith network timeout - analiz atlandı."})
+            return set()
+        except socket.timeout as e:
+            # Socket timeout hatası
+            logger.warning(f"⏱️ BuiltWith socket timeout: {e}")
+            self.reasoning_log.append({"phase": "analysis_timeout", "thought": "BuiltWith socket timeout - analiz atlandı."})
             return set()
         except Exception as e:
             logger.warning(f"❌ BuiltWith hatası: {type(e).__name__} - {str(e)[:100]}")
@@ -1429,11 +1455,9 @@ class TechDetectorModule(MCPTool):
             final_url = content_data["final_url"] # Yönlendirmelerden sonraki son URL
 
             # Farklı metotlarla teknolojileri topla - Güvenli şekilde
-            try:
-                builtwith_tech = self._parse_from_builtwith(final_url)
-            except Exception as e:
-                logger.warning(f"BuiltWith analysis failed: {e}")
-                builtwith_tech = set()
+            # BuiltWith devre dışı - timeout sorunları nedeniyle
+            builtwith_tech = set()
+            logger.info("ℹ️ BuiltWith analizi atlandı (timeout sorunları nedeniyle)")
             
             try:
                 manual_tech = self._parse_manually(content_data["headers"], content_data["content"])
