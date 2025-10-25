@@ -92,6 +92,7 @@ class RAGService:
     """
     CVE RAG sistemi ile etkileşim için servis sınıfı.
     Singleton pattern kullanır.
+    Memory-efficient ve production-ready.
     """
     
     _instance = None
@@ -108,6 +109,9 @@ class RAGService:
         
         self._engine = None
         self._available = False
+        self._session = None  # Shared aiohttp session
+        self._token_validation_cache = None  # Token validation cache
+        self._token_validation_time = None  # Last validation time
         self._initialize()
         self._initialized = True
     
@@ -201,10 +205,26 @@ class RAGService:
         """RAG servisinin kullanılabilir olup olmadığını kontrol et"""
         return self._available and self._engine is not None
     
+    async def _get_or_create_session(self):
+        """Shared aiohttp session - memory efficient"""
+        if self._session is None or self._session.closed:
+            # Timeout ve connection pooling optimizasyonları
+            timeout = aiohttp.ClientTimeout(total=30, connect=10)
+            connector = aiohttp.TCPConnector(limit=10, limit_per_host=5)
+            self._session = aiohttp.ClientSession(timeout=timeout, connector=connector)
+        return self._session
+    
+    async def _close_session(self):
+        """Session cleanup - memory leak prevention"""
+        if self._session and not self._session.closed:
+            await self._session.close()
+            self._session = None
+    
     async def _rerank_results(self, query: str, results: List[CVEResult]) -> List[CVEResult]:
         """
-        HuggingFace mixedbread-ai/mxbai-rerank-base-v1 ile sonuçları yeniden sırala.
+        HuggingFace mixedbread-ai/mxbai-rerank-xsmall-v1 ile sonuçları yeniden sırala.
         Hata durumunda FALLBACK: Orijinal sıralama
+        Memory-efficient ve production-ready.
         
         Args:
             query: Orijinal arama sorgusu
@@ -224,6 +244,11 @@ class RAGService:
         if not config.HUGGINGFACE_TOKEN:
             logger.error("❌ HuggingFace token YOK! Reranker kullanılamıyor.")
             logger.warning("⚠️ Reranker olmadan orijinal sıralama kullanılıyor")
+            return results
+        
+        # Token validation cache (1 saat) - Her request'te kontrol etme
+        if not self._is_token_valid_cached():
+            logger.warning("⚠️ HuggingFace token cache'de geçersiz, reranker atlanıyor")
             return results
         
         try:
@@ -283,13 +308,14 @@ class RAGService:
             doc_count = len(documents)
             logger.info(f"📤 {doc_count} document reranker'a gönderiliyor")
             
-            # HuggingFace API'ye istek gönder
-            async with aiohttp.ClientSession() as session:
+            # HuggingFace API'ye istek gönder - SHARED SESSION (Memory Efficient)
+            session = await self._get_or_create_session()
+            try:
                 async with session.post(
                     inference_url,
                     headers=headers,
                     json=payload,
-                    timeout=aiohttp.ClientTimeout(total=60, connect=15)
+                    timeout=aiohttp.ClientTimeout(total=30, connect=10)  # Daha kısa timeout
                 ) as response:
                     if response.status == 403:
                         error_text = await response.text()
@@ -306,16 +332,24 @@ class RAGService:
                         return results  # Fallback: orijinal sıralama
                     
                     if response.status != 200:
+                        # Error response - limit body size (memory efficient)
                         error_text = await response.text()
                         logger.warning(f"⚠️ Reranker API hatası: {response.status}")
-                        logger.warning(f"API yanıtı: {error_text[:300]}")
+                        logger.warning(f"API yanıtı: {error_text[:200]}")  # Limit to 200 chars
                         logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
                         return results  # Fallback: orijinal sıralama
+                    
+                    # Response body size limit - 1MB max (memory protection)
+                    content_length = response.headers.get('Content-Length')
+                    if content_length and int(content_length) > 1_000_000:  # 1MB
+                        logger.warning(f"⚠️ Reranker response çok büyük: {content_length} bytes")
+                        logger.warning("⚠️ Memory koruması - orijinal sıralama kullanılıyor")
+                        return results
                     
                     rerank_response = await response.json()
                     logger.info(f"✅ Reranker yanıtı alındı: {type(rerank_response)}")
                     
-                    # mixedbread-ai/mxbai-rerank-base-v1 array of scores döndürür veya dict
+                    # mixedbread-ai/mxbai-rerank-xsmall-v1 array of scores döndürür veya dict
                     # Response formatı: [{"score": 0.85}, {"score": 0.72}, ...] veya [0.85, 0.72, ...]
                     rerank_scores = []
                     if isinstance(rerank_response, list):
@@ -377,13 +411,22 @@ class RAGService:
                     else:
                         logger.error(f"❌ Beklenmeyen reranker yanıtı: {type(rerank_scores)}, len: {len(rerank_scores) if isinstance(rerank_scores, list) else 'N/A'}")
                         raise Exception("Reranker yanıtı işlenemedi")
+            
+            except asyncio.TimeoutError:
+                logger.error("❌ Reranker TIMEOUT (30s)")
+                logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
+                return results
+            except aiohttp.ClientError as e:
+                logger.error(f"❌ Reranker bağlantı hatası: {e}")
+                logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
+                return results
+            except Exception as e:
+                logger.warning(f"⚠️ RERANKER request hatası: {type(e).__name__} - {e}")
+                logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
+                return results
                         
         except asyncio.TimeoutError:
-            logger.error("❌ Reranker TIMEOUT (60s)")
-            logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
-            return results
-        except aiohttp.ClientError as e:
-            logger.error(f"❌ Reranker bağlantı hatası: {e}")
+            logger.error("❌ Reranker genel TIMEOUT")
             logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
             return results
         except Exception as e:
@@ -501,30 +544,36 @@ class RAGService:
             if reranker_enabled and len(cve_results) > 1:
                 logger.info(f"🔄 Reranker başlatılıyor ({len(cve_results)} sonuç)...")
                 
-                # Async reranker'ı sync context'te çalıştır
+                # Async reranker'ı sync context'te çalıştır - MEMORY EFFICIENT
                 try:
                     loop = asyncio.get_event_loop()
                     if loop.is_running():
-                        # Event loop zaten çalışıyorsa thread pool kullan
+                        # Event loop zaten çalışıyorsa thread pool kullan - MAX 2 WORKER (memory limit)
                         import concurrent.futures
-                        with concurrent.futures.ThreadPoolExecutor() as pool:
-                            reranked_results = pool.submit(
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                            future = pool.submit(
                                 asyncio.run, 
                                 self._rerank_results(query, cve_results)
-                            ).result(timeout=30)
+                            )
+                            try:
+                                reranked_results = future.result(timeout=25)  # 25s timeout
+                            except concurrent.futures.TimeoutError:
+                                logger.error("⏱️ Reranker thread pool TIMEOUT (25s)")
+                                future.cancel()  # Cancel the future
+                                return cve_results[:limit]
                     else:
                         # Event loop çalışmıyorsa direkt çalıştır
                         reranked_results = loop.run_until_complete(
                             self._rerank_results(query, cve_results)
                         )
                     
-                    # Limit'e göre kes
+                    # Limit'e göre kes - memory efficient
                     reranked_results = reranked_results[:limit]
                     logger.info(f"✅ Reranking tamamlandı, en iyi {len(reranked_results)} sonuç döndürülüyor")
                     return reranked_results
                     
                 except asyncio.TimeoutError:
-                    logger.error(f"⏱️ Reranker TIMEOUT - orijinal sonuçlar döndürülüyor")
+                    logger.error(f"⏱️ Reranker asyncio TIMEOUT - orijinal sonuçlar döndürülüyor")
                     return cve_results[:limit]
                 except Exception as e:
                     logger.error(f"❌ Reranker çalıştırma hatası: {type(e).__name__} - {e}")
@@ -707,18 +756,24 @@ class RAGService:
 
 Şimdi SPESİFİK CVE query'i oluştur:"""
             
-            # Yanıt al - Event loop sorunu çözümü
+            # Yanıt al - Event loop sorunu çözümü - MEMORY EFFICIENT
             import asyncio
             try:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
-                    # Event loop zaten çalışıyor - thread pool kullan
+                    # Event loop zaten çalışıyor - thread pool kullan (MAX 1 WORKER)
                     import concurrent.futures
-                    with concurrent.futures.ThreadPoolExecutor() as pool:
-                        response = pool.submit(
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                        future = pool.submit(
                             asyncio.run,
                             model.generate_content_async(prompt)
-                        ).result(timeout=30)
+                        )
+                        try:
+                            response = future.result(timeout=20)  # 20s timeout
+                        except concurrent.futures.TimeoutError:
+                            logger.warning("LLM query generation TIMEOUT (20s)")
+                            future.cancel()
+                            return self._generate_query_from_scan(scan_results)
                 else:
                     # Event loop çalışmıyor - direkt çalıştır
                     response = loop.run_until_complete(
@@ -727,6 +782,9 @@ class RAGService:
             except RuntimeError as e:
                 # Event loop hatasını yakala
                 logger.warning(f"Event loop hatası: {e}, basit query kullanılıyor")
+                return self._generate_query_from_scan(scan_results)
+            except asyncio.TimeoutError:
+                logger.warning("LLM query generation asyncio TIMEOUT")
                 return self._generate_query_from_scan(scan_results)
             
             # Response string veya object olabilir
@@ -1419,6 +1477,27 @@ class RAGService:
         else:
             return "LOW"
 
+    def _is_token_valid_cached(self) -> bool:
+        """
+        HuggingFace token validation - CACHED (1 saat).
+        Her request'te kontrol etme - memory ve network efficient.
+        """
+        import time
+        
+        # Cache kontrolü - 1 saat (3600 saniye)
+        current_time = time.time()
+        if self._token_validation_cache is not None and self._token_validation_time is not None:
+            if current_time - self._token_validation_time < 3600:
+                # Cache hala geçerli
+                return self._token_validation_cache
+        
+        # Token kontrolü yap ve cache'le
+        is_valid = self._has_valid_hf_token()
+        self._token_validation_cache = is_valid
+        self._token_validation_time = current_time
+        
+        return is_valid
+    
     def _has_valid_hf_token(self) -> bool:
         """HuggingFace token'ının geçerli olup olmadığını kontrol et"""
         try:
@@ -1427,10 +1506,10 @@ class RAGService:
                 logger.error("❌ HUGGINGFACE_TOKEN environment variable yok!")
                 return False
             
-            # Token'ın geçerli olup olmadığını kontrol et
+            # Token'ın geçerli olup olmadığını kontrol et - DAHA KISA TIMEOUT
             import requests
             headers = {"Authorization": f"Bearer {hf_token}"}
-            response = requests.get("https://huggingface.co/api/whoami", headers=headers, timeout=10)
+            response = requests.get("https://huggingface.co/api/whoami", headers=headers, timeout=5)
             
             if response.status_code == 200:
                 user_data = response.json()
@@ -1454,8 +1533,10 @@ class RAGService:
                 logger.warning(f"⚠️ HuggingFace token kontrol hatası: Status {response.status_code}")
                 if response.status_code == 401:
                     logger.warning("💡 Token süresi dolmuş olabilir, ama deneyeceğiz")
+                    return False  # 401 için cache'e False kaydet
                 elif response.status_code == 403:
                     logger.warning("💡 Token yetkisi belirsiz, ama deneyeceğiz")
+                    return True
                 else:
                     logger.warning(f"⚠️ Beklenmeyen status: {response.status_code}")
                 

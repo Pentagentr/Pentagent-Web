@@ -130,6 +130,38 @@ async def startup_event():
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
 
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Uygulama kapatılırken cleanup yap - MEMORY LEAK PREVENTION"""
+    try:
+        logger.info("🔄 Pentagent API kapatılıyor, cleanup başlıyor...")
+        
+        # RAG servisini kapat - aiohttp session cleanup
+        try:
+            rag_service = get_rag_service()
+            if rag_service._session and not rag_service._session.closed:
+                await rag_service._close_session()
+                logger.info("✅ RAG service session kapatıldı")
+        except Exception as e:
+            logger.warning(f"⚠️ RAG session cleanup hatası: {e}")
+        
+        # WebSocket connections cleanup
+        try:
+            for connection in manager.active_connections:
+                try:
+                    await connection.close()
+                except:
+                    pass
+            manager.active_connections.clear()
+            logger.info("✅ WebSocket connections temizlendi")
+        except Exception as e:
+            logger.warning(f"⚠️ WebSocket cleanup hatası: {e}")
+        
+        logger.info("✅ Pentagent API başarıyla kapatıldı")
+        
+    except Exception as e:
+        logger.error(f"❌ Shutdown hatası: {e}")
+
 @app.get("/")
 async def root():
     return {"message": "Pentagent API Server", "status": "running"}
@@ -544,7 +576,8 @@ async def rag_search(request: Dict[str, Any]):
         # CVE araması yap (optimize edilmiş query ile)
         results = rag_service.search_cve(optimized_query, limit=limit, severity=severity)
         
-        return {
+        # Response body size kontrolü - Memory protection (0.6 MB limit)
+        response_data = {
             "success": True,
             "original_query": original_query,
             "optimized_query": optimized_query,
@@ -553,6 +586,18 @@ async def rag_search(request: Dict[str, Any]):
             "severity_filter": severity,
             "results": [r.to_dict() for r in results]
         }
+        
+        # Response size kontrolü - max 500KB
+        import sys
+        response_size = sys.getsizeof(str(response_data))
+        if response_size > 500_000:  # 500KB
+            logger.warning(f"⚠️ Response çok büyük ({response_size} bytes), truncate ediliyor")
+            # Truncate results if too large
+            response_data["results"] = response_data["results"][:3]
+            response_data["truncated"] = True
+            response_data["total_results"] = len(response_data["results"])
+        
+        return response_data
         
     except HTTPException:
         raise
@@ -620,13 +665,27 @@ async def analyze_scan_results(request: Dict[str, Any]):
         results = analysis_result.get('results', [])
         results = results[:limit]  # Limit uygula
         
-        return {
+        # Response data hazırla
+        response_data = {
             "success": True,
             "total_results": len(results),
             "results": [r.to_dict() for r in results],
             "llm_query": analysis_result.get('query', ''),
             "scan_summary": analysis_result.get('summary', '')
         }
+        
+        # Response size kontrolü - Memory protection (max 500KB)
+        import sys
+        response_size = sys.getsizeof(str(response_data))
+        if response_size > 500_000:  # 500KB
+            logger.warning(f"⚠️ Analyze response çok büyük ({response_size} bytes), truncate ediliyor")
+            # Truncate
+            response_data["results"] = response_data["results"][:2]
+            response_data["scan_summary"] = response_data["scan_summary"][:500]  # İlk 500 karakter
+            response_data["truncated"] = True
+            response_data["total_results"] = len(response_data["results"])
+        
+        return response_data
         
     except HTTPException:
         raise
