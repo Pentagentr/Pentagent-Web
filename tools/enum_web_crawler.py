@@ -46,8 +46,9 @@ try:
 except ImportError:
     SELENIUM_AVAILABLE = False
 
-logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s')
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)  # Tool loglarını göster
 
 # --- CrawlContext ve Tool Sınıfı Başlangıcı ---
 @dataclass

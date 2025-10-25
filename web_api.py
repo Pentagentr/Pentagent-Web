@@ -166,6 +166,11 @@ async def shutdown_event():
 async def root():
     return {"message": "Pentagent API Server", "status": "running"}
 
+@app.head("/")
+async def root_head():
+    """HEAD request support - Render health check"""
+    return {"status": "ok"}
+
 @app.get("/health")
 async def health_check():
     """API health check"""
@@ -242,7 +247,7 @@ async def start_scan(request: Dict[str, Any]):
         
         # Status callback fonksiyonu
         async def scan_status_callback(message: str, status_type: str = "info"):
-            timestamp = datetime.now().strftime("%H:%M:%S")
+            timestamp = datetime.now(timezone.utc).isoformat()
             status_data = {
                 "type": "scan_status",
                 "scan_id": scan_id,
@@ -315,7 +320,7 @@ async def run_scan_async(scan_id: str, target: str, task: str, status_callback):
                 "type": "scan_completed",
                 "scan_id": scan_id,
                 "result": result.to_dict() if hasattr(result, 'to_dict') else str(result),
-                "timestamp": datetime.now().strftime("%H:%M:%S")
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
             await manager.broadcast(json.dumps(result_data))
         except Exception as broadcast_err:
@@ -347,7 +352,7 @@ async def websocket_endpoint(websocket: WebSocket):
         connection_status = {
             "type": "connection_status",
             "status": "connected",
-            "timestamp": datetime.now().strftime("%H:%M:%S"),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "message": "WebSocket bağlantısı kuruldu"
         }
         
@@ -389,7 +394,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             "scan_id": scan_id,
                             "target": target,
                             "task": task,
-                            "timestamp": datetime.now().strftime("%H:%M:%S")
+                            "timestamp": datetime.now(timezone.utc).isoformat()
                         }
                         
                         await manager.send_personal_message(
@@ -402,7 +407,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             status_data = {
                                 "type": "scan_status",
                                 "scan_id": scan_id,
-                                "timestamp": datetime.now().strftime("%H:%M:%S"),
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
                                 "message": msg,
                                 "status_type": status_type
                             }
@@ -424,7 +429,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                 ai_response_data = {
                                     "type": "ai_response",
                                     "message": msg,
-                                    "timestamp": datetime.now().strftime("%H:%M:%S")
+                                    "timestamp": datetime.now(timezone.utc).isoformat()
                                 }
                                 await manager.send_personal_message(json.dumps(ai_response_data), websocket)
                             else:
@@ -432,7 +437,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                 status_data = {
                                     "type": "scan_status",
                                     "scan_id": scan_id,
-                                    "timestamp": datetime.now().strftime("%H:%M:%S"),
+                                    "timestamp": datetime.now(timezone.utc).isoformat(),
                                     "message": msg,
                                     "status_type": status_type
                                 }

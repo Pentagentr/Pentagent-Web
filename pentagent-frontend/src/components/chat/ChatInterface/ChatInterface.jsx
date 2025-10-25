@@ -30,18 +30,29 @@ const ChatInterface = () => {
   
   const apiRef = useRef(new PentagentAPI());
 
-  // Türkiye saati için timestamp oluştur (UTC+3)
+  // UTC'den Türkiye saatine dönüştür (UTC+3)
   const getTurkeyTime = (timestamp) => {
     if (timestamp) {
-      // Eğer timestamp string ise parse et
+      // Backend'den ISO format UTC timestamp geliyor
       const date = new Date(timestamp);
       if (!isNaN(date)) {
-        return date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        // Türkiye timezone ile formatla (Europe/Istanbul = UTC+3)
+        return date.toLocaleTimeString('tr-TR', { 
+          hour: '2-digit', 
+          minute: '2-digit', 
+          second: '2-digit',
+          timeZone: 'Europe/Istanbul'
+        });
       }
       return timestamp;
     }
     // Yeni timestamp oluştur - Türkiye saati
-    return new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return new Date().toLocaleTimeString('tr-TR', { 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      second: '2-digit',
+      timeZone: 'Europe/Istanbul'
+    });
   };
 
   // WebSocket mesaj handler
