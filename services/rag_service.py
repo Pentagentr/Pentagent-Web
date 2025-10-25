@@ -220,7 +220,7 @@ class RAGService:
             await self._session.close()
             self._session = None
     
-    async def _rerank_results(self, query: str, results: List[CVEResult]) -> List[CVEResult]:
+    async def _rerank_results(self, query: str, results: List[CVEResult], limit: int = 5) -> List[CVEResult]:
         """
         HuggingFace mixedbread-ai/mxbai-rerank-xsmall-v1 ile sonuçları yeniden sırala.
         Hata durumunda FALLBACK: Orijinal sıralama
@@ -519,7 +519,7 @@ class RAGService:
                         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
                             future = pool.submit(
                                 asyncio.run, 
-                                self._rerank_results(query, cve_results)
+                                self._rerank_results(query, cve_results, limit)
                             )
                             try:
                                 reranked_results = future.result(timeout=25)  # 25s timeout
@@ -530,7 +530,7 @@ class RAGService:
                     else:
                         # Event loop çalışmıyorsa direkt çalıştır
                         reranked_results = loop.run_until_complete(
-                            self._rerank_results(query, cve_results)
+                            self._rerank_results(query, cve_results, limit)
                         )
                     
                     # Limit'e göre kes - memory efficient
