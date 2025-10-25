@@ -22,6 +22,7 @@ import sys
 import hashlib
 import random
 import time
+import urllib.error
 from typing import Dict, Any, List, Optional, Set
 from urllib.parse import urljoin, urlparse
 
@@ -294,7 +295,7 @@ class TechDetectorModule(MCPTool):
             # Random delay to avoid rate limiting
             await asyncio.sleep(random.uniform(0.5, 1.5))
             
-            async with session.get(url, headers=headers, timeout=30, allow_redirects=True) as response:
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=60, connect=20, sock_connect=20), allow_redirects=True) as response:
                 self.reasoning_log.append({"phase": "fetch", "thought": f"{url} adresine {strategy} stratejisi ile istek gönderildi, durum kodu: {response.status}."})
                 
                 # 403 hatası durumunda direkt basic detection'a geç
@@ -315,9 +316,17 @@ class TechDetectorModule(MCPTool):
                     self.reasoning_log.append({"phase": "fallback_basic", "thought": f"Durum kodu {response.status} için Basic URL detection'a geçiliyor."})
                     return await self._basic_url_detection(url)
                     
+        except asyncio.TimeoutError as e:
+            logger.error(f"⏱️ URL timeout hatası {url}: Bağlantı zaman aşımına uğradı (30s)")
+            self.reasoning_log.append({"phase": "fetch_timeout", "thought": f"{url} adresine timeout (30s), Basic URL detection'a geçiliyor."})
+            return await self._basic_url_detection(url)
+        except aiohttp.ClientError as e:
+            logger.error(f"🌐 URL bağlantı hatası {url}: {type(e).__name__} - {str(e)}")
+            self.reasoning_log.append({"phase": "fetch_connection_error", "thought": f"{url} bağlantı hatası: {type(e).__name__}, Basic URL detection'a geçiliyor."})
+            return await self._basic_url_detection(url)
         except Exception as e:
-            logger.error(f"URL getirme hatası {url}: {e}")
-            self.reasoning_log.append({"phase": "fetch_error", "thought": f"{url} adresine ulaşılamadı: {e}, Basic URL detection'a geçiliyor."})
+            logger.error(f"❌ URL getirme hatası {url}: {type(e).__name__} - {str(e)}")
+            self.reasoning_log.append({"phase": "fetch_error", "thought": f"{url} adresine ulaşılamadı: {type(e).__name__} - {str(e)[:100]}, Basic URL detection'a geçiliyor."})
             # Hata durumunda basic detection'a geç
             return await self._basic_url_detection(url)
 
@@ -511,7 +520,7 @@ class TechDetectorModule(MCPTool):
             
             for favicon_url in favicon_urls:
                 try:
-                    async with session.get(favicon_url, timeout=30) as response:
+                    async with session.get(favicon_url, timeout=aiohttp.ClientTimeout(total=15)) as response:
                         if response.status == 200:
                             favicon_data = await response.read()
                             favicon_hash = hashlib.md5(favicon_data).hexdigest()
@@ -547,12 +556,17 @@ class TechDetectorModule(MCPTool):
             return tech_set
         except UnicodeDecodeError as e:
             # Gzip/compressed response hatası - sessizce atla
-            logger.warning(f"BuiltWith UTF-8 decode hatası (gzip response): {e}")
+            logger.warning(f"BuiltWith UTF-8 decode hatası (gzip response): {type(e).__name__}")
             self.reasoning_log.append({"phase": "analysis_skip", "thought": "BuiltWith gzip response hatası - analiz atlandı."})
             return set()
+        except urllib.error.URLError as e:
+            # Connection timeout ve network hatalarını yakala
+            logger.warning(f"⏱️ BuiltWith network hatası: {type(e).__name__} - {str(e)[:100]}")
+            self.reasoning_log.append({"phase": "analysis_network_error", "thought": f"BuiltWith network timeout - analiz atlandı."})
+            return set()
         except Exception as e:
-            logger.warning(f"BuiltWith hatası: {e}")
-            self.reasoning_log.append({"phase": "analysis_error", "thought": f"BuiltWith hatası: {str(e)[:50]}"})
+            logger.warning(f"❌ BuiltWith hatası: {type(e).__name__} - {str(e)[:100]}")
+            self.reasoning_log.append({"phase": "analysis_error", "thought": f"BuiltWith hatası: {type(e).__name__}"})
             return set()
 
     async def _analyze_error_pages(self, session: aiohttp.ClientSession, url: str) -> Set[str]:
@@ -579,7 +593,7 @@ class TechDetectorModule(MCPTool):
             
             for error_url in error_urls:
                 try:
-                    async with session.get(error_url, timeout=30) as response:
+                    async with session.get(error_url, timeout=aiohttp.ClientTimeout(total=15)) as response:
                         if response.status in [404, 500, 403]:
                             content = await response.text()
                             
@@ -616,7 +630,7 @@ class TechDetectorModule(MCPTool):
                 test_url = f"{base_url}{test_path}"
                 
                 try:
-                    async with session.get(test_url, timeout=5) as response:
+                    async with session.get(test_url, timeout=aiohttp.ClientTimeout(total=10)) as response:
                         content = await response.text()
                         
                         # Response'dan teknoloji tespiti
@@ -1336,8 +1350,8 @@ class TechDetectorModule(MCPTool):
 
         headers = {'User-Agent': 'Pentagent Security Scanner/1.0'}
         
-        # DNS çözümleme için optimize edilmiş TCPConnector
-        timeout_config = aiohttp.ClientTimeout(total=60, connect=30, sock_connect=30, sock_read=30)
+        # DNS çözümleme için optimize edilmiş TCPConnector - Timeout artırıldı
+        timeout_config = aiohttp.ClientTimeout(total=90, connect=30, sock_connect=30, sock_read=60)
         connector = aiohttp.TCPConnector(
             verify_ssl=False, 
             ttl_dns_cache=300,

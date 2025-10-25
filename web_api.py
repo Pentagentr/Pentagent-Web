@@ -243,36 +243,64 @@ async def run_scan_async(scan_id: str, target: str, task: str, status_callback):
     try:
         logger.info(f"Scan başlatılıyor: {scan_id} - {target}")
         
-        # Scan başlatma mesajı
-        await status_callback(f"🎯 Scan başlatıldı: {target}", "info")
+        # Scan başlatma mesajı - Safe callback
+        try:
+            await status_callback(f"🎯 Scan başlatıldı: {target}", "info")
+        except Exception as cb_err:
+            logger.error(f"Status callback hatası: {cb_err}")
         
         # Her scan için YENİ orchestrator oluştur (modüler)
         # UnifiedLLM kullanır (Groq API key'i env'den alır)
         scan_orchestrator = DynamicAgentOrchestrator(api_key=None)  # api_key ignored, uses env
         logger.info(f"✅ Scan {scan_id} için yeni orchestrator oluşturuldu (Groq)")
         
-        # Orchestrator ile scan çalıştır - streaming düşünce ile
+        # Safe status callback wrapper
+        async def safe_status_callback(msg: str, status_type: str = "info"):
+            """WebSocket hatalarını yakalayan güvenli callback"""
+            try:
+                await status_callback(msg, status_type)
+            except RuntimeError as re:
+                logger.warning(f"⚠️ WebSocket bağlantısı kapalı, mesaj gönderilemedi: {msg[:50]}...")
+            except Exception as e:
+                logger.error(f"❌ Status callback hatası: {type(e).__name__} - {e}")
+        
+        # Orchestrator ile scan çalıştır - streaming düşünce ile (safe callback)
         result = await scan_orchestrator.run_autonomous_pentest_streaming(
             target=target,
             user_task=task or f"Kapsamlı güvenlik testi yap",
-            status_callback=status_callback
+            status_callback=safe_status_callback
         )
         
         # Scan tamamlanma mesajı
-        await status_callback(f"✅ Scan tamamlandı: {scan_id}", "success")
+        try:
+            await safe_status_callback(f"✅ Scan tamamlandı: {scan_id}", "success")
+        except Exception as cb_err:
+            logger.error(f"Completion callback hatası: {cb_err}")
         
         # Sonuçları broadcast et
-        result_data = {
-            "type": "scan_completed",
-            "scan_id": scan_id,
-            "result": result.to_dict() if hasattr(result, 'to_dict') else str(result),
-            "timestamp": datetime.now().strftime("%H:%M:%S")
-        }
-        await manager.broadcast(json.dumps(result_data))
+        try:
+            result_data = {
+                "type": "scan_completed",
+                "scan_id": scan_id,
+                "result": result.to_dict() if hasattr(result, 'to_dict') else str(result),
+                "timestamp": datetime.now().strftime("%H:%M:%S")
+            }
+            await manager.broadcast(json.dumps(result_data))
+        except Exception as broadcast_err:
+            logger.error(f"Broadcast hatası: {broadcast_err}")
         
+    except asyncio.TimeoutError as e:
+        logger.error(f"⏱️ Scan timeout hatası: {scan_id}")
+        try:
+            await status_callback(f"⏱️ Scan zaman aşımına uğradı", "error")
+        except:
+            pass
     except Exception as e:
-        logger.error(f"Scan çalıştırma hatası: {e}")
-        await status_callback(f"❌ Scan hatası: {str(e)}", "error")
+        logger.error(f"❌ Scan çalıştırma hatası ({type(e).__name__}): {e}")
+        try:
+            await status_callback(f"❌ Scan hatası: {type(e).__name__} - {str(e)[:100]}", "error")
+        except:
+            pass
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

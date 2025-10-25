@@ -70,13 +70,13 @@ class PentagentAPI {
       // WebSocket bağlantısını kur
       this.ws = new WebSocket(this.wsURL);
       
-      // Bağlantı timeout'u ekle
+      // Bağlantı timeout'u ekle - ARTIR ILDI (30s)
       const connectionTimeout = setTimeout(() => {
         if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
-          console.log('WebSocket bağlantı timeout, kapatılıyor...');
+          console.log('WebSocket bağlantı timeout (30s), kapatılıyor...');
           this.ws.close();
         }
-      }, 5000); // 5 saniye timeout (daha kısa)
+      }, 30000); // 30 saniye timeout (5s → 30s)
       
       this.ws.onopen = () => {
         clearTimeout(connectionTimeout);
@@ -181,7 +181,7 @@ class PentagentAPI {
         
         // Timeout'u 10 saniye yap (daha toleranslı)
         this.heartbeatTimeout = setTimeout(() => {
-          console.warn('⚠️ Heartbeat timeout (10s), bağlantı test ediliyor...');
+          console.warn('⚠️ Heartbeat timeout (30s), bağlantı test ediliyor...');
           // Bağlantıyı test et
           if (this.ws && this.ws.readyState !== WebSocket.OPEN) {
             console.log('Bağlantı gerçekten kapalı, kapatılıyor...');
@@ -189,7 +189,7 @@ class PentagentAPI {
           } else {
             console.log('Bağlantı hala açık, heartbeat devam ediyor');
           }
-        }, 10000); // 10 saniye timeout
+        }, 30000); // 30 saniye timeout (10s → 30s)
       }
     }, 60000); // 60 saniyede bir ping (daha az sık)
   }
@@ -276,6 +276,10 @@ class PentagentAPI {
     try {
       console.log(`REST API ile scan başlatılıyor: ${target}`);
       
+      // Timeout wrapper for fetch (90s)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 90000); // 90s timeout
+      
       const response = await fetch(`${this.baseURL}/api/scan`, {
         method: 'POST',
         headers: {
@@ -284,8 +288,11 @@ class PentagentAPI {
         body: JSON.stringify({
           target: target,
           task: task
-        })
+        }),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
 
       console.log('REST API response status:', response.status);
 
@@ -311,6 +318,10 @@ class PentagentAPI {
       console.log('REST API scan result:', result);
       return result;
     } catch (error) {
+      if (error.name === 'AbortError') {
+        console.error('⏱️ REST API timeout (90s):', error);
+        throw new Error('Tarama başlatma zaman aşımına uğradı (90s). Lütfen tekrar deneyin.');
+      }
       console.error('REST API scan hatası:', error);
       throw error;
     }
