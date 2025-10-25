@@ -61,11 +61,10 @@ class Config:
         self.HUGGINGFACE_TOKEN = os.getenv('HUGGINGFACE_TOKEN', '')
         self.HF_MODEL_URL = os.getenv('HF_MODEL_URL', 'https://router.huggingface.co/hf-inference/models/meta-llama/Llama-3.2-3B-Instruct')
         
-        # Reranker Configuration - mixedbread-ai/mxbai-rerank-xsmall-v1 (Lightweight & Fast)
+        # Reranker Configuration - Kendi HuggingFace Space
         self.USE_RERANKER = os.getenv('USE_RERANKER', 'true').lower() == 'true'
-        # mxbai-rerank-xsmall-v1 - Eski mxbai-rerank-base-v1 yerine daha hafif model
-        self.RERANKER_MODEL = os.getenv('RERANKER_MODEL', 'mixedbread-ai/mxbai-rerank-xsmall-v1')
-        self.RERANKER_API_URL = f'https://router.huggingface.co/hf-inference/models/{self.RERANKER_MODEL}'
+        # Kendi Space URL'i - Environment variable'dan al
+        self.RERANKER_API_URL = os.getenv('RERANKER_API_URL', 'https://your-space.hf.space/rerank')
         self.RERANKER_TOP_K = int(os.getenv('RERANKER_TOP_K', '5'))  # Rerank için kaç sonuç alınacak
 
 # Global configuration instance

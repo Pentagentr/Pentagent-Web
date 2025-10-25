@@ -240,15 +240,11 @@ class RAGService:
         if not results or len(results) == 0:
             return results
         
-        # HuggingFace token kontrolü - ZORUNLU
-        if not config.HUGGINGFACE_TOKEN:
-            logger.error("❌ HuggingFace token YOK! Reranker kullanılamıyor.")
-            logger.warning("⚠️ Reranker olmadan orijinal sıralama kullanılıyor")
-            return results
-        
-        # Token validation cache (1 saat) - Her request'te kontrol etme
-        if not self._is_token_valid_cached():
-            logger.warning("⚠️ HuggingFace token cache'de geçersiz, reranker atlanıyor")
+        # Reranker endpoint kontrolü
+        reranker_url = os.getenv('RERANKER_API_URL')
+        if not reranker_url or reranker_url == 'https://your-space.hf.space/rerank':
+            logger.warning("⚠️ RERANKER_API_URL ayarlanmamış, reranker atlanıyor")
+            logger.warning("💡 Environment variable'da kendi Space URL'nizi ayarlayın")
             return results
         
         try:
@@ -273,75 +269,59 @@ class RAGService:
             
             logger.info(f"📝 {len(documents)} document reranker formatında hazırlandı")
             
-            # RERANKER MODEL ve URL - Config'den al
-            reranker_model = config.RERANKER_MODEL
-            inference_url = config.RERANKER_API_URL  # YENİ HuggingFace Inference Providers API
+            # RERANKER ENDPOINT - Kendi HuggingFace Space
+            reranker_url = os.getenv('RERANKER_API_URL', 'https://your-space.hf.space/rerank')
             
-            logger.info(f"🎯 Reranker model: {reranker_model}")
-            logger.info(f"🔗 Endpoint: {inference_url}")
+            logger.info(f"🎯 Reranker endpoint: {reranker_url}")
             
-            # Token kontrolü
-            if not config.HUGGINGFACE_TOKEN:
-                logger.error("❌ HUGGINGFACE_TOKEN environment variable tanımlı değil!")
-                logger.error("💡 Render.com'da Environment Variables bölümünden HUGGINGFACE_TOKEN ekleyin")
-                raise Exception("HUGGINGFACE_TOKEN tanımlı değil")
-            
-            logger.info(f"🔑 HuggingFace Token: {config.HUGGINGFACE_TOKEN[:10]}... (ilk 10 karakter)")
-            
+            # Headers - Token gerekmez (kendi space'imiz)
             headers = {
-                "Authorization": f"Bearer {config.HUGGINGFACE_TOKEN}",
                 "Content-Type": "application/json"
             }
             
-            # mixedbread-ai/mxbai-rerank-base-v1 için DOĞRU format (inputs sarmalamaya gerek yok)
+            # Payload - Kendi API formatımız
             payload = {
                 "query": query,
                 "documents": documents,
-                "options": {
-                    "wait_for_model": True,
-                    "use_cache": False
-                }
+                "top_k": limit
             }
-            logger.info(f"🎯 Reranker formatı kullanılıyor: {reranker_model}")
+            logger.info(f"🎯 Kendi Reranker Space kullanılıyor")
             
             # Log için document sayısını al
             doc_count = len(documents)
             logger.info(f"📤 {doc_count} document reranker'a gönderiliyor")
             
-            # HuggingFace API'ye istek gönder - SHARED SESSION (Memory Efficient)
+            # Kendi Reranker Space'e istek gönder - SHARED SESSION (Memory Efficient)
             session = await self._get_or_create_session()
             try:
                 async with session.post(
-                    inference_url,
+                    reranker_url,
                     headers=headers,
                     json=payload,
-                    timeout=aiohttp.ClientTimeout(total=30, connect=10)  # Daha kısa timeout
+                    timeout=aiohttp.ClientTimeout(total=30, connect=10)
                 ) as response:
-                    if response.status == 403:
-                        error_text = await response.text()
-                        logger.warning(f"⚠️ Reranker API yetki hatası (403): {error_text[:100]}")
-                        logger.warning("💡 Çözüm: HuggingFace token'ınızın 'Inference API' yetkisi olmalı")
-                        logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
-                        return results  # Fallback: orijinal sıralama
-                    
                     if response.status == 404:
-                        # Model bulunamadı - sessizce fallback kullan
-                        logger.warning(f"⚠️ Reranker modeli HuggingFace'de bulunamadı: {reranker_model}")
-                        logger.warning("💡 Çözüm: RERANKER_MODEL environment variable'ını kontrol edin")
+                        logger.warning(f"⚠️ Reranker Space bulunamadı: {reranker_url}")
+                        logger.warning("💡 Çözüm: RERANKER_API_URL environment variable'ını kontrol edin")
                         logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
-                        return results  # Fallback: orijinal sıralama
+                        return results
+                    
+                    if response.status == 503:
+                        logger.warning(f"⚠️ Reranker Space uyuyor (cold start)")
+                        logger.warning("💡 Space uyanıyor, lütfen tekrar deneyin")
+                        logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
+                        return results
                     
                     if response.status != 200:
-                        # Error response - limit body size (memory efficient)
                         error_text = await response.text()
                         logger.warning(f"⚠️ Reranker API hatası: {response.status}")
-                        logger.warning(f"API yanıtı: {error_text[:200]}")  # Limit to 200 chars
+                        logger.warning(f"API yanıtı: {error_text[:200]}")
                         logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
-                        return results  # Fallback: orijinal sıralama
+                        return results
                     
                     # Response body size limit - 1MB max (memory protection)
                     content_length = response.headers.get('Content-Length')
-                    if content_length and int(content_length) > 1_000_000:  # 1MB
+                    if content_length and int(content_length) > 1_000_000:
                         logger.warning(f"⚠️ Reranker response çok büyük: {content_length} bytes")
                         logger.warning("⚠️ Memory koruması - orijinal sıralama kullanılıyor")
                         return results
@@ -349,17 +329,10 @@ class RAGService:
                     rerank_response = await response.json()
                     logger.info(f"✅ Reranker yanıtı alındı: {type(rerank_response)}")
                     
-                    # mixedbread-ai/mxbai-rerank-xsmall-v1 array of scores döndürür veya dict
-                    # Response formatı: [{"score": 0.85}, {"score": 0.72}, ...] veya [0.85, 0.72, ...]
-                    rerank_scores = []
-                    if isinstance(rerank_response, list):
-                        for item in rerank_response:
-                            if isinstance(item, dict) and 'score' in item:
-                                rerank_scores.append(item['score'])
-                            elif isinstance(item, (int, float)):
-                                rerank_scores.append(item)
-                            else:
-                                rerank_scores.append(0.5)  # fallback
+                    # Kendi API formatımız: {"scores": [...], "top_k_indices": [...]}
+                    if isinstance(rerank_response, dict) and 'scores' in rerank_response:
+                        rerank_scores = rerank_response['scores']
+                        logger.info(f"📊 {len(rerank_scores)} skor alındı")
                     else:
                         logger.warning(f"⚠️ Beklenmeyen reranker response formatı: {type(rerank_response)}")
                         return results
@@ -472,15 +445,8 @@ class RAGService:
         try:
             logger.info(f"CVE araması yapılıyor: '{query}' (limit={limit}, severity={severity})")
             
-            # Reranker MUTLAKA aktif - HuggingFace token kontrolü
+            # Reranker MUTLAKA aktif
             reranker_enabled = True if use_reranker is None else use_reranker
-            
-            # HuggingFace token kontrolü - yetki yoksa uyarı ver ama devam et
-            if reranker_enabled and not self._has_valid_hf_token():
-                logger.error("❌ HUGGINGFACE TOKEN YETKİSİ YOK!")
-                logger.error("💡 Çözüm: HuggingFace hesabınızda 'Inference API' yetkisi olmalı")
-                logger.error("🔗 https://huggingface.co/settings/tokens adresinden token oluşturun")
-                # Reranker'ı devre dışı bırakma, sadece uyarı ver
             # 20 sparse vektör için fetch_limit = 20
             fetch_limit = 20 if reranker_enabled else limit
             if reranker_enabled:

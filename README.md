@@ -1,4 +1,4 @@
-# 🛡️ Pentagent - Yapay Zeka Destekli Güvenlik Test Platformu
+# 🛡️ Pentagent - AI-Powered Security Testing Platform
 
 <div align="center">
 
@@ -7,72 +7,73 @@
 ![React](https://img.shields.io/badge/react-18+-61dafb.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688.svg)
 
-**Pentagent**, güvenlik testlerini otomatikleştiren, yapay zeka ile güçlendirilmiş, yeni nesil bir penetrasyon testi platformudur.
+**Pentagent** is an AI-powered, next-generation penetration testing platform that automates security testing with advanced artificial intelligence.
 
-[Özellikler](#-özellikler) •
-[Kurulum](#-kurulum) •
-[Kullanım](#-kullanım) •
-[Mimarı](#-mimari) •
+[Features](#-features) •
+[Installation](#-installation) •
+[Usage](#-usage) •
+[Architecture](#-architecture) •
 
 </div>
 
 ---
 
-## 🎯 Genel Bakış
+## 🎯 Overview
 
-**Pentagent**, siber güvenlik uzmanları için geliştirilmiş, tamamen otonom bir penetrasyon testi platformudur:
+**Pentagent** is a fully autonomous penetration testing platform designed for cybersecurity professionals:
 
-- 🤖 **AI Destekli Karar Alma** - GPT OSS 120B modeli ile akıllı test stratejileri
-- 🔍 **RAG Entegrasyonu** - 95,000+ CVE veritabanı ile anlık zafiyet analizi (HuggingFace Space: [Pentagent Qdrant](https://huggingface.co/spaces/meryemarpaci/pentagent-qdrant))
-- 🎯 **Reranker Optimizasyonu** - mixedbread-ai/mxbai-rerank-base-v1 ile 10x score boost
-- 📊 **Dinamik Risk Skoru** - Tool çıktılarına dayalı akıllı risk hesaplama
-- 📊 **Otomatik Raporlama** - PDF/TXT/JSON/MD formatlarında LLM-destekli profesyonel raporlar
-- 🎨 **Modern Arayüz** - Real-time WebSocket güncellemeleri ile kullanıcı dostu UI
-- 🛠️ **30+ Güvenlik Aracı** - Kapsamlı zafiyet tespit ve doğrulama araçları
+- 🤖 **AI-Driven Decision Making** - Intelligent test strategies with GPT OSS 120B model
+- 🔍 **RAG Integration** - Real-time vulnerability analysis with 95,000+ CVE database (HuggingFace Space: [Pentagent Qdrant](https://huggingface.co/spaces/meryemarpaci/pentagent-qdrant))
+- 🎯 **Reranker Optimization** - 10x score boost with mixedbread-ai/mxbai-rerank-base-v1
+- 📊 **Dynamic Risk Scoring** - Intelligent risk calculation based on tool outputs
+- 📊 **Automated Reporting** - LLM-powered professional reports
+- 🎨 **Modern Interface** - User-friendly UI with real-time WebSocket updates
+- 🛠️ **30+ Security Tools** - Comprehensive vulnerability detection and validation tools
 
 ---
 
-## ✨ Temel Özellikler
+## ✨ Key Features
 
-### 🤖 Yapay Zeka Odaklı Test
-- **Otonom Karar Mekanizması**: AI, hedef sistemi analiz eder ve en uygun test stratejisini belirler
-- **Dinamik Orkestrasyon**: Tool seçimi ve sıralama yapay zeka tarafından optimize edilir
-- **Hata Yönetimi**: Başarısız araçlar için otomatik fallback stratejileri
+### 🤖 AI-Focused Testing
+- **Autonomous Decision Mechanism**: AI analyzes target systems and determines optimal test strategies
+- **Dynamic Orchestration**: Tool selection and sequencing optimized by artificial intelligence
+- **Error Management**: Automatic fallback strategies for failed tools
 
-### 🔍 RAG (Retrieval-Augmented Generation) Sistemi
-- **95K+ CVE Veritabanı**: MITRE ve NVD kaynaklı güncel zafiyet bilgileri
+### 🔍 RAG (Retrieval-Augmented Generation) System
+- **95K+ CVE Database**: Up-to-date vulnerability information from NVD sources
+- **Docker Deployment**: Local database setup
 - **HuggingFace Space**: Deployed on [meryemarpaci/pentagent-qdrant](https://huggingface.co/spaces/meryemarpaci/pentagent-qdrant)
-- **Semantik Arama**: BGE-M3 embeddings ile anlam tabanlı CVE eşleştirme
-- **Reranker Entegrasyonu**: mixedbread-ai/mxbai-rerank-base-v1 ile 10x score boost
-- **Sorgu Optimizasyonu**: GPT OSS 120B ile kullanıcı sorgularının otomatik iyileştirilmesi
-- **Hızlı Yanıt**: Hybrid scoring (15% vector + 85% reranker) ile <500ms yanıt süresi
-- **Graceful Fallback**: Reranker API hataları için otomatik fallback mekanizması
+- **Semantic Search**: Meaning-based CVE matching with BGE-M3 embeddings
+- **Reranker Integration**: 10x score boost with mixedbread-ai/mxbai-rerank-base-v1
+- **Query Optimization**: Automatic query improvement with GPT OSS 120B
+- **Fast Response**: <500ms response time with hybrid scoring (15% vector + 85% reranker)
+- **Graceful Fallback**: Automatic fallback mechanism for Reranker API errors
 
-### 📊 Raporlama Sistemi
-- **RAG-Entegreli Raporlar**: En alakalı CVE'ler otomatik olarak rapora eklenir
-- **LLM-Enhanced Reports**: LLM ile AI-destekli rapor oluşturma
-- **Dinamik Risk Skoru**: Tool çıktılarına göre (endpoints, forms, ports) akıllı skorlama
-- **CVSS Detayları**: Her CVE için CVSS skoru, vektör ve detaylı açıklama
-- **Çoklu Format**: PDF, TXT, JSON ve Markdown formatlarında export
-- **OWASP Uyumlu**: OWASP Top 10 kategorilerine göre sınıflandırma
-- **Kurumsal Tasarım**: Profesyonel raporlama
+### 📊 Reporting System
+- **RAG-Integrated Reports**: Most relevant CVEs automatically added to reports
+- **LLM-Enhanced Reports**: AI-powered report generation with LLM
+- **Dynamic Risk Scoring**: Intelligent scoring based on tool outputs (endpoints, forms, ports)
+- **CVSS Details**: CVSS score, vector, and detailed description for each CVE
+- **Multi-Format Export**: PDF, TXT, JSON, and Markdown formats
+- **OWASP Compliant**: Classification according to OWASP Top 10 categories
+- **Professional Design**: Enterprise-grade reporting
 
-### 🛠️ Güvenlik Araçları (30+)
-**Keşif & Tarama:**
+### 🛠️ Security Tools (30+)
+**Discovery & Scanning:**
 - Port Scanner (SYN/Connect/UDP)
 - Subdomain Enumeration (passive + bruteforce)
 - Web Crawler (Selenium + BeautifulSoup)
-- Technology Detection (Wappalyzer benzeri)
+- Technology Detection (Wappalyzer-like)
 - Directory Bruteforce
 
-**Zafiyet Tespiti:**
+**Vulnerability Detection:**
 - SQL Injection Scanner
 - XSS Detector (HTTP + Selenium)
 - IDOR Tester
 - LFI/RFI Scanner
 - JWT Vulnerability Checker
 
-**Altyapı Analizi:**
+**Infrastructure Analysis:**
 - Firewall Detector
 - Origin IP Finder (CDN bypass)
 - HTTP Header Analyzer
@@ -88,11 +89,11 @@
 
 ---
 
-## 🏗️ Sistem Mimarisi
+## 🏗️ System Architecture
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│              PENTAGENT MİMARİSİ                     │
+│              PENTAGENT ARCHITECTURE                 │
 └──────────────────────────────────────────────────────┘
 
 React Frontend (Firebase Hosting)
@@ -116,111 +117,97 @@ FastAPI Backend (Render.com)
     │
     └─ RAG Service
         ↓ REST API
-Qdrant Vector DB (HuggingFace Space: meryemarpaci/pentagent-qdrant)
+Docker Qdrant Vector DB (HuggingFace Space: meryemarpaci/pentagent-qdrant)
     ├─ 95K+ CVE Embeddings (BGE-M3)
     ├─ Hybrid Search (Sparse + Dense)
     └─ Reranker (mixedbread-ai/mxbai-rerank-base-v1)
 ```
 
-### 🔄 RAG İş Akışı
+### 🔄 RAG Workflow
 
 ```
-1. Kullanıcı Sorgusu → GPT OSS 120B Optimizasyonu
-2. Optimize Sorgu → BGE-M3 Embedding
-3. Hybrid Search → Qdrant (Sparse 40% + Dense 60%, Top 20 sonuç)
+1. User Query → GPT OSS 120B Optimization
+2. Optimized Query → BGE-M3 Embedding
+3. Hybrid Search → Qdrant (Sparse 40% + Dense 60%, Top 20 results)
 4. Reranking → mixedbread-ai/mxbai-rerank-base-v1 (10x score boost)
 5. Hybrid Scoring → 15% vector + 85% reranker (boosted)
-6. Final Results → En alakalı CVE'ler (CVSS detayları ile)
-7. Graceful Fallback → Reranker hatası durumunda orijinal sıralama
+6. Final Results → Most relevant CVEs (with CVSS details)
+7. Graceful Fallback → Original ranking on Reranker errors
 ```
 
-### 🎯 Risk Skoru Hesaplama (Yeni)
+### 🎯 Risk Score Calculation (New)
 
 ```
-Tool Çıktılarına Dayalı Dinamik Skorlama:
-├─ Severity Ağırlıkları
+Dynamic Scoring Based on Tool Outputs:
+├─ Severity Weights
 │   ├─ Critical: +15
 │   ├─ High: +10
 │   ├─ Medium: +5
 │   └─ Low/Info: +2/+1
 │
-├─ Tool Çıktısı Bonusları
-│   ├─ 50+ endpoints → +30 (kritik saldırı yüzeyi)
-│   ├─ 10+ forms → +25 (injection riski)
-│   ├─ 20+ subdomains → +20 (geniş yüzey)
+├─ Tool Output Bonuses
+│   ├─ 50+ endpoints → +30 (critical attack surface)
+│   ├─ 10+ forms → +25 (injection risk)
+│   ├─ 20+ subdomains → +20 (wide surface)
 │   ├─ 10+ open ports → +20
 │   └─ Critical dirs (admin, config) → +20
 │
-├─ Gerçek Zafiyet Bulguları
+├─ Real Vulnerability Findings
 │   └─ SQL/XSS/RCE → +20 each (max +50)
 │
-└─ Kritik Yol/Endpoint
-    └─ admin, login, api → +20 (5+ adet)
+└─ Critical Path/Endpoint
+    └─ admin, login, api → +20 (5+ instances)
 
-Sonuç: 0-100 arası normalize skor, minimum 15 (bulgu varsa)
+Result: 0-100 normalized score, minimum 15 (if findings exist)
 ```
 
 ---
 
-## 🚀 Hızlı Başlangıç
-
-### Gereksinimler
-
-**Backend:**
-- Python 3.9+
-- FastAPI
-- Qdrant (HuggingFace Space veya local)
-
-**Frontend:**
-- Node.js 16+
-- React 18+
-- Vite
-
 **API Keys:**
-- `GROQ_API_KEY` - GPT OSS 120B için
-- `HUGGINGFACE_TOKEN` - RAG servisi için 
+- `GROQ_API_KEY` - For GPT OSS 120B
+- `HUGGINGFACE_TOKEN` - For RAG service
 
-### 📦 Kurulum
+### 📦 Installation
 
-#### 1. Projeyi Klonlayın
+#### 1. Clone the Project
 
 ```bash
 git clone https://github.com/Pentagentr/Pentagent-Web.git
 cd Pentagent-Web
 ```
 
-#### 2. Backend Kurulumu
+#### 2. Backend Setup
 
 ```bash
-# Python sanal ortamı oluştur
+# Create Python virtual environment
 python -m venv venv
 
-# Sanal ortamı aktif et
+# Activate virtual environment
 # Windows:
 venv\Scripts\activate
 # Linux/Mac:
 source venv/bin/activate
 
-# Bağımlılıkları yükle
+# Install dependencies
 pip install -r requirements.txt
 
-# Ortam değişkenlerini ayarla
-# .env dosyası oluştur ve aşağıdaki değerleri ekle:
+# Set environment variables
+# Create .env file with the following values:
 ```
 
-**.env Örneği:**
+**.env Example:**
 ```env
-# Zorunlu
+# Required
 GROQ_API_KEY=your_groq_api_key_here
 MODEL_PROVIDER=groq
-GROQ_MODEL=gpt-4o
+GROQ_MODEL=gpt-oss-120b
 
-# RAG Sistemi (Opsiyonel)
+# RAG System (Optional)
 HUGGINGFACE_TOKEN=your_hf_token_here
 QDRANT_HOST=https://your-qdrant-space.hf.space
 EMBEDDING_API_URL=https://your-embedding-space.hf.space/embed
 
-# Reranker (Opsiyonel - varsayılan değerler)
+# Reranker (Optional - default values)
 USE_RERANKER=true
 RERANKER_MODEL=mixedbread-ai/mxbai-rerank-base-v1
 RERANKER_TOP_K=5
@@ -231,26 +218,26 @@ ALLOWED_ORIGINS=http://localhost:5173,https://your-frontend.web.app
 ```
 
 ```bash
-# Backend'i başlat
+# Start backend
 python web_api.py
 ```
 
-Backend şimdi `http://localhost:8000` adresinde çalışıyor.
+Backend is now running at `http://localhost:8000`.
 
-#### 3. Frontend Kurulumu
+#### 3. Frontend Setup
 
 ```bash
-# Frontend dizinine geç
+# Navigate to frontend directory
 cd pentagent-frontend
 
-# Bağımlılıkları yükle
+# Install dependencies
 npm install
 
-# Ortam değişkenlerini ayarla
-# .env.local dosyası oluştur:
+# Set environment variables
+# Create .env.local file:
 ```
 
-**.env.local Örneği:**
+**.env.local Example:**
 ```env
 VITE_API_URL=http://localhost:8000
 VITE_FIREBASE_API_KEY=your_firebase_api_key
@@ -259,32 +246,62 @@ VITE_FIREBASE_PROJECT_ID=your-project-id
 ```
 
 ```bash
-# Development sunucusunu başlat
+# Start development server
 npm run dev
 ```
 
-Frontend şimdi `http://localhost:5173` adresinde çalışıyor.
+Frontend is now running at `http://localhost:5173`.
 
-#### 4. Firebase Deployment (Opsiyonel)
+#### 4. Docker Qdrant Setup (Local Development)
+
+For local development, you can run Qdrant with Docker:
 
 ```bash
-# Firebase CLI'yi yükle
+# Pull and run Qdrant
+docker run -p 6333:6333 -p 6334:6334 \
+    -v $(pwd)/qdrant_storage:/qdrant/storage:z \
+    qdrant/qdrant
+
+# Or use docker-compose
+docker-compose up -d
+```
+
+**docker-compose.yml:**
+```yaml
+version: '3.8'
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - ./qdrant_storage:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__SERVICE__GRPC_PORT=6334
+```
+
+#### 5. Firebase Deployment (Optional)
+
+```bash
+# Install Firebase CLI
 npm install -g firebase-tools
 
-# Firebase'e giriş yap
+# Login to Firebase
 firebase login
 
-# Projeyi başlat (ilk defa)
+# Initialize project (first time)
 firebase init hosting
 
-# Build oluştur
+# Build project
 npm run build
 
-# Deploy et
+# Deploy
 firebase deploy --only hosting
 ```
 
-**firebase.json Yapılandırması:**
+**firebase.json Configuration:**
 ```json
 {
   "hosting": {
@@ -302,27 +319,27 @@ firebase deploy --only hosting
 
 ---
 
-## 💻 Kullanım
+## 💻 Usage
 
-### 1. Temel Tarama
+### 1. Basic Scanning
 
 ```bash
-# Web arayüzünde
-1. http://localhost:5173 adresine git
-2. Giriş yap veya kayıt ol
-3. Chat sayfasında hedef ve isteğini gir: "example.com sitesini taramanı istiyorum"
-4. AI otomatik olarak uygun araçları seçer ve taramayı başlatır
+# Web interface
+1. Go to http://localhost:5173
+2. Login or register
+3. Enter target and request in chat page: "I want you to scan example.com"
+4. AI automatically selects appropriate tools and starts the scan
 ```
 
-### 2. RAG CVE Araması
+### 2. RAG CVE Search
 
 ```python
-# Programatik kullanım
+# Programmatic usage
 from services.rag_service import get_rag_service
 
 rag = get_rag_service()
 
-# CVE ara
+# Search CVEs
 results = rag.search_cve("SQL injection", limit=5)
 
 for cve in results:
@@ -332,30 +349,30 @@ for cve in results:
     print(f"Match Score: {cve.score}")
 ```
 
-### 3. Rapor Oluşturma
+### 3. Report Generation
 
 ```bash
-# Web arayüzünde
-1. Tarama tamamlandıktan sonra
-2. Sağ panelde "Generate Report" butonuna tıkla
-3. Rapor otomatik olarak oluşturulur (PDF/TXT/JSON)
-4. "Download" butonu ile indir
+# Web interface
+1. After scan completion
+2. Click "Generate Report" button in right panel
+3. Report is automatically generated (PDF/TXT/JSON)
+4. Download with "Download" button
 ```
 
-### 4. API Kullanımı
+### 4. API Usage
 
 ```python
 import requests
 
-# Tarama başlat
+# Start scan
 response = requests.post("http://localhost:8000/api/scan", json={
     "target": "example.com",
-    "task": "Kapsamlı güvenlik testi yap"
+    "task": "Perform comprehensive security test"
 })
 
 scan_id = response.json()["scan_id"]
 
-# RAG CVE ara
+# RAG CVE search
 response = requests.post("http://localhost:8000/api/rag/search", json={
     "query": "SQL injection WordPress",
     "limit": 5,
@@ -364,7 +381,7 @@ response = requests.post("http://localhost:8000/api/rag/search", json={
 
 cves = response.json()["results"]
 
-# Rapor oluştur
+# Generate report
 response = requests.post("http://localhost:8000/api/generate-report", json={
     "target": "example.com",
     "scan_results": {"vulnerabilities": [...]},
@@ -376,7 +393,7 @@ report = response.json()
 
 ---
 
-## 🔧 Teknoloji Stack
+## 🔧 Technology Stack
 
 ### Backend
 - **Framework:** FastAPI (async Python)
@@ -397,7 +414,7 @@ report = response.json()
 - **Icons:** Lucide React
 - **Deploy:** Firebase Hosting
 
-### Veritabanı & ML
+### Database & ML
 - **Vector DB:** Qdrant ([Deployed on HuggingFace](https://huggingface.co/spaces/meryemarpaci/pentagent-qdrant))
 - **Embedding Model:** BAAI/bge-m3 (1024-dim, hybrid scoring)
 - **Reranker Model:** mixedbread-ai/mxbai-rerank-base-v1 (10x boost + fallback)
@@ -407,105 +424,105 @@ report = response.json()
 
 ---
 
-## 📊 Performans Metrikleri
+## 📊 Performance Metrics
 
-| Metrik | Değer | Açıklama |
-|--------|-------|----------|
-| RAG Yanıt Süresi | <500ms | Reranker dahil ortalama süre |
-| CVE Veritabanı | 95,000+ | MITRE ve NVD kaynakları |
-| Embedding Boyutu | 1024-dim | BGE-M3 vektör boyutu |
-| Reranker Score Boost | 10x | mixedbread-ai model ile boost |
-| Hybrid Scoring | 15/85 | Vector (15%) vs Reranker (85%) ağırlığı |
+| Metric | Value | Description |
+|--------|-------|-------------|
+| RAG Response Time | <500ms | Average time including reranker |
+| CVE Database | 95,000+ | MITRE and NVD sources |
+| Embedding Size | 1024-dim | BGE-M3 vector dimension |
+| Reranker Score Boost | 10x | Boost with mixedbread-ai model |
+| Hybrid Scoring | 15/85 | Vector (15%) vs Reranker (85%) weight |
 | Reranker Fallback | ✅ | Graceful degradation on API errors |
 | Risk Score Accuracy | Dynamic | Tool output-based calculation |
-| Tool Success Rate | ~85% | Ortalama başarı oranı |
+| Tool Success Rate | ~85% | Average success rate |
 | LLM Token Optimization | 60% | Prompt size reduction (3000→1500 words) |
 
 ---
 
-## 🗂️ Proje Yapısı
+## 🗂️ Project Structure
 
 ```
 Pentagent/
-├── agent_core/              # AI orkestrasyonu
-│   ├── dynamic_orchestrator.py  # Ana AI karar motoru
-│   ├── planner.py               # Strateji planlayıcı
-│   ├── analyzer.py              # Sonuç analizörü
-│   ├── report_generator.py      # RAG-entegreli raporlama
-│   └── state.py                 # Durum yönetimi
+├── agent_core/              # AI orchestration
+│   ├── dynamic_orchestrator.py  # Main AI decision engine
+│   ├── planner.py               # Strategy planner
+│   ├── analyzer.py              # Result analyzer
+│   ├── report_generator.py      # RAG-integrated reporting
+│   └── state.py                 # State management
 │
-├── tools/                   # Güvenlik araçları (30+)
-│   ├── enum_*.py           # Keşif araçları
-│   ├── verify_*.py         # Doğrulama araçları
-│   ├── recon_*.py          # Recon araçları
-│   └── vuln_*.py           # Zafiyet tarayıcıları
+├── tools/                   # Security tools (30+)
+│   ├── enum_*.py           # Discovery tools
+│   ├── verify_*.py         # Validation tools
+│   ├── recon_*.py          # Recon tools
+│   └── vuln_*.py           # Vulnerability scanners
 │
-├── services/               # Servisler
-│   └── rag_service.py      # RAG + Reranker sistemi
+├── services/               # Services
+│   └── rag_service.py      # RAG + Reranker system
 │
 ├── mcp_server/            # Tool registry
-│   ├── tool_registry.py    # Merkezi tool kaydı
+│   ├── tool_registry.py    # Central tool registry
 │   └── enhanced_mcp_tools.py
 │
 ├── pentagent-frontend/    # React frontend
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── chat/          # Chat arayüzü
-│   │   │   ├── reports/       # Rapor görüntüleme
-│   │   │   ├── layout/        # Layout bileşenleri
-│   │   │   └── common/        # Ortak bileşenler
+│   │   │   ├── chat/          # Chat interface
+│   │   │   ├── reports/       # Report viewer
+│   │   │   ├── layout/        # Layout components
+│   │   │   └── common/        # Common components
 │   │   ├── pages/
-│   │   │   ├── ChatPage.jsx   # Ana pentest sayfası
-│   │   │   ├── Reports.jsx    # Rapor sayfası
-│   │   │   └── RagSearch.jsx  # RAG arama sayfası
+│   │   │   ├── ChatPage.jsx   # Main pentest page
+│   │   │   ├── Reports.jsx    # Report page
+│   │   │   └── RagSearch.jsx  # RAG search page
 │   │   ├── services/
 │   │   │   └── pentagentAPI.js # Backend API client
 │   │   └── contexts/
-│   │       └── AuthContext.jsx # Auth yönetimi
+│   │       └── AuthContext.jsx # Auth management
 │   └── dist/              # Build output
 │
-├── reports/               # Oluşturulan raporlar
-├── logs/                  # Sistem logları
+├── reports/               # Generated reports
+├── logs/                  # System logs
 ├── web_api.py            # FastAPI backend server
-├── config.py             # Konfigürasyon
-├── requirements.txt      # Python bağımlılıkları
-└── README.md            # Bu dosya
+├── config.py             # Configuration
+├── requirements.txt      # Python dependencies
+└── README.md            # This file
 ```
 
 ---
 
-## 🔐 Güvenlik Notları
+## 🔐 Security Notes
 
-- ✅ Kendi sistemlerinizi test edin
-- ✅ Yazılı izin alınmış sistemleri test edin
-- ✅ CTF ve eğitim ortamlarında kullanın
-- ❌ İzinsiz sistemlere karşı kullanmayın
-- ❌ Sistem kaynaklarını kötüye kullanmayın
+- ✅ Test your own systems
+- ✅ Test systems with written permission
+- ✅ Use in CTF and educational environments
+- ❌ Do not use against unauthorized systems
+- ❌ Do not abuse system resources
 
 ---
 
 ## 📈 Roadmap
 
-### v2.0 (Mevcut) ✅
-- [x] RAG sistemi entegrasyonu (HuggingFace Space)
-- [x] mixedbread-ai/mxbai-rerank-base-v1 optimizasyonu (10x boost)
-- [x] GPT OSS 120B model entegrasyonu
-- [x] Dinamik risk skoru hesaplama (tool-based)
-- [x] LLM-enhanced markdown raporlar
-- [x] Otomatik rapor oluşturma (PDF/TXT/JSON/MD)
-- [x] 30+ güvenlik aracı
+### v2.0 (Current) ✅
+- [x] RAG system integration (HuggingFace Space)
+- [x] mixedbread-ai/mxbai-rerank-base-v1 optimization (10x boost)
+- [x] GPT OSS 120B model integration
+- [x] Dynamic risk score calculation (tool-based)
+- [x] LLM-enhanced markdown reports
+- [x] Automatic report generation (PDF/TXT/JSON/MD)
+- [x] 30+ security tools
 - [x] WebSocket real-time updates + error handling
-- [x] Graceful fallback mekanizmaları (Reranker, LLM)
-- [x] Token optimization (60% azaltma)
+- [x] Graceful fallback mechanisms (Reranker, LLM)
+- [x] Token optimization (60% reduction)
 
-### v2.1 (Planlanan) 🚧
+### v2.1 (Planned) 🚧
 - [ ] Multi-target scanning
-- [ ] Custom wordlist yönetimi
+- [ ] Custom wordlist management
 - [ ] Export to Burp Suite
 - [ ] Scheduled scans
-- [ ] Email bildirimler
+- [ ] Email notifications
 
-### v3.0 (Gelecek) 🔮
+### v3.0 (Future) 🔮
 - [ ] Machine learning CVE predictor
 - [ ] Exploit generator
 - [ ] API fuzzing
@@ -514,33 +531,34 @@ Pentagent/
 
 ---
 
-## 📄 Lisans
+## 📄 License
 
-Bu proje Apache License 2.0 altında lisanslanmıştır. Detaylar için [LICENSE](LICENSE) dosyasına bakın.
+This project is licensed under Apache License 2.0. See [LICENSE](LICENSE) file for details.
 
-**Öne Çıkan Özellikler:**
-- ✅ Ticari kullanım izni
-- ✅ Değişiklik yapma izni
-- ✅ Dağıtım izni
-- ✅ Patent kullanım izni
-- ⚠️ Sorumluluk ve garanti feragati
+**Key Features:**
+- ✅ Commercial use permission
+- ✅ Modification permission
+- ✅ Distribution permission
+- ✅ Patent use permission
+- ⚠️ Liability and warranty disclaimer
 
 ---
 
-## 🙏 Teşekkürler
+## 🙏 Acknowledgments
 
-- **GPT OSS 120B** - AI reasoning modeli (Groq API üzerinden)
-- **Qdrant** - Vector database motoru ([HuggingFace Space deployment](https://huggingface.co/spaces/meryemarpaci/pentagent-qdrant))
+- **GPT OSS 120B** - AI reasoning model (via Groq API)
+- **Qdrant** - Vector database engine ([HuggingFace Space deployment](https://huggingface.co/spaces/meryemarpaci/pentagent-qdrant))
+- **Docker** - Vector db storage
 - **BAAI** - BGE-M3 embeddings
 - **mixedbread-ai** - mxbai-rerank-base-v1 reranker model
 - **HuggingFace** - Model hosting & inference API
-- **NVD/MITRE** - CVE veri kaynağı
+- **NVD/MITRE** - CVE data source
 - **FastAPI** - High-performance backend framework
 - **React** - Modern frontend framework
 - **Firebase** - Frontend hosting & authentication
 
 ---
 
-Made with by Pentagent
+Made with ❤️ by Pentagent
 
 </div>
