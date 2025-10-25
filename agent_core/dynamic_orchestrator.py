@@ -387,40 +387,97 @@ Hangi hedefi taramak istersin?"""
             logger.error(f"Result display error: {e}")
     
     async def _execute_tool(self, tool_name: str, params: dict):
-        """Tool'u çalıştır"""
+        """
+        Tool'u çalıştır - TIMEOUT KORUMASLI
+        ⏱️ Her tool için maksimum 5 dakika (300s) timeout
+        """
         try:
-            result = await self.mcp_server.execute_tool(tool_name, params)
+            # TIMEOUT EKLE - 5 dakika (300s)
+            result = await asyncio.wait_for(
+                self.mcp_server.execute_tool(tool_name, params),
+                timeout=300.0  # 5 dakika
+            )
+            
             # Result'ı kontrol et ve gerekirse düzelt
             if not isinstance(result, dict):
                 result = {"success": True, "data": result}
             if "success" not in result:
                 result["success"] = True
             return result
+            
+        except asyncio.TimeoutError:
+            error_msg = f"⏱️ Tool timeout (5 dakika) - {tool_name}"
+            logger.error(error_msg)
+            return {
+                "success": False, 
+                "error": error_msg,
+                "data": {},
+                "timeout": True
+            }
         except Exception as e:
-            logger.error(f"Tool execution failed: {e}")
-            return {"success": False, "error": str(e), "data": {}}
+            logger.error(f"❌ Tool execution failed ({tool_name}): {type(e).__name__} - {e}")
+            return {
+                "success": False, 
+                "error": f"{type(e).__name__}: {str(e)}", 
+                "data": {}
+            }
 
     async def _execute_tool_streaming(self, tool_name: str, params: dict, status_callback):
-        """Tool'u streaming düşünce ile çalıştır - KISA VERSİYON"""
+        """
+        Tool'u streaming düşünce ile çalıştır - TIMEOUT KORUMASLI
+        ⏱️ Her tool için maksimum 5 dakika timeout
+        """
         try:
             await status_callback(f"🔧 {tool_name} başlatılıyor...", "tool_start")
             
-            # Tool'u çalıştır
+            # Tool'u çalıştır (timeout korumalı)
             result = await self._execute_tool(tool_name, params)
+            
+            # Timeout kontrolü
+            if result.get("timeout"):
+                await status_callback(
+                    f"⏱️ {tool_name} zaman aşımına uğradı (5 dakika) - Sonraki adıma geçiliyor", 
+                    "tool_timeout"
+                )
+                return result
             
             if result.get("success"):
                 await status_callback(f"✅ {tool_name} tamamlandı", "tool_complete")
                 
                 # DETAYLI SONUÇ GÖSTERİMİ
-                await self._display_tool_results(tool_name, result, status_callback)
+                try:
+                    await self._display_tool_results(tool_name, result, status_callback)
+                except Exception as display_err:
+                    logger.error(f"Display error: {display_err}")
                 
             else:
-                await status_callback(f"⚠️ {tool_name} sorunlu tamamlandı", "tool_complete")
+                error_msg = result.get("error", "Bilinmeyen hata")
+                await status_callback(
+                    f"⚠️ {tool_name} başarısız: {error_msg[:100]}", 
+                    "tool_error"
+                )
             
             return result
+            
+        except asyncio.TimeoutError:
+            error_msg = f"⏱️ Tool streaming timeout (5 dakika)"
+            logger.error(f"{error_msg} - {tool_name}")
+            await status_callback(f"{error_msg} - {tool_name}", "tool_timeout")
+            return {
+                "success": False, 
+                "error": error_msg, 
+                "data": {},
+                "timeout": True
+            }
         except Exception as e:
-            await status_callback(f"❌ {tool_name} hatası: {str(e)}", "tool_error")
-            return {"success": False, "error": str(e), "data": {}}
+            error_msg = f"{type(e).__name__}: {str(e)[:100]}"
+            logger.error(f"❌ Tool streaming error ({tool_name}): {error_msg}")
+            await status_callback(f"❌ {tool_name} hatası: {error_msg}", "tool_error")
+            return {
+                "success": False, 
+                "error": error_msg, 
+                "data": {}
+            }
 
     async def run_autonomous_pentest(self, target: str, user_task: str):
         """Normal otonom pentest - streaming olmadan"""

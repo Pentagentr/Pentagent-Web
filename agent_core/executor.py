@@ -1,5 +1,6 @@
 # agent_core/executor.py
 
+import asyncio
 from typing import Dict, Any, List
 from agent_core.state import AgentState
 
@@ -123,15 +124,18 @@ class Executor:
             # Debug için parametreleri logla
             await self.status_callback(f"🔍 Executor parametreleri: {params}", "ai_reasoning")
             
-            # Tool'u çalıştır
-            result = await self.mcp_server.execute_tool(tool_name, params)
+            # Tool'u çalıştır - TIMEOUT KORUMASLI (5 dakika)
+            result = await asyncio.wait_for(
+                self.mcp_server.execute_tool(tool_name, params),
+                timeout=300.0  # 5 dakika
+            )
             
             # Sonucu analiz et ve durum güncellemesi yap
             if result.get("success"):
                 await self.status_callback(f"✅ {tool_name} başarıyla tamamlandı", "success")
             else:
                 error_msg = result.get("error", "Bilinmeyen hata")
-                await self.status_callback(f"❌ {tool_name} başarısız: {error_msg}", "error")
+                await self.status_callback(f"❌ {tool_name} başarısız: {error_msg[:100]}", "error")
             
             return {
                 "step_details": step,
@@ -140,9 +144,33 @@ class Executor:
                 "enhanced": "custom_payloads" in params or "custom_wordlist" in params
             }
             
+        except asyncio.TimeoutError:
+            error_msg = f"⏱️ Tool timeout (5 dakika) - {tool_name}"
+            logger.error(error_msg)
+            await self.status_callback(error_msg, "error")
+            
+            error_result = {
+                "success": False, 
+                "error": error_msg,
+                "timeout": True
+            }
+            
+            return {
+                "step_details": step,
+                "result": error_result,
+                "execution_time": 0,
+                "enhanced": False
+            }
+            
         except Exception as e:
-            error_result = {"success": False, "error": str(e)}
-            await self.status_callback(f"💥 {tool_name} kritik hata: {str(e)}", "error")
+            error_msg = f"{type(e).__name__}: {str(e)[:100]}"
+            logger.error(f"❌ Tool execution error ({tool_name}): {error_msg}")
+            await self.status_callback(f"💥 {tool_name} kritik hata: {error_msg}", "error")
+            
+            error_result = {
+                "success": False, 
+                "error": error_msg
+            }
             
             return {
                 "step_details": step,
