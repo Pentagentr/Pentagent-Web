@@ -516,11 +516,19 @@ class RAGService:
                     if loop.is_running():
                         # Event loop zaten çalışıyorsa thread pool kullan - MAX 2 WORKER (memory limit)
                         import concurrent.futures
+                        def run_rerank_in_new_loop():
+                            """Yeni event loop oluştur ve rerank çalıştır"""
+                            new_loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(new_loop)
+                            try:
+                                return new_loop.run_until_complete(
+                                    self._rerank_results(query, cve_results, limit)
+                                )
+                            finally:
+                                new_loop.close()
+                        
                         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-                            future = pool.submit(
-                                asyncio.run, 
-                                self._rerank_results(query, cve_results, limit)
-                            )
+                            future = pool.submit(run_rerank_in_new_loop)
                             try:
                                 reranked_results = future.result(timeout=25)  # 25s timeout
                             except concurrent.futures.TimeoutError:
