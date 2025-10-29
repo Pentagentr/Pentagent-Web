@@ -307,116 +307,118 @@ class RAGService:
             logger.info(f"🔗 POST {reranker_url}")
             logger.debug(f"📦 Payload: query='{query[:50]}...', documents={doc_count}, top_k={limit}")
             
-            # Kendi Reranker Space'e istek gönder - SHARED SESSION (Memory Efficient)
-            session = await self._get_or_create_session()
+            # SYNC HTTP REQUEST - Event loop sorununu önlemek için
+            # requests kütüphanesi kullanıyoruz (async yerine)
+            import requests
             try:
-                async with session.post(
+                response = requests.post(
                     reranker_url,
                     headers=headers,
                     json=payload,
-                    timeout=aiohttp.ClientTimeout(total=30, connect=10)
-                ) as response:
-                    if response.status == 404:
-                        logger.warning(f"⚠️ Reranker Space bulunamadı: {reranker_url}")
-                        logger.warning("💡 Çözüm: RERANKER_API_URL environment variable'ını kontrol edin")
-                        logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
-                        return results
-                    
-                    if response.status == 503:
-                        logger.warning(f"⚠️ Reranker Space uyuyor (cold start)")
-                        logger.warning("💡 Space uyanıyor, lütfen tekrar deneyin")
-                        logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
-                        return results
-                    
-                    if response.status == 405:
-                        error_text = await response.text()
-                        logger.error(f"❌ Reranker API Method Not Allowed (405): {reranker_url}")
-                        logger.error(f"💡 URL kontrolü: Space URL'i doğru formatta olmalı")
-                        logger.error(f"💡 Doğru format: https://username-spacename.hf.space/rerank")
-                        logger.error(f"💡 Örnek: https://meryemarpaci-pentagent-mxbai-rerank.hf.space/rerank")
-                        logger.error(f"API yanıtı: {error_text[:200]}")
-                        logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
-                        return results
-                    
-                    if response.status != 200:
-                        error_text = await response.text()
-                        logger.warning(f"⚠️ Reranker API hatası: {response.status}")
-                        logger.warning(f"💡 URL: {reranker_url}")
-                        logger.warning(f"API yanıtı: {error_text[:200]}")
-                        logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
-                        return results
-                    
-                    # Response body size limit - 1MB max (memory protection)
-                    content_length = response.headers.get('Content-Length')
-                    if content_length and int(content_length) > 1_000_000:
-                        logger.warning(f"⚠️ Reranker response çok büyük: {content_length} bytes")
-                        logger.warning("⚠️ Memory koruması - orijinal sıralama kullanılıyor")
-                        return results
-                    
-                    rerank_response = await response.json()
-                    logger.info(f"✅ Reranker yanıtı alındı: {type(rerank_response)}")
-                    
-                    # Kendi API formatımız: {"scores": [...], "top_k_indices": [...]}
-                    if isinstance(rerank_response, dict) and 'scores' in rerank_response:
-                        rerank_scores = rerank_response['scores']
-                        logger.info(f"📊 {len(rerank_scores)} skor alındı")
-                    else:
-                        logger.warning(f"⚠️ Beklenmeyen reranker response formatı: {type(rerank_response)}")
-                        return results
-                    
-                    if len(rerank_scores) == len(results):
-                        # Sonuçları rerank skoruna göre sırala
-                        reranked = []
-                        for idx, score in enumerate(rerank_scores):
-                            cve = results[idx]
-                            original_score = cve.score
-                            
-                            # Rerank score normalize et (0-1 arası)
-                            rerank_score = float(score) if isinstance(score, (int, float)) else 0.5
-                            
-                            # mixedbread-ai/mxbai-rerank-base-v1 zaten 0-1 arası skor verir
-                            # Ama genelde düşük skorlar veriyor (0.01-0.3 arası), scale up yapıyoruz
-                            # Score'u 10x yapıp clamp ediyoruz
-                            boosted_score = min(1.0, rerank_score * 10.0)  # 10x boost, max 1.0
-                            normalized_rerank = max(0.0, boosted_score)
-                            
-                            # Combined score: %85 rerank (boosted), %15 original
-                            # Boosted reranker score ile daha yüksek skorlar
-                            combined_score = (original_score * 0.15) + (normalized_rerank * 0.85)
-                            
-                            # Score'u update et - frontend'de görünsün
-                            cve.score = combined_score
-                            
-                            reranked.append({
-                                "cve": cve,
-                                "original_score": original_score,
-                                "rerank_score": rerank_score,
-                                "normalized_rerank": normalized_rerank,
-                                "combined_score": combined_score
-                            })
+                    timeout=(10, 30)  # (connect, read) timeout
+                )
+                
+                if response.status_code == 404:
+                    logger.warning(f"⚠️ Reranker Space bulunamadı: {reranker_url}")
+                    logger.warning("💡 Çözüm: RERANKER_API_URL environment variable'ını kontrol edin")
+                    logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
+                    return results
+                
+                if response.status_code == 503:
+                    logger.warning(f"⚠️ Reranker Space uyuyor (cold start)")
+                    logger.warning("💡 Space uyanıyor, lütfen tekrar deneyin")
+                    logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
+                    return results
+                
+                if response.status_code == 405:
+                    error_text = response.text
+                    logger.error(f"❌ Reranker API Method Not Allowed (405): {reranker_url}")
+                    logger.error(f"💡 URL kontrolü: Space URL'i doğru formatta olmalı")
+                    logger.error(f"💡 Doğru format: https://username-spacename.hf.space/rerank")
+                    logger.error(f"💡 Örnek: https://meryemarpaci-pentagent-mxbai-rerank.hf.space/rerank")
+                    logger.error(f"API yanıtı: {error_text[:200]}")
+                    logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
+                    return results
+                
+                if response.status_code != 200:
+                    error_text = response.text
+                    logger.warning(f"⚠️ Reranker API hatası: {response.status_code}")
+                    logger.warning(f"💡 URL: {reranker_url}")
+                    logger.warning(f"API yanıtı: {error_text[:200]}")
+                    logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
+                    return results
+                
+                # Response body size limit - 1MB max (memory protection)
+                content_length = response.headers.get('Content-Length')
+                if content_length and int(content_length) > 1_000_000:
+                    logger.warning(f"⚠️ Reranker response çok büyük: {content_length} bytes")
+                    logger.warning("⚠️ Memory koruması - orijinal sıralama kullanılıyor")
+                    return results
+                
+                rerank_response = response.json()
+                logger.info(f"✅ Reranker yanıtı alındı: {type(rerank_response)}")
+                
+                # Kendi API formatımız: {"scores": [...], "top_k_indices": [...]}
+                if isinstance(rerank_response, dict) and 'scores' in rerank_response:
+                    rerank_scores = rerank_response['scores']
+                    logger.info(f"📊 {len(rerank_scores)} skor alındı")
+                else:
+                    logger.warning(f"⚠️ Beklenmeyen reranker response formatı: {type(rerank_response)}")
+                    return results
+                
+                if len(rerank_scores) == len(results):
+                    # Sonuçları rerank skoruna göre sırala
+                    reranked = []
+                    for idx, score in enumerate(rerank_scores):
+                        cve = results[idx]
+                        original_score = cve.score
                         
-                        # Combined score'a göre sırala (EN YÜKSEK ÖNCE)
-                        reranked.sort(key=lambda x: x['combined_score'], reverse=True)
+                        # Rerank score normalize et (0-1 arası)
+                        rerank_score = float(score) if isinstance(score, (int, float)) else 0.5
                         
-                        # Sadece CVE'leri döndür
-                        reranked_cves = [item['cve'] for item in reranked]
+                        # mixedbread-ai/mxbai-rerank-base-v1 zaten 0-1 arası skor verir
+                        # Ama genelde düşük skorlar veriyor (0.01-0.3 arası), scale up yapıyoruz
+                        # Score'u 10x yapıp clamp ediyoruz
+                        boosted_score = min(1.0, rerank_score * 10.0)  # 10x boost, max 1.0
+                        normalized_rerank = max(0.0, boosted_score)
                         
-                        logger.info(f"✅ RERANKING TAMAMLANDI: {len(reranked_cves)} sonuç")
+                        # Combined score: %85 rerank (boosted), %15 original
+                        # Boosted reranker score ile daha yüksek skorlar
+                        combined_score = (original_score * 0.15) + (normalized_rerank * 0.85)
                         
-                        # Top 3'ü logla - normalized score'ları göster
-                        for i, item in enumerate(reranked[:3], 1):
-                            logger.info(f"  🏆 #{i}: {item['cve'].cve_id} | Rerank: {item['rerank_score']:.3f} | Normalized: {item['normalized_rerank']:.3f} | Final: {item['combined_score']:.3f} ({item['combined_score']*100:.1f}%)")
+                        # Score'u update et - frontend'de görünsün
+                        cve.score = combined_score
                         
-                        return reranked_cves
-                    else:
-                        logger.error(f"❌ Beklenmeyen reranker yanıtı: {type(rerank_scores)}, len: {len(rerank_scores) if isinstance(rerank_scores, list) else 'N/A'}")
-                        raise Exception("Reranker yanıtı işlenemedi")
+                        reranked.append({
+                            "cve": cve,
+                            "original_score": original_score,
+                            "rerank_score": rerank_score,
+                            "normalized_rerank": normalized_rerank,
+                            "combined_score": combined_score
+                        })
+                    
+                    # Combined score'a göre sırala (EN YÜKSEK ÖNCE)
+                    reranked.sort(key=lambda x: x['combined_score'], reverse=True)
+                    
+                    # Sadece CVE'leri döndür
+                    reranked_cves = [item['cve'] for item in reranked]
+                    
+                    logger.info(f"✅ RERANKING TAMAMLANDI: {len(reranked_cves)} sonuç")
+                    
+                    # Top 3'ü logla - normalized score'ları göster
+                    for i, item in enumerate(reranked[:3], 1):
+                        logger.info(f"  🏆 #{i}: {item['cve'].cve_id} | Rerank: {item['rerank_score']:.3f} | Normalized: {item['normalized_rerank']:.3f} | Final: {item['combined_score']:.3f} ({item['combined_score']*100:.1f}%)")
+                    
+                    return reranked_cves
+                else:
+                    logger.error(f"❌ Beklenmeyen reranker yanıtı: {type(rerank_scores)}, len: {len(rerank_scores) if isinstance(rerank_scores, list) else 'N/A'}")
+                    raise Exception("Reranker yanıtı işlenemedi")
             
-            except asyncio.TimeoutError:
+            except requests.exceptions.Timeout:
                 logger.error("❌ Reranker TIMEOUT (30s)")
                 logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
                 return results
-            except aiohttp.ClientError as e:
+            except requests.exceptions.RequestException as e:
                 logger.error(f"❌ Reranker bağlantı hatası: {e}")
                 logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
                 return results
@@ -424,11 +426,6 @@ class RAGService:
                 logger.warning(f"⚠️ RERANKER request hatası: {type(e).__name__} - {e}")
                 logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
                 return results
-                        
-        except asyncio.TimeoutError:
-            logger.error("❌ Reranker genel TIMEOUT")
-            logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
-            return results
         except Exception as e:
             logger.warning(f"⚠️ RERANKER BAŞARISIZ: {type(e).__name__} - {e}")
             logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
