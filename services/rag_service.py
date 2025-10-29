@@ -270,7 +270,7 @@ class RAGService:
             logger.info(f"📝 {len(documents)} document reranker formatında hazırlandı")
             
             # RERANKER ENDPOINT - Kendi HuggingFace Space
-            reranker_url_raw = os.getenv('RERANKER_API_URL', 'https://your-space.hf.space/rerank')
+            reranker_url_raw = os.getenv('RERANKER_API_URL', 'https://meryemarpaci-pentagent-mxbai-rerank.hf.space/rerank')
             
             # URL formatını düzelt: username/spacename -> https://username-spacename.hf.space/rerank
             if reranker_url_raw and not reranker_url_raw.startswith('http'):
