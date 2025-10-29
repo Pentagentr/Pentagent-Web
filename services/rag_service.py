@@ -531,8 +531,20 @@ class RAGService:
             logger.info(f"✅ {len(cve_results)} CVE bulundu (vektör araması)")
             
             # Reranker ile optimize et
+            if reranker_enabled:
+                if len(cve_results) <= 1:
+                    logger.info(f"⚠️ Reranker atlanıyor: {len(cve_results)} sonuç var (en az 2 sonuç gerekli)")
+                else:
+                    # Reranker URL kontrolü - erken uyarı
+                    reranker_url = os.getenv('RERANKER_API_URL')
+                    if not reranker_url or reranker_url == 'https://your-space.hf.space/rerank':
+                        logger.warning(f"⚠️ RERANKER_API_URL ayarlanmamış veya geçersiz: {reranker_url}")
+                        logger.warning("⚠️ Reranker atlanıyor, orijinal sıralama kullanılıyor")
+                    else:
+                        logger.info(f"🔄 Reranker başlatılıyor ({len(cve_results)} sonuç) → {reranker_url}")
+            
             if reranker_enabled and len(cve_results) > 1:
-                logger.info(f"🔄 Reranker başlatılıyor ({len(cve_results)} sonuç)...")
+                logger.info(f"🔄 Reranker işleme başlıyor...")
                 
                 # Async reranker'ı sync context'te çalıştır - MEMORY EFFICIENT
                 try:

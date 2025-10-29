@@ -561,7 +561,8 @@ async def rag_search(request: Dict[str, Any]):
     """
     try:
         original_query = request.get("query", "").strip()
-        limit = min(int(request.get("limit", 5)), 50)  # Max 50
+        requested_limit = int(request.get("limit", 5))
+        limit = min(requested_limit, 5)  # Max 5 - Reranker için sabit
         severity = request.get("severity")
         
         if not original_query:
@@ -575,11 +576,15 @@ async def rag_search(request: Dict[str, Any]):
                 detail="RAG servisi kullanılamıyor. Qdrant'ın çalıştığından emin olun."
             )
         
+        logger.info(f"🔍 RAG Search: query='{original_query}', limit={limit} (requested={requested_limit})")
+        
         # 🤖 AI ile query'yi optimize et
         optimized_query = await optimize_rag_query(original_query)
         
-        # CVE araması yap (optimize edilmiş query ile)
-        results = rag_service.search_cve(optimized_query, limit=limit, severity=severity)
+        # CVE araması yap (optimize edilmiş query ile, reranker ZORUNLU)
+        results = rag_service.search_cve(optimized_query, limit=limit, severity=severity, use_reranker=True)
+        
+        logger.info(f"✅ RAG Search tamamlandı: {len(results)} sonuç döndürülüyor (reranker aktif)")
         
         # Response body size kontrolü - Memory protection (0.6 MB limit)
         response_data = {
