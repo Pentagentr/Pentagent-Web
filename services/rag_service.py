@@ -270,7 +270,21 @@ class RAGService:
             logger.info(f"📝 {len(documents)} document reranker formatında hazırlandı")
             
             # RERANKER ENDPOINT - Kendi HuggingFace Space
-            reranker_url = os.getenv('RERANKER_API_URL', 'https://your-space.hf.space/rerank')
+            reranker_url_raw = os.getenv('RERANKER_API_URL', 'https://your-space.hf.space/rerank')
+            
+            # URL formatını düzelt: username/spacename -> https://username-spacename.hf.space/rerank
+            if reranker_url_raw and not reranker_url_raw.startswith('http'):
+                # username/spacename formatını düzelt
+                if '/' in reranker_url_raw and not reranker_url_raw.startswith('http'):
+                    space_name = reranker_url_raw.replace('/', '-')
+                    reranker_url = f"https://{space_name}.hf.space/rerank"
+                else:
+                    reranker_url = reranker_url_raw
+            elif reranker_url_raw and '/rerank' not in reranker_url_raw:
+                # URL var ama /rerank endpoint'i yok
+                reranker_url = reranker_url_raw.rstrip('/') + '/rerank'
+            else:
+                reranker_url = reranker_url_raw
             
             logger.info(f"🎯 Reranker endpoint: {reranker_url}")
             
@@ -290,6 +304,8 @@ class RAGService:
             # Log için document sayısını al
             doc_count = len(documents)
             logger.info(f"📤 {doc_count} document reranker'a gönderiliyor")
+            logger.info(f"🔗 POST {reranker_url}")
+            logger.debug(f"📦 Payload: query='{query[:50]}...', documents={doc_count}, top_k={limit}")
             
             # Kendi Reranker Space'e istek gönder - SHARED SESSION (Memory Efficient)
             session = await self._get_or_create_session()
@@ -312,9 +328,20 @@ class RAGService:
                         logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
                         return results
                     
+                    if response.status == 405:
+                        error_text = await response.text()
+                        logger.error(f"❌ Reranker API Method Not Allowed (405): {reranker_url}")
+                        logger.error(f"💡 URL kontrolü: Space URL'i doğru formatta olmalı")
+                        logger.error(f"💡 Doğru format: https://username-spacename.hf.space/rerank")
+                        logger.error(f"💡 Örnek: https://meryemarpaci-pentagent-mxbai-rerank.hf.space/rerank")
+                        logger.error(f"API yanıtı: {error_text[:200]}")
+                        logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
+                        return results
+                    
                     if response.status != 200:
                         error_text = await response.text()
                         logger.warning(f"⚠️ Reranker API hatası: {response.status}")
+                        logger.warning(f"💡 URL: {reranker_url}")
                         logger.warning(f"API yanıtı: {error_text[:200]}")
                         logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
                         return results
