@@ -539,46 +539,69 @@ class RAGService:
                 
                 # Async reranker'ı sync context'te çalıştır - MEMORY EFFICIENT
                 try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        # Event loop zaten çalışıyorsa thread pool kullan - MAX 2 WORKER (memory limit)
-                        import concurrent.futures
-                        def run_rerank_in_new_loop():
-                            """Yeni event loop oluştur ve rerank çalıştır"""
-                            new_loop = asyncio.new_event_loop()
+                    import concurrent.futures
+                    
+                    def run_rerank_in_new_loop():
+                        """Yeni event loop oluştur ve rerank çalıştır - Thread-safe"""
+                        # Her thread için tamamen yeni event loop oluştur
+                        new_loop = asyncio.new_event_loop()
+                        try:
                             asyncio.set_event_loop(new_loop)
+                            return new_loop.run_until_complete(
+                                self._rerank_results(query, cve_results, limit)
+                            )
+                        finally:
+                            # Loop'u temizle - Event loop is closed hatasını önle
                             try:
-                                return new_loop.run_until_complete(
-                                    self._rerank_results(query, cve_results, limit)
-                                )
+                                # Pending tasks'leri temizle
+                                pending = asyncio.all_tasks(new_loop)
+                                for task in pending:
+                                    task.cancel()
+                                # Tasks'lerin tamamlanmasını bekle
+                                if pending:
+                                    new_loop.run_until_complete(
+                                        asyncio.gather(*pending, return_exceptions=True)
+                                    )
+                            except Exception:
+                                pass  # Hata olsa bile devam et
                             finally:
                                 new_loop.close()
-                        
-                        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-                            future = pool.submit(run_rerank_in_new_loop)
-                            try:
-                                reranked_results = future.result(timeout=25)  # 25s timeout
-                            except concurrent.futures.TimeoutError:
-                                logger.error("⏱️ Reranker thread pool TIMEOUT (25s)")
-                                future.cancel()  # Cancel the future
+                                asyncio.set_event_loop(None)  # Thread'den loop'u temizle
+                    
+                    # Her zaman yeni thread'de çalıştır - Event loop çakışmasını önle
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                        future = pool.submit(run_rerank_in_new_loop)
+                        try:
+                            reranked_results = future.result(timeout=25)  # 25s timeout
+                            
+                            # Limit'e göre kes - memory efficient
+                            reranked_results = reranked_results[:limit]
+                            logger.info(f"✅ Reranking tamamlandı, en iyi {len(reranked_results)} sonuç döndürülüyor")
+                            return reranked_results
+                            
+                        except concurrent.futures.TimeoutError:
+                            logger.error("⏱️ Reranker thread pool TIMEOUT (25s)")
+                            future.cancel()  # Cancel the future
+                            return cve_results[:limit]
+                        except RuntimeError as e:
+                            if "Event loop is closed" in str(e):
+                                logger.error(f"❌ Event loop closed hatası yakalandı: {e}")
+                                logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
                                 return cve_results[:limit]
-                    else:
-                        # Event loop çalışmıyorsa direkt çalıştır
-                        reranked_results = loop.run_until_complete(
-                            self._rerank_results(query, cve_results, limit)
-                        )
+                            raise  # Diğer RuntimeError'ları yukarı fırlat
                     
-                    # Limit'e göre kes - memory efficient
-                    reranked_results = reranked_results[:limit]
-                    logger.info(f"✅ Reranking tamamlandı, en iyi {len(reranked_results)} sonuç döndürülüyor")
-                    return reranked_results
-                    
+                except RuntimeError as e:
+                    if "Event loop is closed" in str(e) or "cannot be called from a running event loop" in str(e).lower():
+                        logger.error(f"❌ RERANKER Event loop hatası: {e}")
+                        logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
+                        return cve_results[:limit]
+                    raise  # Diğer RuntimeError'ları yukarı fırlat
                 except asyncio.TimeoutError:
                     logger.error(f"⏱️ Reranker asyncio TIMEOUT - orijinal sonuçlar döndürülüyor")
                     return cve_results[:limit]
                 except Exception as e:
-                    logger.error(f"❌ Reranker çalıştırma hatası: {type(e).__name__} - {e}")
-                    logger.info("⚠️ Reranker başarısız, orijinal sonuçlar döndürülüyor")
+                    logger.warning(f"⚠️ RERANKER request hatası: {type(e).__name__} - {e}")
+                    logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
                     return cve_results[:limit]
             else:
                 # Reranker kullanılmıyor, direkt döndür
