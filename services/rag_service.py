@@ -471,8 +471,8 @@ class RAGService:
             
             # Reranker MUTLAKA aktif
             reranker_enabled = True if use_reranker is None else use_reranker
-            # 20 sparse vektör için fetch_limit = 20
-            fetch_limit = 20 if reranker_enabled else limit
+            # Reranker için 10 sonuç çek (en iyi 5'i seçmek için yeterli)
+            fetch_limit = 10 if reranker_enabled else limit
             if reranker_enabled:
                 logger.info(f"🎯 Reranker aktif - {fetch_limit} sonuç çekilecek, reranking sonrası {limit} döndürülecek")
             else:
