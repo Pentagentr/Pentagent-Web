@@ -576,12 +576,12 @@ class RAGService:
                             finally:
                                 new_loop.close()
                                 asyncio.set_event_loop(None)  # Thread'den loop'u temizle
-                
-                # Her zaman yeni thread'de çalıştır - Event loop çakışmasını önle
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(run_rerank_in_new_loop)
-                    try:
-                        reranked_results = future.result(timeout=60)  # 60s timeout (HuggingFace Space cold start için)
+                    
+                    # Her zaman yeni thread'de çalıştır - Event loop çakışmasını önle
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                        future = pool.submit(run_rerank_in_new_loop)
+                        try:
+                            reranked_results = future.result(timeout=60)  # 60s timeout (HuggingFace Space cold start için)
                             
                             # Limit'e göre kes - memory efficient
                             reranked_results = reranked_results[:limit]
@@ -589,7 +589,7 @@ class RAGService:
                             return reranked_results
                             
                         except concurrent.futures.TimeoutError:
-                            logger.error("⏱️ Reranker thread pool TIMEOUT (25s)")
+                            logger.error("⏱️ Reranker thread pool TIMEOUT (60s)")
                             future.cancel()  # Cancel the future
                             return cve_results[:limit]
                         except RuntimeError as e:
@@ -598,7 +598,14 @@ class RAGService:
                                 logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
                                 return cve_results[:limit]
                             raise  # Diğer RuntimeError'ları yukarı fırlat
-                    
+                        except asyncio.TimeoutError:
+                            logger.error(f"⏱️ Reranker asyncio TIMEOUT - orijinal sonuçlar döndürülüyor")
+                            return cve_results[:limit]
+                        except Exception as e:
+                            logger.warning(f"⚠️ RERANKER request hatası: {type(e).__name__} - {e}")
+                            logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
+                            return cve_results[:limit]
+                            
                 except RuntimeError as e:
                     if "Event loop is closed" in str(e) or "cannot be called from a running event loop" in str(e).lower():
                         logger.error(f"❌ RERANKER Event loop hatası: {e}")
