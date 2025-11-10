@@ -381,7 +381,7 @@ const ChatInterface = () => {
               ) : connectionStatus === 'connecting' ? (
                 <>
                   <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm text-yellow-400">Connecting</span>
+                  <span className="text-sm text-yellow-400">Connecting to HuggingFace Spaces...</span>
                 </>
               ) : (
                 <>

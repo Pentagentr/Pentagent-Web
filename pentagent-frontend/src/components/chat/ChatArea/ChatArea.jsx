@@ -185,7 +185,7 @@ const ChatArea = ({ conversationId, isTyping, messages = [], currentScan }) => {
                     <div className="w-1.5 h-1.5 bg-platinum-500 rounded-full animate-pulse" style={{ animationDelay: '400ms' }} />
                   </div>
                 </div>
-                <p className="text-sm text-text-secondary mt-3">Düşünüyor...</p>
+                <p className="text-sm text-text-secondary mt-3">Bağlantı açılıyor (HuggingFace Spaces uyandırılıyor - 1-3 dakika sürebilir)...</p>
               </div>
             </div>
           </div>

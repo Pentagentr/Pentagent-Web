@@ -118,7 +118,7 @@ class UnifiedLLM:
                 "return_full_text": False,
             },
         }
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=180.0) as client:  # 180s (3 min) - HuggingFace Space cold start
             resp = await client.post(self._hf_url, headers=headers, json=payload)
             resp.raise_for_status()
             data = resp.json()

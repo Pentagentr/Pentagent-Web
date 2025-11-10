@@ -315,9 +315,9 @@ class RAGService:
                     reranker_url,
                     headers=headers,
                     json=payload,
-                    timeout=(10, 30)  # (connect, read) timeout
+                    timeout=(10, 90)  # (connect, read) timeout - 90s HuggingFace Space cold start için
                 )
-                
+                    
                 if response.status_code == 404:
                     logger.warning(f"⚠️ Reranker Space bulunamadı: {reranker_url}")
                     logger.warning("💡 Çözüm: RERANKER_API_URL environment variable'ını kontrol edin")
@@ -576,12 +576,12 @@ class RAGService:
                             finally:
                                 new_loop.close()
                                 asyncio.set_event_loop(None)  # Thread'den loop'u temizle
-                    
-                    # Her zaman yeni thread'de çalıştır - Event loop çakışmasını önle
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                        future = pool.submit(run_rerank_in_new_loop)
-                        try:
-                            reranked_results = future.result(timeout=25)  # 25s timeout
+                
+                # Her zaman yeni thread'de çalıştır - Event loop çakışmasını önle
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    future = pool.submit(run_rerank_in_new_loop)
+                    try:
+                        reranked_results = future.result(timeout=60)  # 60s timeout (HuggingFace Space cold start için)
                             
                             # Limit'e göre kes - memory efficient
                             reranked_results = reranked_results[:limit]
