@@ -147,14 +147,14 @@ class EnumWebCrawlerTool(MCPTool):
 
         driver = None
         try:
-            logger.info("ChromeDriver otomatik olarak ayarlanıyor...")
+            logger.debug("ChromeDriver otomatik olarak ayarlanıyor...")
             try:
                 service = ChromeService(ChromeDriverManager().install())
                 driver = webdriver.Chrome(service=service, options=options)
             except Exception as chrome_error:
-                logger.warning(f"Chrome başlatılamadı: {chrome_error}")
-                # Fallback: HTTP-based crawling kullan
-                logger.info("Fallback: HTTP-based crawling kullanılıyor...")
+                logger.debug(f"Chrome başlatılamadı (normal durum): {chrome_error}")
+                # Fallback: HTTP-based crawling kullan - sessizce
+                logger.info("HTTP-based crawling kullanılıyor (Chrome alternatifi)")
                 return self._http_based_crawl(context)
             
             driver.set_page_load_timeout(60) # Sayfa yükleme için zaman aşımı
@@ -259,7 +259,7 @@ class EnumWebCrawlerTool(MCPTool):
             
             try:
                 # Timeout artırıldı - DNS çözümleme için daha fazla süre
-                response = session.get(current_url, timeout=30)
+                response = session.get(current_url, timeout=10)
                 if response.status_code == 200:
                     crawled_urls.add(current_url)
                     context.discovered_paths.add(urlparse(current_url).path or '/')

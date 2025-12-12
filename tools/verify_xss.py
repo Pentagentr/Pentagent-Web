@@ -177,14 +177,19 @@ class XssVerifier(MCPTool):
         driver = self._get_driver()
         if not driver:
             # Chrome WebDriver başlatılamadı - bu normal bir durum (Render ortamı)
-            # Alternatif araçlar (verify_xss_http) kullanılacak
-            error_msg = "Chrome WebDriver başlatılamadı (Render ortamı veya Chrome binary yok). Alternatif araçlar kullanılacak."
+            # Alternatif araçlar (verify_xss_http) otomatik kullanılacak
+            # ARAYÜZE HATA GÖNDERMEYELİM - sadece logla
+            logger.info("Chrome WebDriver bulunamadı, verify_xss_http otomatik kullanılacak")
             ai_reasoning_log.append({
                 "phase": "fallback", 
-                "thought": error_msg + " Sistem çökmedi, alternatif mekanizmalara geçiliyor."
+                "thought": "Chrome WebDriver bulunamadı, alternatif HTTP-based XSS testi otomatik kullanılacak"
             })
-            # Başarısız olarak işaretle ama sistem çökmesin
-            return self._create_mcp_output(success=False, error=error_msg, ai_reasoning_log=ai_reasoning_log)
+            # Sessizce başarısız ol - orchestrator alternatif kullanacak
+            return self._create_mcp_output(
+                success=False, 
+                error="CHROME_NOT_AVAILABLE",  # Özel kod - orchestrator tanır
+                ai_reasoning_log=ai_reasoning_log
+            )
 
         findings: List[XssFinding] = []
         try:

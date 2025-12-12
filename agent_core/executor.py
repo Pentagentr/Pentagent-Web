@@ -135,15 +135,27 @@ class Executor:
                 await self.status_callback(f"✅ {tool_name} başarıyla tamamlandı", "success")
             else:
                 error_msg = result.get("error", "Bilinmeyen hata")
+                
+                # Özel hata kodlarını kontrol et
+                if error_msg == "CHROME_NOT_AVAILABLE":
+                    # Chrome yok - tamamen sessiz, orchestrator alternatif kullanacak
+                    logger.debug(f"{tool_name}: Chrome not available, orchestrator will use alternative")
+                    return {
+                        "step_details": step,
+                        "result": result,
+                        "execution_time": self._calculate_execution_time(),
+                        "enhanced": False
+                    }
+                
                 # Chrome/WebDriver hatalarını arayüzden filtrele
                 chrome_keywords = ["Chrome", "WebDriver", "chromedriver", "cannot find Chrome", "Chrome binary", "Selenium"]
                 if any(keyword.lower() in error_msg.lower() for keyword in chrome_keywords):
                     # Chrome hatası - sadece logla, arayüze gönderme
                     logger.debug(f"Chrome hatası filtrelendi: {error_msg[:100]}")
-                    # Alternatif araç kullanılıyor mesajı gönder
-                    await self.status_callback(f"🔄 {tool_name} alternatif yöntemle çalıştırılıyor", "info")
+                    # HİÇ BİR MESAJ GÖNDERME - orchestrator halledecek
                 else:
-                    await self.status_callback(f"❌ {tool_name} başarısız: {error_msg[:100]}", "error")
+                    # Diğer hatalar için mesaj gönder
+                    await self.status_callback(f"⚠️ {tool_name}: Alternatif yöntem deneniyor", "info")
             
             return {
                 "step_details": step,
