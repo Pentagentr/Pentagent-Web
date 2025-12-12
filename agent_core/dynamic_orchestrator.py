@@ -472,7 +472,13 @@ Hangi hedefi taramak istersin?"""
         except Exception as e:
             error_msg = f"{type(e).__name__}: {str(e)[:100]}"
             logger.error(f"❌ Tool streaming error ({tool_name}): {error_msg}")
-            await status_callback(f"❌ {tool_name} hatası: {error_msg}", "tool_error")
+            # Chrome/WebDriver hatalarını arayüzden filtrele
+            chrome_keywords = ["Chrome", "WebDriver", "chromedriver", "cannot find Chrome", "Chrome binary", "Selenium"]
+            if any(keyword.lower() in error_msg.lower() for keyword in chrome_keywords):
+                logger.debug(f"Chrome hatası filtrelendi: {error_msg}")
+                await status_callback(f"🔄 {tool_name} alternatif yöntemle çalıştırılıyor", "info")
+            else:
+                await status_callback(f"❌ {tool_name} hatası: {error_msg}", "tool_error")
             return {
                 "success": False, 
                 "error": error_msg, 

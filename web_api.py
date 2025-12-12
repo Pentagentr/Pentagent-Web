@@ -1511,8 +1511,23 @@ async def generate_security_report(request: Dict[str, Any]):
         import os
         os.makedirs("reports", exist_ok=True)
         
-        # AI ile geliştirilmiş rapor oluştur
-        ai_report_content = await report_gen.generate_ai_enhanced_report(state, scan_results, cve_results)
+        # AI ile geliştirilmiş rapor oluştur - hata yönetimi ile
+        try:
+            ai_report_content = await report_gen.generate_ai_enhanced_report(state, scan_results, cve_results)
+        except Exception as ai_err:
+            logger.warning(f"AI enhanced report oluşturma hatası: {ai_err}")
+            # Fallback: Basit rapor oluştur
+            try:
+                enriched_data = {
+                    "target": target,
+                    "findings": state.findings if hasattr(state, 'findings') and isinstance(state.findings, list) else [],
+                    "cve_results": cve_results if isinstance(cve_results, list) else [],
+                    "scan_results": scan_results if isinstance(scan_results, dict) else {}
+                }
+                ai_report_content = report_gen.generate_comprehensive_report_sync(enriched_data)
+            except Exception as fallback_err:
+                logger.warning(f"Fallback rapor oluşturma hatası: {fallback_err}")
+                ai_report_content = f"# Güvenlik Raporu\n\nHedef: {target}\n\nRapor oluşturulurken bir hata oluştu. Lütfen tekrar deneyin."
         
         # TÜM TOOL ÇIKTILARINI ÖNCE TOPLA - TEKRARLANMASIN
         all_tool_outputs = {}
@@ -1627,8 +1642,28 @@ async def generate_security_report(request: Dict[str, Any]):
             logger.error(f"❌ LLM rapor üretimi hatası: {e}", exc_info=True)
             llm_report = "LLM raporu oluşturulamadı"
         
-        # Rapor oluştur (TÜM TOOL ÇIKTILARI İLE)
-        success = await report_gen.generate_report(state, report_path)
+        # Rapor oluştur (TÜM TOOL ÇIKTILARI İLE) - hata yönetimi ile
+        try:
+            success = await report_gen.generate_report(state, report_path)
+        except Exception as report_err:
+            logger.warning(f"Rapor oluşturma hatası: {report_err}")
+            # Fallback: Basit rapor oluştur
+            try:
+                enriched_data = {
+                    "target": target,
+                    "findings": state.findings if hasattr(state, 'findings') and isinstance(state.findings, list) else [],
+                    "cve_results": cve_results if isinstance(cve_results, list) else [],
+                    "scan_results": scan_results if isinstance(scan_results, dict) else {}
+                }
+                simple_report = report_gen.generate_comprehensive_report_sync(enriched_data)
+                # Basit raporu dosyaya yaz
+                txt_path = f"{report_path}.txt"
+                with open(txt_path, 'w', encoding='utf-8') as f:
+                    f.write(simple_report if isinstance(simple_report, str) else str(simple_report))
+                success = True
+            except Exception as fallback_err:
+                logger.warning(f"Fallback rapor oluşturma hatası: {fallback_err}")
+                success = False
         
         # Markdown raporu da oluştur (AI ile geliştirilmiş)
         md_path = f"{report_path}.md"
@@ -1642,10 +1677,17 @@ async def generate_security_report(request: Dict[str, Any]):
         if not success:
             raise HTTPException(status_code=500, detail="Rapor oluşturulamadı")
         
-        # Risk skoru hesapla (tüm bulgulardan)
-        all_findings = state.findings  # Tüm bulguları al
+        # Risk skoru hesapla (tüm bulgulardan) - GÜNCELLENMİŞ
+        all_findings = state.findings if hasattr(state, 'findings') and isinstance(state.findings, list) else []
         logger.info(f"📊 RAPOR GENERATİON - Toplam bulgu sayısı: {len(all_findings)}")
-        logger.info(f"📊 Bulgular detayı: {[(f.get('title'), f.get('severity')) for f in all_findings[:5]]}")
+        if len(all_findings) > 0:
+            logger.info(f"📊 Bulgular detayı (ilk 10): {[(f.get('title', 'N/A')[:50], f.get('severity', 'N/A')) for f in all_findings[:10]]}")
+            # Severity dağılımını logla
+            severity_counts = {}
+            for f in all_findings:
+                sev = f.get('severity', 'info').lower()
+                severity_counts[sev] = severity_counts.get(sev, 0) + 1
+            logger.info(f"📊 Severity dağılımı: {severity_counts}")
         logger.info(f"📊 Scan results keys: {list(scan_results.keys()) if isinstance(scan_results, dict) else 'Not dict'}")
         logger.info(f"📊 All tool outputs keys: {list(all_tool_outputs.keys())}")
         
@@ -1995,33 +2037,60 @@ async def generate_security_report(request: Dict[str, Any]):
                 logger.info("🔍 Minimum bulgu eklendi")
         
         # all_findings'i güncelle - SADECE TOOL BULGULARI (CVE referansları risk skorunu çok artırmasın)
-        all_findings = state.findings.copy()
+        all_findings = state.findings.copy() if hasattr(state, 'findings') and isinstance(state.findings, list) else []
+        
+        # Findings'leri temizle ve normalize et - severity'leri standartlaştır
+        cleaned_findings = []
+        for f in all_findings:
+            if isinstance(f, dict):
+                # Severity'yi normalize et
+                severity = f.get('severity', 'info')
+                if isinstance(severity, str):
+                    severity = severity.lower().strip()
+                    # Türkçe severity'leri İngilizce'ye çevir
+                    severity_map = {
+                        'kritik': 'critical',
+                        'yüksek': 'high',
+                        'orta': 'medium',
+                        'düşük': 'low',
+                        'bilgilendirme': 'info',
+                        'information': 'info'
+                    }
+                    severity = severity_map.get(severity, severity)
+                    f['severity'] = severity
+                cleaned_findings.append(f)
         
         # NOT: CVE'leri risk hesaplamasına dahil ETMİYORUZ
         # Çünkü CVE'ler sadece referans için, tool bulgularına öncelik veriyoruz
-        logger.info(f"📊 Risk skoru sadece tool bulgularıyla hesaplanacak: {len(all_findings)} bulgu")
+        logger.info(f"📊 Risk skoru sadece tool bulgularıyla hesaplanacak: {len(cleaned_findings)} bulgu")
+        if len(cleaned_findings) > 0:
+            severity_dist = {}
+            for f in cleaned_findings:
+                sev = f.get('severity', 'info')
+                severity_dist[sev] = severity_dist.get(sev, 0) + 1
+            logger.info(f"📊 Severity dağılımı: {severity_dist}")
         
-        risk_score = report_gen._calculate_risk_score(all_findings)
-        logger.info(f"📊 Hesaplanan risk skoru (SADECE tool bulguları): {risk_score} (Toplam bulgu: {len(all_findings)})")
+        risk_score = report_gen._calculate_risk_score(cleaned_findings)
+        logger.info(f"📊 Hesaplanan risk skoru (SADECE tool bulguları): {risk_score} (Toplam bulgu: {len(cleaned_findings)})")
         
-        # Vulnerabilities objesini oluştur (frontend için)
+        # Vulnerabilities objesini oluştur (frontend için) - normalized severity ile
         vulnerabilities = {
-            'critical': len([f for f in all_findings if f.get('severity') == 'critical']),
-            'high': len([f for f in all_findings if f.get('severity') == 'high']),
-            'medium': len([f for f in all_findings if f.get('severity') == 'medium']),
-            'low': len([f for f in all_findings if f.get('severity') == 'low']),
-            'info': len([f for f in all_findings if f.get('severity') == 'info'])
+            'critical': len([f for f in cleaned_findings if f.get('severity', '').lower() == 'critical']),
+            'high': len([f for f in cleaned_findings if f.get('severity', '').lower() == 'high']),
+            'medium': len([f for f in cleaned_findings if f.get('severity', '').lower() == 'medium']),
+            'low': len([f for f in cleaned_findings if f.get('severity', '').lower() == 'low']),
+            'info': len([f for f in cleaned_findings if f.get('severity', '').lower() == 'info'])
         }
         logger.info(f"📊 Vulnerabilities objesi: {vulnerabilities}")
         logger.info(f"📊 Toplam zafiyet: {sum(vulnerabilities.values())}")
         
         # Risk skoru 0 ise ve bulgular varsa, minimum skor ver
-        if risk_score == 0 and len(all_findings) > 0:
+        if risk_score == 0 and len(cleaned_findings) > 0:
             severity_counts = {
-                'critical': len([f for f in all_findings if f.get('severity') == 'critical']),
-                'high': len([f for f in all_findings if f.get('severity') == 'high']),
-                'medium': len([f for f in all_findings if f.get('severity') == 'medium']),
-                'low': len([f for f in all_findings if f.get('severity') == 'low'])
+                'critical': vulnerabilities['critical'],
+                'high': vulnerabilities['high'],
+                'medium': vulnerabilities['medium'],
+                'low': vulnerabilities['low']
             }
             if severity_counts['critical'] > 0:
                 risk_score = 85
@@ -2138,10 +2207,17 @@ async def generate_security_report(request: Dict[str, Any]):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Rapor oluşturma hatası: {e}")
+        # Hataları daha iyi yönet - sistem çökmesini önle
+        error_type = type(e).__name__
+        error_msg = str(e) if str(e) else f"{error_type} hatası oluştu"
+        logger.warning(f"Rapor oluşturma hatası ({error_type}): {error_msg}")
         import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Rapor oluşturma hatası: {str(e)}")
+        logger.debug(f"Traceback: {traceback.format_exc()}")
+        # Kullanıcıya anlamlı hata mesajı gönder
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Rapor oluşturma hatası: {error_msg[:200]}"
+        )
 
 @app.get("/api/debug/test-qdrant")
 async def test_qdrant_connection():

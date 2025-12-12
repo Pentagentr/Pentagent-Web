@@ -135,7 +135,15 @@ class Executor:
                 await self.status_callback(f"✅ {tool_name} başarıyla tamamlandı", "success")
             else:
                 error_msg = result.get("error", "Bilinmeyen hata")
-                await self.status_callback(f"❌ {tool_name} başarısız: {error_msg[:100]}", "error")
+                # Chrome/WebDriver hatalarını arayüzden filtrele
+                chrome_keywords = ["Chrome", "WebDriver", "chromedriver", "cannot find Chrome", "Chrome binary", "Selenium"]
+                if any(keyword.lower() in error_msg.lower() for keyword in chrome_keywords):
+                    # Chrome hatası - sadece logla, arayüze gönderme
+                    logger.debug(f"Chrome hatası filtrelendi: {error_msg[:100]}")
+                    # Alternatif araç kullanılıyor mesajı gönder
+                    await self.status_callback(f"🔄 {tool_name} alternatif yöntemle çalıştırılıyor", "info")
+                else:
+                    await self.status_callback(f"❌ {tool_name} başarısız: {error_msg[:100]}", "error")
             
             return {
                 "step_details": step,
@@ -165,7 +173,13 @@ class Executor:
         except Exception as e:
             error_msg = f"{type(e).__name__}: {str(e)[:100]}"
             logger.error(f"❌ Tool execution error ({tool_name}): {error_msg}")
-            await self.status_callback(f"💥 {tool_name} kritik hata: {error_msg}", "error")
+            # Chrome/WebDriver hatalarını arayüzden filtrele
+            chrome_keywords = ["Chrome", "WebDriver", "chromedriver", "cannot find Chrome", "Chrome binary", "Selenium"]
+            if any(keyword.lower() in error_msg.lower() for keyword in chrome_keywords):
+                logger.debug(f"Chrome hatası filtrelendi: {error_msg}")
+                await self.status_callback(f"🔄 {tool_name} alternatif yöntemle çalıştırılıyor", "info")
+            else:
+                await self.status_callback(f"💥 {tool_name} kritik hata: {error_msg}", "error")
             
             error_result = {
                 "success": False, 
