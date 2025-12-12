@@ -210,7 +210,7 @@ class EnumWebCrawlerTool(MCPTool):
                 driver.quit()
                 logger.info("ChromeDriver kapatıldı.")
 
-     def _http_based_crawl(self, context: CrawlContext) -> CrawlContext:
+    def _http_based_crawl(self, context: CrawlContext) -> CrawlContext:
          """
          HTTP-based fallback crawling (Selenium mevcut değilse).
          Basit requests + BeautifulSoup kullanır.
