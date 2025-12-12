@@ -210,62 +210,71 @@ class EnumWebCrawlerTool(MCPTool):
                 driver.quit()
                 logger.info("ChromeDriver kapatıldı.")
 
-    def _http_based_crawl(self, context: CrawlContext) -> CrawlContext:
-        """
-        HTTP-based fallback crawling (Selenium mevcut değilse).
-        Basit requests + BeautifulSoup kullanır.
-        """
-        import requests
-        from requests.adapters import HTTPAdapter
-        from urllib3.util.retry import Retry
-        
-        logger.info("HTTP-based crawling başlatılıyor...")
-        self._add_reasoning(context.ai_reasoning_log, "fallback", "Selenium kullanılamadı, HTTP-based crawling kullanılıyor")
-        
-        # Session oluştur - DNS çözümleme için optimize edilmiş
-        session = requests.Session()
-        
-        # Retry stratejisi - MİNİMAL (sistem çökmesin)
-        retry = Retry(
-            total=1,  # SADECE 1 deneme - hızlı fail
-            connect=1,  # Connect için 1 deneme
-            read=1,  # Read için 1 deneme
-            backoff_factor=0.1,  # Çok az bekleme
-            status_forcelist=[500, 502, 503, 504],  # Sadece server hatalarında retry
-            allowed_methods=["HEAD", "GET"],  # Sadece safe methodlar
-            raise_on_status=False  # HTTP hata kodlarında exception fırlatma
-        )
-        
-        # HTTPAdapter - minimal konfigürasyon
-        adapter = HTTPAdapter(
-            max_retries=retry,
-            pool_connections=10,  # Minimal pool
-            pool_maxsize=10,  # Minimal pool
-            pool_block=False  # Pool dolu olduğunda bloke etme
-        )
-        
-        session.mount('http://', adapter)
-        session.mount('https://', adapter)
-        session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        })
-        
-        queue = collections.deque([(context.base_url, 0)])
-        crawled_urls = set()
-        
-        # MİNİMAL AYARLAR: Max 10 sayfa, depth 1 - ÇÖKME YOK
-        max_crawl_pages = min(context.max_pages, 10)  # Sadece 10 sayfa
-        max_crawl_depth = min(context.max_depth, 1)   # Sadece 1 derinlik
-        
-        while queue and len(crawled_urls) < max_crawl_pages:
-            current_url, depth = queue.popleft()
-            
-            if current_url in crawled_urls or depth > max_crawl_depth:
-                continue
-            
-            try:
-                # MİNİMAL TIMEOUT: 3 saniye - çok hızlı fail
-                response = session.get(current_url, timeout=3, allow_redirects=True)
+     def _http_based_crawl(self, context: CrawlContext) -> CrawlContext:
+         """
+         HTTP-based fallback crawling (Selenium mevcut değilse).
+         Basit requests + BeautifulSoup kullanır.
+         Progress tracking ile.
+         """
+         import requests
+         from requests.adapters import HTTPAdapter
+         from urllib3.util.retry import Retry
+         
+         logger.info("HTTP-based crawling başlatılıyor...")
+         self._add_reasoning(context.ai_reasoning_log, "fallback", "Selenium kullanılamadı, HTTP-based crawling kullanılıyor")
+         
+         # Session oluştur - DNS çözümleme için optimize edilmiş
+         session = requests.Session()
+         
+         # Retry stratejisi - MİNİMAL (sistem çökmesin)
+         retry = Retry(
+             total=1,  # SADECE 1 deneme - hızlı fail
+             connect=1,  # Connect için 1 deneme
+             read=1,  # Read için 1 deneme
+             backoff_factor=0.1,  # Çok az bekleme
+             status_forcelist=[500, 502, 503, 504],  # Sadece server hatalarında retry
+             allowed_methods=["HEAD", "GET"],  # Sadece safe methodlar
+             raise_on_status=False  # HTTP hata kodlarında exception fırlatma
+         )
+         
+         # HTTPAdapter - minimal konfigürasyon
+         adapter = HTTPAdapter(
+             max_retries=retry,
+             pool_connections=10,  # Minimal pool
+             pool_maxsize=10,  # Minimal pool
+             pool_block=False  # Pool dolu olduğunda bloke etme
+         )
+         
+         session.mount('http://', adapter)
+         session.mount('https://', adapter)
+         session.headers.update({
+             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+         })
+         
+         queue = collections.deque([(context.base_url, 0)])
+         crawled_urls = set()
+         
+         # MİNİMAL AYARLAR: Max 10 sayfa, depth 1 - ÇÖKME YOK
+         max_crawl_pages = min(context.max_pages, 10)  # Sadece 10 sayfa
+         max_crawl_depth = min(context.max_depth, 1)   # Sadece 1 derinlik
+         
+         # Progress tracking için
+         page_count = 0
+         
+         while queue and len(crawled_urls) < max_crawl_pages:
+             current_url, depth = queue.popleft()
+             
+             if current_url in crawled_urls or depth > max_crawl_depth:
+                 continue
+             
+             try:
+                 # Progress güncelleme (her sayfa için)
+                 page_count += 1
+                 progress_percent = int((page_count / max_crawl_pages) * 100)
+                 logger.info(f"Crawling progress: {progress_percent}% ({page_count}/{max_crawl_pages})")
+                 
+                 # MİNİMAL TIMEOUT: 3 saniye - çok hızlı fail
+                 response = session.get(current_url, timeout=3, allow_redirects=True)
                 if response.status_code == 200:
                     crawled_urls.add(current_url)
                     context.discovered_paths.add(urlparse(current_url).path or '/')
@@ -468,47 +477,74 @@ class EnumWebCrawlerTool(MCPTool):
         
         return recommendations
 
-    def run_tool(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        start_url = params.get("url")
-        if not start_url: 
-            return self._create_final_output(
-                success=False,
-                ai_summary="URL parametresi zorunludur.",
-                error="URL parametresi zorunludur."
-            )
-        if not SELENIUM_AVAILABLE: 
-            return self._create_final_output(
-                success=False,
-                ai_summary="Gerekli kütüphaneler bulunamadı.",
-                error="Gerekli kütüphaneler bulunamadı. Lütfen 'pip install selenium webdriver-manager' komutunu çalıştırın."
-            )
-        if not start_url.startswith(('http://', 'https://')): 
-            start_url = 'https://' + start_url
-        
-         # MİNİMAL PARAMETRELER - ÇÖKME YOK, HIZLI VE STABİL
-         max_depth = min(params.get("depth", 1), 1)   # Max 1 depth - sadece ana sayfa
-         max_pages = min(params.get("max_pages", 10), 10)  # Max 10 sayfa - çok hızlı
-         
-         context = CrawlContext(
-             base_url=start_url.rstrip('/'), 
-             target_domain=urlparse(start_url).netloc, 
-             max_depth=max_depth, 
-             max_pages=max_pages
-         )
-        self._add_reasoning(context.ai_reasoning_log, "initialization", f"Hedef {context.target_domain} için tarama başlatılıyor (Motor: Selenium).")
-        
-        try:
-            # Selenium'u direkt senkron olarak çalıştır
-            context = self._crawl_sync(context)
-            return self._build_final_json(context)
-        except Exception as e:
-            logger.error(f"Execute metodunda kritik hata: {repr(e)}", exc_info=True)
-            return self._create_final_output(
-                success=False,
-                ai_summary="Web tarayıcı sırasında kritik bir hata oluştu.",
-                ai_reasoning=context.ai_reasoning_log,
-                error=str(e)
-            )
+     def run_tool(self, params: Dict[str, Any]) -> Dict[str, Any]:
+         """
+         CRASH KORUNMALI - Tüm hatalar yakalanır, sistem ASLA çökmez
+         """
+         try:
+             start_url = params.get("url")
+             if not start_url: 
+                 return self._create_final_output(
+                     success=False,
+                     ai_summary="URL parametresi zorunludur.",
+                     error="URL parametresi zorunludur."
+                 )
+             if not SELENIUM_AVAILABLE: 
+                 return self._create_final_output(
+                     success=False,
+                     ai_summary="Gerekli kütüphaneler bulunamadı.",
+                     error="Gerekli kütüphaneler bulunamadı. Lütfen 'pip install selenium webdriver-manager' komutunu çalıştırın."
+                 )
+             if not start_url.startswith(('http://', 'https://')): 
+                 start_url = 'https://' + start_url
+             
+             # MİNİMAL PARAMETRELER - ÇÖKME YOK, HIZLI VE STABİL
+             max_depth = min(params.get("depth", 1), 1)   # Max 1 depth - sadece ana sayfa
+             max_pages = min(params.get("max_pages", 10), 10)  # Max 10 sayfa - çok hızlı
+             
+             context = CrawlContext(
+                 base_url=start_url.rstrip('/'), 
+                 target_domain=urlparse(start_url).netloc, 
+                 max_depth=max_depth, 
+                 max_pages=max_pages
+             )
+             self._add_reasoning(context.ai_reasoning_log, "initialization", f"Hedef {context.target_domain} için tarama başlatılıyor.")
+             
+             try:
+                 # Selenium'u direkt senkron olarak çalıştır
+                 context = self._crawl_sync(context)
+                 return self._build_final_json(context)
+             except KeyboardInterrupt:
+                 # Kullanıcı durdurdu
+                 logger.info("Tarama kullanıcı tarafından durduruldu")
+                 return self._create_final_output(
+                     success=False,
+                     ai_summary="Tarama kullanıcı tarafından durduruldu.",
+                     ai_reasoning=context.ai_reasoning_log,
+                     error="KeyboardInterrupt"
+                 )
+             except Exception as e:
+                 # Herhangi bir hata - graceful fail
+                 logger.warning(f"Crawl hatası (graceful): {type(e).__name__}")
+                 # En azından toplanan verileri döndür
+                 if context.crawled_page_count > 0 or len(context.discovered_paths) > 0:
+                     logger.info(f"Kısmi sonuç döndürülüyor: {context.crawled_page_count} sayfa")
+                     return self._build_final_json(context)
+                 else:
+                     return self._create_final_output(
+                         success=False,
+                         ai_summary="Web tarayıcı sırasında bir hata oluştu.",
+                         ai_reasoning=context.ai_reasoning_log,
+                         error=f"{type(e).__name__}: {str(e)[:100]}"
+                     )
+         except Exception as outer_e:
+             # En dış catch - sistem ASLA çökmez
+             logger.error(f"CRITICAL: Outer exception in run_tool: {outer_e}")
+             return self._create_final_output(
+                 success=False,
+                 ai_summary="Kritik hata oluştu ama sistem korundu.",
+                 error=f"Critical: {type(outer_e).__name__}"
+             )
 
 async def main():
     parser = argparse.ArgumentParser(description="Pentagent Web Crawler (v8 - Selenium Tabanlı).")
