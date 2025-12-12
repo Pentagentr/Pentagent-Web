@@ -225,20 +225,22 @@ class EnumWebCrawlerTool(MCPTool):
         # Session oluştur - DNS çözümleme için optimize edilmiş
         session = requests.Session()
         
-        # Retry stratejisi - DNS hatalarını da kapsar
+        # Retry stratejisi - MİNİMAL (sistem çökmesin)
         retry = Retry(
-            total=5,  # Toplam deneme sayısı
-            backoff_factor=1,  # Her denemede bekleme süresi artışı
-            status_forcelist=[429, 500, 502, 503, 504],  # Retry yapılacak HTTP kodları
-            allowed_methods=["HEAD", "GET", "OPTIONS"],  # Retry yapılacak methodlar
+            total=1,  # SADECE 1 deneme - hızlı fail
+            connect=1,  # Connect için 1 deneme
+            read=1,  # Read için 1 deneme
+            backoff_factor=0.1,  # Çok az bekleme
+            status_forcelist=[500, 502, 503, 504],  # Sadece server hatalarında retry
+            allowed_methods=["HEAD", "GET"],  # Sadece safe methodlar
             raise_on_status=False  # HTTP hata kodlarında exception fırlatma
         )
         
-        # HTTPAdapter - connection pool ve timeout ayarları
+        # HTTPAdapter - minimal konfigürasyon
         adapter = HTTPAdapter(
             max_retries=retry,
-            pool_connections=50,  # Connection pool size artırıldı
-            pool_maxsize=50,  # Maksimum pool size artırıldı
+            pool_connections=10,  # Minimal pool
+            pool_maxsize=10,  # Minimal pool
             pool_block=False  # Pool dolu olduğunda bloke etme
         )
         
@@ -251,15 +253,19 @@ class EnumWebCrawlerTool(MCPTool):
         queue = collections.deque([(context.base_url, 0)])
         crawled_urls = set()
         
-        while queue and len(crawled_urls) < min(context.max_pages, 50):  # HTTP crawling için limit daha düşük
+        # ULTRA OPTİMİZE: Max 20 sayfa, depth 2 - SİSTEM ÇÖKMEYE KARŞI KORUNMA
+        max_crawl_pages = min(context.max_pages, 20)
+        max_crawl_depth = min(context.max_depth, 2)
+        
+        while queue and len(crawled_urls) < max_crawl_pages:
             current_url, depth = queue.popleft()
             
-            if current_url in crawled_urls or depth > context.max_depth:
+            if current_url in crawled_urls or depth > max_crawl_depth:
                 continue
             
             try:
-                # Timeout artırıldı - DNS çözümleme için daha fazla süre
-                response = session.get(current_url, timeout=10)
+                # ULTRA KISA TIMEOUT: 5 saniye - sistem takılmasın
+                response = session.get(current_url, timeout=5, allow_redirects=True)
                 if response.status_code == 200:
                     crawled_urls.add(current_url)
                     context.discovered_paths.add(urlparse(current_url).path or '/')
@@ -271,12 +277,26 @@ class EnumWebCrawlerTool(MCPTool):
                     for link in new_links:
                         if link not in crawled_urls:
                             queue.append((link, depth + 1))
+             except requests.exceptions.Timeout:
+                # Timeout - sessizce atla
+                logger.debug(f"Timeout (5s): {current_url}")
+                continue
+            except requests.exceptions.ConnectionError:
+                # Connection error - sessizce atla
+                logger.debug(f"Connection error: {current_url}")
+                continue
+            except requests.exceptions.RequestException:
+                # Request hatası - sessizce atla
+                logger.debug(f"Request error: {current_url}")
+                continue
             except Exception as e:
-                logger.warning(f"HTTP crawl hatası {current_url}: {e}")
+                # Diğer hatalar - sessizce atla, sistem çökmesin
+                logger.debug(f"Crawl hatası: {current_url}")
                 continue
         
         context.crawled_page_count = len(crawled_urls)
-        self._add_reasoning(context.ai_reasoning_log, "http_complete", f"{len(crawled_urls)} sayfa HTTP ile tarandı")
+        logger.info(f"HTTP crawling tamamlandı: {len(crawled_urls)} sayfa tarandı")
+        self._add_reasoning(context.ai_reasoning_log, "http_complete", f"{len(crawled_urls)} sayfa HTTP ile tarandı (optimal)")
         return context
     
     def _build_final_json(self, context: CrawlContext, error: Exception = None) -> Dict[str, Any]:
@@ -465,7 +485,16 @@ class EnumWebCrawlerTool(MCPTool):
         if not start_url.startswith(('http://', 'https://')): 
             start_url = 'https://' + start_url
         
-        context = CrawlContext(base_url=start_url.rstrip('/'), target_domain=urlparse(start_url).netloc, max_depth=params.get("depth", 5), max_pages=params.get("max_pages", 1000))
+         # OPTİMAL PARAMETRELER - SİSTEM ÇÖKMEYE KARŞI KORUNMA
+         max_depth = min(params.get("depth", 2), 2)  # Max 2 depth
+         max_pages = min(params.get("max_pages", 20), 20)  # Max 20 sayfa
+         
+         context = CrawlContext(
+             base_url=start_url.rstrip('/'), 
+             target_domain=urlparse(start_url).netloc, 
+             max_depth=max_depth, 
+             max_pages=max_pages
+         )
         self._add_reasoning(context.ai_reasoning_log, "initialization", f"Hedef {context.target_domain} için tarama başlatılıyor (Motor: Selenium).")
         
         try:
