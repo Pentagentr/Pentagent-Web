@@ -253,9 +253,9 @@ class EnumWebCrawlerTool(MCPTool):
         queue = collections.deque([(context.base_url, 0)])
         crawled_urls = set()
         
-        # ULTRA OPTİMİZE: Max 20 sayfa, depth 2 - SİSTEM ÇÖKMEYE KARŞI KORUNMA
-        max_crawl_pages = min(context.max_pages, 20)
-        max_crawl_depth = min(context.max_depth, 2)
+        # MİNİMAL AYARLAR: Max 10 sayfa, depth 1 - ÇÖKME YOK
+        max_crawl_pages = min(context.max_pages, 10)  # Sadece 10 sayfa
+        max_crawl_depth = min(context.max_depth, 1)   # Sadece 1 derinlik
         
         while queue and len(crawled_urls) < max_crawl_pages:
             current_url, depth = queue.popleft()
@@ -264,8 +264,8 @@ class EnumWebCrawlerTool(MCPTool):
                 continue
             
             try:
-                # ULTRA KISA TIMEOUT: 5 saniye - sistem takılmasın
-                response = session.get(current_url, timeout=5, allow_redirects=True)
+                # MİNİMAL TIMEOUT: 3 saniye - çok hızlı fail
+                response = session.get(current_url, timeout=3, allow_redirects=True)
                 if response.status_code == 200:
                     crawled_urls.add(current_url)
                     context.discovered_paths.add(urlparse(current_url).path or '/')
@@ -485,9 +485,9 @@ class EnumWebCrawlerTool(MCPTool):
         if not start_url.startswith(('http://', 'https://')): 
             start_url = 'https://' + start_url
         
-         # OPTİMAL PARAMETRELER - SİSTEM ÇÖKMEYE KARŞI KORUNMA
-         max_depth = min(params.get("depth", 2), 2)  # Max 2 depth
-         max_pages = min(params.get("max_pages", 20), 20)  # Max 20 sayfa
+         # MİNİMAL PARAMETRELER - ÇÖKME YOK, HIZLI VE STABİL
+         max_depth = min(params.get("depth", 1), 1)   # Max 1 depth - sadece ana sayfa
+         max_pages = min(params.get("max_pages", 10), 10)  # Max 10 sayfa - çok hızlı
          
          context = CrawlContext(
              base_url=start_url.rstrip('/'), 
