@@ -66,28 +66,58 @@ class ConnectionManager:
         logger.info(f"WebSocket bağlantısı kesildi. Toplam: {len(self.active_connections)}")
 
     async def send_personal_message(self, message: str, websocket: WebSocket):
+        """WebSocket'e mesaj gönder - geliştirilmiş hata yönetimi"""
         try:
             # WebSocket state kontrolü ekle
-            if websocket in self.active_connections:
-                # WebSocket bağlantı durumunu kontrol et
-                try:
-                    await websocket.send_text(message)
-                except RuntimeError as re:
-                    # "WebSocket is not connected" hatası
-                    logger.warning(f"WebSocket bağlantısı kapalı: {re}")
-                    self.disconnect(websocket)
+            if websocket not in self.active_connections:
+                logger.debug("WebSocket bağlantısı aktif değil, mesaj gönderilmedi")
+                return
+            
+            # WebSocket bağlantı durumunu kontrol et
+            try:
+                await websocket.send_text(message)
+            except WebSocketDisconnect:
+                # Normal disconnect - INFO seviyesinde logla
+                logger.info("WebSocket bağlantısı kapatıldı (mesaj gönderilirken)")
+                self.disconnect(websocket)
+            except RuntimeError as re:
+                # "WebSocket is not connected" hatası - normal durum
+                error_msg = str(re) if re else "WebSocket bağlantısı kapalı"
+                logger.debug(f"WebSocket bağlantısı kapalı: {error_msg}")
+                self.disconnect(websocket)
+            except ConnectionResetError:
+                # Bağlantı resetlendi - normal durum
+                logger.debug("WebSocket bağlantısı resetlendi")
+                self.disconnect(websocket)
+        except WebSocketDisconnect:
+            # Normal disconnect - INFO seviyesinde logla
+            logger.info("WebSocket bağlantısı kapatıldı (send_personal_message)")
+            self.disconnect(websocket)
         except Exception as e:
-            logger.error(f"Mesaj gönderme hatası: {e}")
-            logger.error(f"WebSocket hatası: {type(e).__name__}: {str(e)}")
+            # Gerçek hatalar için detaylı log
+            error_type = type(e).__name__
+            error_msg = str(e) if str(e) else f"{error_type} hatası oluştu"
+            # Sadece gerçek hatalar için ERROR logla
+            if error_type not in ['WebSocketDisconnect', 'RuntimeError', 'ConnectionResetError']:
+                logger.warning(f"WebSocket mesaj gönderme hatası ({error_type}): {error_msg}")
+            else:
+                logger.debug(f"WebSocket bağlantı durumu ({error_type}): {error_msg}")
             self.disconnect(websocket)
 
     async def broadcast(self, message: str):
+        """Tüm aktif bağlantılara mesaj gönder - geliştirilmiş hata yönetimi"""
         disconnected_connections = []
         for connection in self.active_connections:
             try:
                 await connection.send_text(message)
+            except (WebSocketDisconnect, RuntimeError, ConnectionResetError) as e:
+                # Normal disconnect durumları - DEBUG seviyesinde logla
+                logger.debug(f"Broadcast sırasında bağlantı kapatıldı: {type(e).__name__}")
+                disconnected_connections.append(connection)
             except Exception as e:
-                logger.error(f"Broadcast hatası: {e}")
+                # Gerçek hatalar için WARNING logla
+                error_msg = str(e) if str(e) else f"{type(e).__name__} hatası"
+                logger.warning(f"Broadcast hatası ({type(e).__name__}): {error_msg}")
                 disconnected_connections.append(connection)
         
         # Disconnected connections'ları temizle
@@ -272,8 +302,15 @@ async def start_scan(request: Dict[str, Any]):
         # HTTPException'ı olduğu gibi fırlat (400, 503 vb.)
         raise
     except Exception as e:
-        logger.error(f"Scan başlatma hatası: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Hataları daha iyi yönet - sistem çökmesini önle
+        error_type = type(e).__name__
+        error_msg = str(e) if str(e) else f"{error_type} hatası oluştu"
+        logger.warning(f"Scan başlatma hatası ({error_type}): {error_msg}")
+        # Kullanıcıya anlamlı hata mesajı gönder
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Tarama başlatılamadı: {error_msg[:200]}"
+        )
 
 async def run_scan_async(scan_id: str, target: str, task: str, status_callback):
     """Async olarak scan çalıştır - MODÜLER (her scan için yeni orchestrator)"""
@@ -296,10 +333,14 @@ async def run_scan_async(scan_id: str, target: str, task: str, status_callback):
             """WebSocket hatalarını yakalayan güvenli callback"""
             try:
                 await status_callback(msg, status_type)
-            except RuntimeError as re:
-                logger.warning(f"⚠️ WebSocket bağlantısı kapalı, mesaj gönderilemedi: {msg[:50]}...")
+            except (RuntimeError, WebSocketDisconnect, ConnectionResetError) as re:
+                # Normal disconnect durumları - DEBUG seviyesinde logla
+                logger.debug(f"WebSocket bağlantısı kapalı, mesaj gönderilemedi: {msg[:50]}...")
             except Exception as e:
-                logger.error(f"❌ Status callback hatası: {type(e).__name__} - {e}")
+                # Diğer hatalar için WARNING seviyesi
+                error_type = type(e).__name__
+                error_msg = str(e) if str(e) else f"{error_type} hatası"
+                logger.warning(f"Status callback hatası ({error_type}): {error_msg}")
         
         # Orchestrator ile scan çalıştır - streaming düşünce ile (safe callback)
         result = await scan_orchestrator.run_autonomous_pentest_streaming(
@@ -324,20 +365,26 @@ async def run_scan_async(scan_id: str, target: str, task: str, status_callback):
             }
             await manager.broadcast(json.dumps(result_data))
         except Exception as broadcast_err:
-            logger.error(f"Broadcast hatası: {broadcast_err}")
+            # Broadcast hataları normal olabilir - WARNING seviyesinde logla
+            error_msg = str(broadcast_err) if str(broadcast_err) else f"{type(broadcast_err).__name__} hatası"
+            logger.warning(f"Broadcast hatası (normal olabilir): {error_msg}")
         
     except asyncio.TimeoutError as e:
-        logger.error(f"⏱️ Scan timeout hatası: {scan_id}")
+        # Timeout normal bir durum olabilir - WARNING seviyesinde logla
+        logger.warning(f"⏱️ Scan timeout hatası: {scan_id} - normal durum olabilir")
         try:
-            await status_callback(f"⏱️ Scan zaman aşımına uğradı", "error")
-        except:
-            pass
+            await status_callback(f"⏱️ Scan zaman aşımına uğradı", "warning")
+        except Exception as cb_err:
+            logger.debug(f"Timeout callback hatası (normal olabilir): {cb_err}")
     except Exception as e:
-        logger.error(f"❌ Scan çalıştırma hatası ({type(e).__name__}): {e}")
+        # Hataları daha iyi yönet - sistem çökmesini önle
+        error_type = type(e).__name__
+        error_msg = str(e) if str(e) else f"{error_type} hatası oluştu"
+        logger.warning(f"Scan çalıştırma hatası ({error_type}): {error_msg}")
         try:
-            await status_callback(f"❌ Scan hatası: {type(e).__name__} - {str(e)[:100]}", "error")
-        except:
-            pass
+            await status_callback(f"⚠️ Scan hatası: {error_msg[:100]}", "error")
+        except Exception as cb_err:
+            logger.debug(f"Error callback hatası (normal olabilir): {cb_err}")
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -447,33 +494,46 @@ async def websocket_endpoint(websocket: WebSocket):
                         asyncio.create_task(run_scan_async(scan_id, "", task, ws_ai_callback))
                         logger.info("AI yanıt task başlatıldı")
             except WebSocketDisconnect:
-                # WebSocket client disconnected
+                # WebSocket client disconnected - normal durum
                 logger.info("WebSocket client disconnected (normal)")
                 break
             except RuntimeError as re:
-                # WebSocket bağlantısı kesildiğinde oluşan hata
-                logger.info(f"WebSocket bağlantısı kapatıldı (RuntimeError): {re}")
+                # WebSocket bağlantısı kesildiğinde oluşan hata - normal durum
+                error_msg = str(re) if str(re) else "WebSocket bağlantısı kapatıldı"
+                logger.info(f"WebSocket bağlantısı kapatıldı (RuntimeError): {error_msg}")
+                break
+            except ConnectionResetError:
+                # Bağlantı resetlendi - normal durum
+                logger.info("WebSocket bağlantısı resetlendi")
                 break
             except Exception as e:
                 # Diğer hatalar - log et ama devam et
-                logger.error(f"❌ WebSocket message loop hatası: {type(e).__name__} - {e}")
+                error_type = type(e).__name__
+                error_msg = str(e) if str(e) else f"{error_type} hatası oluştu"
+                logger.warning(f"WebSocket message loop hatası ({error_type}): {error_msg}")
                 # DEVAM ET - sistemi crash ettirme!
                 break
             
     except WebSocketDisconnect:
         logger.info("✅ WebSocket bağlantısı normal şekilde kapatıldı")
-    except RuntimeError as re:
-        logger.info(f"✅ WebSocket runtime error (normal disconnect): {re}")
+    except (RuntimeError, ConnectionResetError) as re:
+        error_msg = str(re) if str(re) else type(re).__name__
+        logger.info(f"✅ WebSocket bağlantısı kapatıldı ({type(re).__name__}): {error_msg}")
     except Exception as e:
-        logger.error(f"❌ WebSocket endpoint hatası: {type(e).__name__} - {e}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
+        error_type = type(e).__name__
+        error_msg = str(e) if str(e) else f"{error_type} hatası oluştu"
+        logger.warning(f"WebSocket endpoint hatası ({error_type}): {error_msg}")
+        # Sadece gerçek beklenmeyen hatalar için traceback göster
+        if error_type not in ['WebSocketDisconnect', 'RuntimeError', 'ConnectionResetError']:
+            import traceback
+            logger.debug(f"Traceback: {traceback.format_exc()}")
         # HATA YAKALA - Sistemi crash ettirme!
     finally:
         try:
             manager.disconnect(websocket)
         except Exception as disc_err:
-            logger.error(f"❌ Disconnect hatası: {disc_err}")
+            # Disconnect hatası normal olabilir - DEBUG seviyesinde logla
+            logger.debug(f"Disconnect hatası (normal olabilir): {disc_err}")
 
 # ==================== RAG QUERY OPTIMIZATION ====================
 

@@ -405,28 +405,31 @@ class CVESearchEngine:
                 return dense_vec, sparse_vec
                 
             except requests.exceptions.Timeout:
-                logger.error(f"⏱️ Custom endpoint TIMEOUT ({timeout_seconds}s) - deneme {attempt + 1}/{max_retries}")
+                # Timeout normal bir durum - WARNING seviyesinde logla
+                logger.warning(f"⏱️ Custom endpoint TIMEOUT ({timeout_seconds}s) - deneme {attempt + 1}/{max_retries}")
                 if attempt < max_retries - 1:
                     import time
                     wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
                     logger.info(f"⏳ {wait_time}s bekleniyor...")
                     time.sleep(wait_time)
                 else:
-                    logger.error(f"❌ Custom endpoint tüm denemeler başarısız - FALLBACK PUBLIC API")
+                    logger.info(f"⚠️ Custom endpoint tüm denemeler başarısız - FALLBACK PUBLIC API (normal durum)")
                     return self._encode_with_public_hf_api(query)
             except Exception as e:
-                logger.error(f"❌ Custom endpoint hatası (deneme {attempt + 1}): {e}")
+                # Hatalar için WARNING seviyesi - sistem çökmesini önle
+                error_msg = str(e) if str(e) else f"{type(e).__name__} hatası"
+                logger.warning(f"⚠️ Custom endpoint hatası (deneme {attempt + 1}): {error_msg}")
                 if attempt < max_retries - 1:
                     import time
                     wait_time = 2 ** attempt
                     logger.info(f"⏳ {wait_time}s bekleniyor...")
                     time.sleep(wait_time)
                 else:
-                    logger.error(f"❌ Custom endpoint tüm denemeler başarısız - FALLBACK PUBLIC API")
+                    logger.info(f"⚠️ Custom endpoint tüm denemeler başarısız - FALLBACK PUBLIC API (normal durum)")
                     return self._encode_with_public_hf_api(query)
         
-        # Buraya gelirse fallback
-        logger.error("❌ Custom endpoint başarısız - PUBLIC API kullanılıyor")
+        # Buraya gelirse fallback - normal durum
+        logger.info("⚠️ Custom endpoint başarısız - PUBLIC API kullanılıyor (normal fallback)")
         return self._encode_with_public_hf_api(query)
     
     def _analyze_query_intelligence(self, query: str) -> dict:

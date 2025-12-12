@@ -317,16 +317,21 @@ class TechDetectorModule(MCPTool):
                     return await self._basic_url_detection(url)
                     
         except asyncio.TimeoutError as e:
-            logger.error(f"⏱️ URL timeout hatası {url}: Bağlantı zaman aşımına uğradı (60s)")
+            # Timeout normal bir durum - WARNING seviyesinde logla
+            logger.warning(f"⏱️ URL timeout hatası {url}: Bağlantı zaman aşımına uğradı (60s) - Basic URL detection'a geçiliyor")
             self.reasoning_log.append({"phase": "fetch_timeout", "thought": f"{url} adresine timeout (60s), Basic URL detection'a geçiliyor."})
             return await self._basic_url_detection(url)
         except aiohttp.ClientError as e:
-            logger.error(f"🌐 URL bağlantı hatası {url}: {type(e).__name__} - {str(e)}")
+            # Bağlantı hataları normal olabilir - WARNING seviyesinde logla
+            error_msg = str(e) if str(e) else f"{type(e).__name__} hatası"
+            logger.warning(f"🌐 URL bağlantı hatası {url}: {error_msg} - Basic URL detection'a geçiliyor")
             self.reasoning_log.append({"phase": "fetch_connection_error", "thought": f"{url} bağlantı hatası: {type(e).__name__}, Basic URL detection'a geçiliyor."})
             return await self._basic_url_detection(url)
         except Exception as e:
-            logger.error(f"❌ URL getirme hatası {url}: {type(e).__name__} - {str(e)}")
-            self.reasoning_log.append({"phase": "fetch_error", "thought": f"{url} adresine ulaşılamadı: {type(e).__name__} - {str(e)[:100]}, Basic URL detection'a geçiliyor."})
+            # Genel hatalar için WARNING seviyesi - sistem çökmesini önle
+            error_msg = str(e) if str(e) else f"{type(e).__name__} hatası"
+            logger.warning(f"⚠️ URL getirme hatası {url}: {error_msg[:100]} - Basic URL detection'a geçiliyor")
+            self.reasoning_log.append({"phase": "fetch_error", "thought": f"{url} adresine ulaşılamadı: {type(e).__name__} - {error_msg[:100]}, Basic URL detection'a geçiliyor."})
             # Hata durumunda basic detection'a geç
             return await self._basic_url_detection(url)
 

@@ -589,21 +589,26 @@ class RAGService:
                             return reranked_results
                             
                         except concurrent.futures.TimeoutError:
-                            logger.error("⏱️ Reranker thread pool TIMEOUT (60s)")
+                            # Timeout normal bir durum - WARNING seviyesinde logla
+                            logger.warning("⏱️ Reranker thread pool TIMEOUT (60s) - orijinal sıralama kullanılıyor (normal durum)")
                             future.cancel()  # Cancel the future
                             return cve_results[:limit]
                         except RuntimeError as e:
                             if "Event loop is closed" in str(e):
-                                logger.error(f"❌ Event loop closed hatası yakalandı: {e}")
-                                logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
+                                # Event loop closed normal bir durum olabilir - WARNING seviyesinde logla
+                                logger.warning(f"⚠️ Event loop closed hatası yakalandı: {e}")
+                                logger.info("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan) - normal fallback")
                                 return cve_results[:limit]
                             raise  # Diğer RuntimeError'ları yukarı fırlat
                         except asyncio.TimeoutError:
-                            logger.error(f"⏱️ Reranker asyncio TIMEOUT - orijinal sonuçlar döndürülüyor")
+                            # Timeout normal bir durum - WARNING seviyesinde logla
+                            logger.warning(f"⏱️ Reranker asyncio TIMEOUT - orijinal sonuçlar döndürülüyor (normal durum)")
                             return cve_results[:limit]
                         except Exception as e:
-                            logger.warning(f"⚠️ RERANKER request hatası: {type(e).__name__} - {e}")
-                            logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
+                            # Hatalar için WARNING seviyesi - sistem çökmesini önle
+                            error_msg = str(e) if str(e) else f"{type(e).__name__} hatası"
+                            logger.warning(f"⚠️ RERANKER request hatası: {error_msg}")
+                            logger.info("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan) - normal fallback")
                             return cve_results[:limit]
                             
                 except RuntimeError as e:

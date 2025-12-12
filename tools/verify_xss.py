@@ -66,6 +66,24 @@ class XssVerifier(MCPTool):
 
     def _get_driver(self) -> Optional[webdriver.Chrome]:
         """Otomatik olarak indirilen sürücü ile bir Chrome WebDriver nesnesi oluşturur."""
+        # RENDER UYUMLU: Chrome binary kontrolü
+        import shutil
+        chrome_paths = [
+            '/usr/bin/google-chrome',
+            '/usr/bin/chromium',
+            '/usr/bin/chromium-browser',
+            shutil.which('google-chrome'),
+            shutil.which('chromium'),
+            shutil.which('chromium-browser')
+        ]
+        
+        chrome_available = any(path and os.path.exists(path) for path in chrome_paths if path)
+        
+        if not chrome_available:
+            logger.warning("Chrome binary bulunamadı (Render ortamı tespit edildi)")
+            logger.info("Chrome WebDriver başlatılamadı - alternatif araçlar kullanılacak")
+            return None
+        
         try:
             options = ChromeOptions()
             options.add_argument("--headless")
@@ -73,13 +91,29 @@ class XssVerifier(MCPTool):
             options.add_argument("--disable-dev-shm-usage")
             options.add_argument("--log-level=3") # Sadece ciddi hataları göster
             options.add_argument(f"user-agent=Pentagent/{self.name}/1.0 (Selenium)")
-            service = ChromeService(ChromeDriverManager().install())
-            driver = webdriver.Chrome(service=service, options=options)
-            driver.set_page_load_timeout(15)
-            return driver
+            
+            try:
+                service = ChromeService(ChromeDriverManager().install())
+                driver = webdriver.Chrome(service=service, options=options)
+                driver.set_page_load_timeout(15)
+                return driver
+            except WebDriverException as wde:
+                # WebDriver hatası - Chrome binary veya driver sorunu
+                error_msg = str(wde.msg) if hasattr(wde, 'msg') and wde.msg else str(wde)
+                logger.warning(f"Chrome WebDriver başlatılamadı: {error_msg}")
+                logger.info("Alternatif araçlar (verify_xss_http) kullanılacak")
+                return None
+            except Exception as e:
+                # Diğer hatalar
+                error_msg = str(e) if str(e) else f"{type(e).__name__} hatası"
+                logger.warning(f"Chrome WebDriver başlatılamadı: {error_msg}")
+                logger.info("Alternatif araçlar kullanılacak")
+                return None
         except Exception as e:
-            logger.error(f"Chrome WebDriver başlatılamadı. Hata: {e}")
-            logger.error("Lütfen sisteminizde Google Chrome'un kurulu olduğundan emin olun.")
+            # Genel hata yakalama
+            error_msg = str(e) if str(e) else f"{type(e).__name__} hatası"
+            logger.warning(f"Chrome WebDriver başlatılamadı: {error_msg}")
+            logger.info("Alternatif araçlar kullanılacak")
             return None
 
     def _test_payload(self, driver: webdriver.Chrome, url: str, method: str, parameter: str, payload_info: Dict[str, str], ai_reasoning_log: List[Dict]) -> Optional[XssFinding]:
@@ -142,8 +176,14 @@ class XssVerifier(MCPTool):
         
         driver = self._get_driver()
         if not driver:
-            error_msg = "Selenium WebDriver başlatılamadığı için testler çalıştırılamadı."
-            ai_reasoning_log.append({"phase": "error", "thought": error_msg})
+            # Chrome WebDriver başlatılamadı - bu normal bir durum (Render ortamı)
+            # Alternatif araçlar (verify_xss_http) kullanılacak
+            error_msg = "Chrome WebDriver başlatılamadı (Render ortamı veya Chrome binary yok). Alternatif araçlar kullanılacak."
+            ai_reasoning_log.append({
+                "phase": "fallback", 
+                "thought": error_msg + " Sistem çökmedi, alternatif mekanizmalara geçiliyor."
+            })
+            # Başarısız olarak işaretle ama sistem çökmesin
             return self._create_mcp_output(success=False, error=error_msg, ai_reasoning_log=ai_reasoning_log)
 
         findings: List[XssFinding] = []
