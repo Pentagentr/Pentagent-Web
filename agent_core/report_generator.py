@@ -2564,6 +2564,85 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
             else:
                 findings_text = "Bulgu bulunamadı.\n"
             
+            # Açık portları ve dizin bulgularını çıkar - BASİT VE KISA FORMAT
+            ports_text = ""
+            directories_text = ""
+            
+            if scan_results:
+                # Açık portları bul
+                all_open_ports = []
+                for tool_name, tool_data in scan_results.items():
+                    if isinstance(tool_data, dict) and tool_data.get('success'):
+                        data = tool_data.get('data', {})
+                        if isinstance(data, dict):
+                            # open_ports alanını kontrol et
+                            open_ports = data.get('open_ports', [])
+                            if open_ports:
+                                for port_info in open_ports:
+                                    if isinstance(port_info, dict):
+                                        port = port_info.get('port', 'N/A')
+                                        service = port_info.get('service', 'unknown')
+                                        product = port_info.get('product', '')
+                                        version = port_info.get('version', '')
+                                        port_str = f"{port}/{service}"
+                                        if product:
+                                            port_str += f" ({product}"
+                                            if version:
+                                                port_str += f" {version}"
+                                            port_str += ")"
+                                        all_open_ports.append(port_str)
+                                    elif isinstance(port_info, (int, str)):
+                                        all_open_ports.append(str(port_info))
+                
+                if all_open_ports:
+                    ports_text = f"\n## AÇIK PORTLAR ({len(all_open_ports)} adet):\n\n"
+                    # İlk 20 portu göster, kısa format
+                    for port in all_open_ports[:20]:
+                        ports_text += f"- {port}\n"
+                    if len(all_open_ports) > 20:
+                        ports_text += f"\n+ {len(all_open_ports) - 20} port daha...\n"
+                
+                # Dizin bulgularını bul
+                all_directories = []
+                for tool_name, tool_data in scan_results.items():
+                    if isinstance(tool_data, dict) and tool_data.get('success'):
+                        data = tool_data.get('data', {})
+                        if isinstance(data, dict):
+                            # Directory bruteforce findings kontrolü
+                            findings_dict = data.get('findings', {})
+                            if isinstance(findings_dict, dict):
+                                critical_dirs = findings_dict.get('critical', [])
+                                high_dirs = findings_dict.get('high', [])
+                                info_dirs = findings_dict.get('informational', [])
+                                
+                                for dir_finding in critical_dirs + high_dirs + info_dirs[:10]:  # İlk 10 info
+                                    if isinstance(dir_finding, dict):
+                                        path = dir_finding.get('path', '')
+                                        url = dir_finding.get('url', '')
+                                        status = dir_finding.get('status_code', '')
+                                        if path:
+                                            dir_str = path
+                                            if status:
+                                                dir_str += f" [{status}]"
+                                            all_directories.append(dir_str)
+                            
+                            # Alternatif: found_paths kontrolü
+                            found_paths = data.get('found_paths', [])
+                            if found_paths:
+                                for path_info in found_paths[:15]:  # İlk 15
+                                    if isinstance(path_info, dict):
+                                        path = path_info.get('path', '') or path_info.get('url', '')
+                                        if path:
+                                            all_directories.append(path)
+            
+                if all_directories:
+                    directories_text = f"\n## BULUNAN DİZİNLER/DOSYALAR ({len(all_directories)} adet):\n\n"
+                    # İlk 20 dizini göster, kısa format
+                    for directory in all_directories[:20]:
+                        directories_text += f"- {directory}\n"
+                    if len(all_directories) > 20:
+                        directories_text += f"\n+ {len(all_directories) - 20} dizin/dosya daha...\n"
+            
             # CVE'leri metne çevir - OPTİMİZE (TOKEN TASARRUFU)
             cve_text = ""
             if cve_results:
@@ -2604,6 +2683,10 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
 {findings_text}
 
 {cve_text}
+
+{ports_text}
+
+{directories_text}
 
 🎯 REQUIREMENTS:
 - Write in Turkish
@@ -2662,18 +2745,27 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
                     report = str(response)
                 
                 logger.info(f"✅ LLM raporu oluşturuldu: {len(report)} karakter")
+                
+                # Port ve dizin bilgilerini raporun sonuna ekle (basit ve kısa format)
+                if ports_text or directories_text:
+                    report += "\n\n---\n\n"
+                    if ports_text:
+                        report += ports_text
+                    if directories_text:
+                        report += directories_text
+                
                 return report
                 
             except Exception as e:
                 logger.error(f"LLM rapor oluşturma hatası: {e}")
                 # Fallback: template-based rapor
-                return self._generate_template_llm_report(findings, target, cve_results, tool_outputs)
+                return self._generate_template_llm_report(findings, target, cve_results, tool_outputs, scan_results)
                 
         except Exception as e:
             logger.error(f"LLM enhanced report hatası: {e}")
-            return self._generate_template_llm_report(findings, target, cve_results, tool_outputs)
+            return self._generate_template_llm_report(findings, target, cve_results, tool_outputs, scan_results)
     
-    def _generate_template_llm_report(self, findings: List[Dict[str, Any]], target: str, cve_results: List[Dict[str, Any]], tool_outputs: Dict[str, Any]) -> str:
+    def _generate_template_llm_report(self, findings: List[Dict[str, Any]], target: str, cve_results: List[Dict[str, Any]], tool_outputs: Dict[str, Any], scan_results: Dict[str, Any] = None) -> str:
         """Template-based fallback rapor"""
         report_parts = []
         
@@ -2705,9 +2797,89 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
         
         report_parts.append("")
         
+        # Açık Portlar ve Dizin Bulguları - BASİT VE KISA FORMAT
+        if scan_results:
+            # Açık portları bul
+            all_open_ports = []
+            for tool_name, tool_data in scan_results.items():
+                if isinstance(tool_data, dict) and tool_data.get('success'):
+                    data = tool_data.get('data', {})
+                    if isinstance(data, dict):
+                        open_ports = data.get('open_ports', [])
+                        if open_ports:
+                            for port_info in open_ports:
+                                if isinstance(port_info, dict):
+                                    port = port_info.get('port', 'N/A')
+                                    service = port_info.get('service', 'unknown')
+                                    product = port_info.get('product', '')
+                                    version = port_info.get('version', '')
+                                    port_str = f"{port}/{service}"
+                                    if product:
+                                        port_str += f" ({product}"
+                                        if version:
+                                            port_str += f" {version}"
+                                        port_str += ")"
+                                    all_open_ports.append(port_str)
+                                elif isinstance(port_info, (int, str)):
+                                    all_open_ports.append(str(port_info))
+            
+            if all_open_ports:
+                report_parts.append("## 2. AÇIK PORTLAR")
+                report_parts.append("")
+                report_parts.append(f"**Toplam:** {len(all_open_ports)} açık port tespit edildi")
+                report_parts.append("")
+                # İlk 20 portu göster, kısa format
+                for port in all_open_ports[:20]:
+                    report_parts.append(f"- {port}")
+                if len(all_open_ports) > 20:
+                    report_parts.append(f"\n+ {len(all_open_ports) - 20} port daha...")
+                report_parts.append("")
+            
+            # Dizin bulgularını bul
+            all_directories = []
+            for tool_name, tool_data in scan_results.items():
+                if isinstance(tool_data, dict) and tool_data.get('success'):
+                    data = tool_data.get('data', {})
+                    if isinstance(data, dict):
+                        findings_dict = data.get('findings', {})
+                        if isinstance(findings_dict, dict):
+                            critical_dirs = findings_dict.get('critical', [])
+                            high_dirs = findings_dict.get('high', [])
+                            info_dirs = findings_dict.get('informational', [])
+                            
+                            for dir_finding in critical_dirs + high_dirs + info_dirs[:10]:
+                                if isinstance(dir_finding, dict):
+                                    path = dir_finding.get('path', '')
+                                    status = dir_finding.get('status_code', '')
+                                    if path:
+                                        dir_str = path
+                                        if status:
+                                            dir_str += f" [{status}]"
+                                        all_directories.append(dir_str)
+                        
+                        found_paths = data.get('found_paths', [])
+                        if found_paths:
+                            for path_info in found_paths[:15]:
+                                if isinstance(path_info, dict):
+                                    path = path_info.get('path', '') or path_info.get('url', '')
+                                    if path:
+                                        all_directories.append(path)
+            
+            if all_directories:
+                report_parts.append("## 3. BULUNAN DİZİNLER/DOSYALAR")
+                report_parts.append("")
+                report_parts.append(f"**Toplam:** {len(all_directories)} dizin/dosya bulundu")
+                report_parts.append("")
+                # İlk 20 dizini göster, kısa format
+                for directory in all_directories[:20]:
+                    report_parts.append(f"- {directory}")
+                if len(all_directories) > 20:
+                    report_parts.append(f"\n+ {len(all_directories) - 20} dizin/dosya daha...")
+                report_parts.append("")
+        
         # Detaylı Bulgular
         if findings:
-            report_parts.append("## 3. DETAYLI BULGULAR")
+            report_parts.append("## 4. DETAYLI BULGULAR")
             report_parts.append("")
             
             for i, finding in enumerate(findings, 1):
@@ -2721,7 +2893,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
         
         # Tool Çıktıları
         if tool_outputs:
-            report_parts.append("## 4. TOOL ÇIKTILARI")
+            report_parts.append("## 5. TOOL ÇIKTILARI")
             report_parts.append("")
             
             for tool_name, tool_data in list(tool_outputs.items())[:10]:  # İlk 10 tool
@@ -2733,7 +2905,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
         
         # CVE Analizi
         if cve_results:
-            report_parts.append("## 5. CVE ANALİZİ")
+            report_parts.append("## 6. CVE ANALİZİ")
             report_parts.append("")
             
             for i, cve in enumerate(cve_results[:10], 1):
@@ -2800,12 +2972,90 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
             report_parts.append("**Kapsam Dışı:** Sosyal mühendislik, fiziksel güvenlik ve DoS/DDoS saldırıları")
             report_parts.append("")
             
-            # Detaylı Bulgular
-            if state.findings:
-                report_parts.append("## 3. DETAYLI BULGULAR")
-                report_parts.append("")
+            # Açık Portlar ve Dizin Bulguları - BASİT VE KISA FORMAT
+            if scan_results:
+                # Açık portları bul
+                all_open_ports = []
+                for tool_name, tool_data in scan_results.items():
+                    if isinstance(tool_data, dict) and tool_data.get('success'):
+                        data = tool_data.get('data', {})
+                        if isinstance(data, dict):
+                            open_ports = data.get('open_ports', [])
+                            if open_ports:
+                                for port_info in open_ports:
+                                    if isinstance(port_info, dict):
+                                        port = port_info.get('port', 'N/A')
+                                        service = port_info.get('service', 'unknown')
+                                        product = port_info.get('product', '')
+                                        version = port_info.get('version', '')
+                                        port_str = f"{port}/{service}"
+                                        if product:
+                                            port_str += f" ({product}"
+                                            if version:
+                                                port_str += f" {version}"
+                                            port_str += ")"
+                                        all_open_ports.append(port_str)
+                                    elif isinstance(port_info, (int, str)):
+                                        all_open_ports.append(str(port_info))
                 
-                for i, finding in enumerate(state.findings, 1):
+                if all_open_ports:
+                    report_parts.append("## 3. AÇIK PORTLAR")
+                    report_parts.append("")
+                    report_parts.append(f"**Toplam:** {len(all_open_ports)} açık port tespit edildi")
+                    report_parts.append("")
+                    for port in all_open_ports[:20]:
+                        report_parts.append(f"- {port}")
+                    if len(all_open_ports) > 20:
+                        report_parts.append(f"\n+ {len(all_open_ports) - 20} port daha...")
+                    report_parts.append("")
+                
+                # Dizin bulgularını bul
+                all_directories = []
+                for tool_name, tool_data in scan_results.items():
+                    if isinstance(tool_data, dict) and tool_data.get('success'):
+                        data = tool_data.get('data', {})
+                        if isinstance(data, dict):
+                            findings_dict = data.get('findings', {})
+                            if isinstance(findings_dict, dict):
+                                critical_dirs = findings_dict.get('critical', [])
+                                high_dirs = findings_dict.get('high', [])
+                                info_dirs = findings_dict.get('informational', [])
+                                
+                                for dir_finding in critical_dirs + high_dirs + info_dirs[:10]:
+                                    if isinstance(dir_finding, dict):
+                                        path = dir_finding.get('path', '')
+                                        status = dir_finding.get('status_code', '')
+                                        if path:
+                                            dir_str = path
+                                            if status:
+                                                dir_str += f" [{status}]"
+                                            all_directories.append(dir_str)
+                            
+                            found_paths = data.get('found_paths', [])
+                            if found_paths:
+                                for path_info in found_paths[:15]:
+                                    if isinstance(path_info, dict):
+                                        path = path_info.get('path', '') or path_info.get('url', '')
+                                        if path:
+                                            all_directories.append(path)
+                
+                if all_directories:
+                    report_parts.append("## 4. BULUNAN DİZİNLER/DOSYALAR")
+                    report_parts.append("")
+                    report_parts.append(f"**Toplam:** {len(all_directories)} dizin/dosya bulundu")
+                    report_parts.append("")
+                    for directory in all_directories[:20]:
+                        report_parts.append(f"- {directory}")
+                    if len(all_directories) > 20:
+                        report_parts.append(f"\n+ {len(all_directories) - 20} dizin/dosya daha...")
+                    report_parts.append("")
+            
+        # Detaylı Bulgular
+        if state.findings:
+            report_parts.append("## 5. DETAYLI BULGULAR")
+            report_parts.append("")
+            
+            for i, finding in enumerate(state.findings, 1):
                     report_parts.append(f"### {i}. {finding.get('title', 'Bilinmeyen Bulgu')}")
                     report_parts.append(f"**Severity:** {finding.get('severity', 'Unknown').upper()}")
                     report_parts.append(f"**Açıklama:** {finding.get('description', 'Açıklama yok')}")
@@ -2816,7 +3066,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
             
             # CVE Analizi
             if cve_results:
-                report_parts.append("## 4. CVE ANALİZİ")
+                report_parts.append("## 6. CVE ANALİZİ")
                 report_parts.append("")
                 
                 for i, cve in enumerate(cve_results[:10], 1):  # Top 10 CVE
@@ -2828,7 +3078,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
                         report_parts.append("")
             
             # Öneriler
-            report_parts.append("## 5. ÖNERİLER VE ÇÖZÜMLER")
+            report_parts.append("## 7. ÖNERİLER VE ÇÖZÜMLER")
             report_parts.append("")
             
             if critical_count > 0:
@@ -2852,7 +3102,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
             report_parts.append("")
             
             # Sonuç
-            report_parts.append("## 6. SONUÇ")
+            report_parts.append("## 8. SONUÇ")
             report_parts.append("")
             if findings_count == 0:
                 report_parts.append("Bu güvenlik değerlendirmesi sonucunda kritik bir güvenlik açığına rastlanmamıştır. Sistemin genel güvenlik duruşu temel seviyede yeterli görünmektedir.")
