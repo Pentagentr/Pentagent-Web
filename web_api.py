@@ -671,6 +671,100 @@ JSON formatında döndür:
         return default_response
 
 
+def _filter_cve_results(results: List[Any], query_info: Dict[str, Any]) -> List[Any]:
+    """
+    CVE sonuçlarını query bilgilerine göre filtrele
+    
+    Filtreleme kuralları:
+    - Yıl varsa sadece o yılın CVE'leri
+    - Ürün adı varsa sadece o ürüne ait CVE'ler (vendor/product alanlarında)
+    - Kesin eşleşme gerekiyorsa sadece tam eşleşen CVE'ler
+    """
+    if not results or not query_info:
+        return results
+    
+    year = query_info.get('year')
+    product = query_info.get('product')
+    vendor = query_info.get('vendor')
+    exact_match = query_info.get('exact_product_match', False)
+    
+    filtered = []
+    
+    for result in results:
+        # Yıl kontrolü
+        if year:
+            published_date = result.published_date or result.get('published_date')
+            if published_date:
+                try:
+                    # Yıl formatı: "2021-12-10" veya "2021"
+                    result_year = int(str(published_date)[:4])
+                    if result_year != year:
+                        logger.debug(f"⏭️  CVE {result.cve_id} yıl uyuşmuyor: {result_year} != {year}")
+                        continue
+                except:
+                    pass
+        
+        # Ürün kontrolü
+        if product:
+            result_product = result.product or result.get('product', '')
+            result_vendor = result.vendor or result.get('vendor', '')
+            description = result.description or result.get('description', '')
+            
+            # Ürün adını normalize et (case-insensitive)
+            product_lower = product.lower()
+            result_product_lower = result_product.lower() if result_product else ''
+            result_vendor_lower = result_vendor.lower() if result_vendor else ''
+            description_lower = description.lower() if description else ''
+            
+            # Kesin eşleşme gerekiyorsa
+            if exact_match:
+                # Sadece vendor/product alanlarında eşleşme kabul et
+                # Açıklamada geçen ama ürüne ait olmayan CVE'leri dahil etme
+                product_match = (
+                    product_lower in result_product_lower or
+                    result_product_lower in product_lower
+                )
+                
+                # Vendor kontrolü (eğer vendor belirtilmişse)
+                vendor_match = True
+                if vendor:
+                    vendor_lower = vendor.lower()
+                    vendor_match = (
+                        vendor_lower in result_vendor_lower or
+                        result_vendor_lower in vendor_lower
+                    )
+                
+                if not (product_match and vendor_match):
+                    logger.debug(f"⏭️  CVE {result.cve_id} ürün/vendor uyuşmuyor: product={result_product}, vendor={result_vendor}")
+                    continue
+            else:
+                # Kesin eşleşme gerekmiyorsa, açıklamada da geçebilir ama öncelik vendor/product'ta
+                product_match = (
+                    product_lower in result_product_lower or
+                    result_product_lower in product_lower or
+                    (not exact_match and product_lower in description_lower)
+                )
+                
+                if not product_match:
+                    logger.debug(f"⏭️  CVE {result.cve_id} ürün eşleşmiyor: product={result_product}")
+                    continue
+        
+        # Vendor kontrolü (sadece vendor varsa ve product yoksa)
+        if vendor and not product:
+            result_vendor = result.vendor or result.get('vendor', '')
+            vendor_lower = vendor.lower()
+            result_vendor_lower = result_vendor.lower() if result_vendor else ''
+            
+            if vendor_lower not in result_vendor_lower and result_vendor_lower not in vendor_lower:
+                logger.debug(f"⏭️  CVE {result.cve_id} vendor uyuşmuyor: {result_vendor}")
+                continue
+        
+        filtered.append(result)
+    
+    logger.info(f"🔍 Filtreleme: {len(results)} → {len(filtered)} sonuç (yıl={year}, product={product}, vendor={vendor}, exact={exact_match})")
+    return filtered
+
+
 # ==================== RAG ENDPOINTS ====================
 
 @app.post("/api/rag/search")
