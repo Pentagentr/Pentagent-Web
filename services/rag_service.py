@@ -852,8 +852,12 @@ class RAGService:
                 logger.info(f"✅ LLM query oluşturuldu: '{query}'")
                 return query
             else:
-                logger.warning("LLM boş veya kısa query döndürdü")
-                return self._generate_query_from_scan(scan_results)
+                # Fallback mekanizması normal bir durum - DEBUG seviyesinde logla
+                logger.debug(f"LLM query oluşturulamadı veya kısa döndü, fallback kullanılıyor")
+                fallback_query = self._generate_query_from_scan(scan_results)
+                if fallback_query:
+                    logger.info(f"✅ Fallback query oluşturuldu: '{fallback_query}'")
+                return fallback_query
             
         except Exception as e:
             logger.error(f"LLM query oluşturma hatası: {e}")
@@ -1395,7 +1399,8 @@ class RAGService:
     
     def _generate_query_from_scan(self, scan_results: Dict[str, Any]) -> str:
         """
-        Basit query oluştur (Gemini fallback için).
+        Basit query oluştur (LLM fallback için).
+        Scan results'tan teknoloji, zafiyet ve servis bilgilerini çıkararak optimize query oluşturur.
         
         Args:
             scan_results: Tarama sonuçları
@@ -1404,35 +1409,83 @@ class RAGService:
             RAG query string
         """
         query_parts = []
-        
-        # Vulnerability türlerini topla
-        vulnerabilities = scan_results.get("vulnerabilities", [])
-        if vulnerabilities:
-            vuln_types = [v.get("type", "") for v in vulnerabilities if v.get("type")]
-            if vuln_types:
-                query_parts.extend(vuln_types[:3])  # İlk 3 vulnerability türü
-        
-        # Teknoloji ve servis bilgilerini ekle
-        technologies = scan_results.get("technologies", [])
-        if technologies:
-            query_parts.extend(technologies[:2])  # İlk 2 teknoloji
-        
-        # Açık portlar ve servisler
-        services = scan_results.get("services", [])
-        if services:
-            service_names = [s.get("name", "") for s in services if s.get("name")]
-            query_parts.extend(service_names[:2])
-        
-        # Query'yi oluştur
-        if query_parts:
-            return " ".join(query_parts)
-        
-        # Fallback: target'ı kullan
         target = scan_results.get("target", "")
-        if target:
-            return f"web application vulnerability {target}"
         
-        return "web security vulnerability"
+        # Tool çıktılarından bilgi çıkar
+        for key, value in scan_results.items():
+            if not isinstance(value, dict):
+                continue
+                
+            # Tool data içinden bilgi çıkar
+            tool_data = value.get("data", {}) if isinstance(value.get("data"), dict) else {}
+            
+            # Teknoloji tespiti
+            technologies = tool_data.get("technologies", [])
+            if technologies and isinstance(technologies, list):
+                tech_list = [str(t) for t in technologies[:3] if t]
+                if tech_list:
+                    query_parts.extend(tech_list)
+            
+            # Vulnerability türlerini topla
+            vulnerabilities = tool_data.get("vulnerabilities", [])
+            if vulnerabilities and isinstance(vulnerabilities, list):
+                vuln_types = [v.get("type", "") or v.get("title", "") for v in vulnerabilities[:3] if isinstance(v, dict)]
+                vuln_types = [v for v in vuln_types if v and len(v) > 3]
+                if vuln_types:
+                    query_parts.extend(vuln_types)
+            
+            # Findings'lerden bilgi çıkar
+            findings = tool_data.get("findings", {})
+            if isinstance(findings, dict):
+                # Critical ve high severity findings
+                critical = findings.get("critical", [])
+                high = findings.get("high", [])
+                if critical or high:
+                    query_parts.append("security vulnerability")
+            
+            # Servis bilgileri
+            services = tool_data.get("services", [])
+            if services and isinstance(services, list):
+                service_names = [s.get("name", "") if isinstance(s, dict) else str(s) for s in services[:2]]
+                service_names = [s for s in service_names if s and len(s) > 2]
+                if service_names:
+                    query_parts.extend(service_names)
+        
+        # Direct scan_results keys'lerden bilgi çıkar
+        vulnerabilities = scan_results.get("vulnerabilities", [])
+        if vulnerabilities and isinstance(vulnerabilities, list):
+            vuln_types = [v.get("type", "") for v in vulnerabilities[:3] if isinstance(v, dict) and v.get("type")]
+            if vuln_types:
+                query_parts.extend(vuln_types)
+        
+        technologies = scan_results.get("technologies", [])
+        if technologies and isinstance(technologies, list):
+            tech_list = [str(t) for t in technologies[:2] if t]
+            if tech_list:
+                query_parts.extend(tech_list)
+        
+        # Query'yi oluştur - tekrarları kaldır ve optimize et
+        if query_parts:
+            # Tekrarları kaldır, sırayı koru
+            seen = set()
+            unique_parts = []
+            for part in query_parts:
+                part_lower = part.lower().strip()
+                if part_lower and part_lower not in seen and len(part_lower) > 2:
+                    seen.add(part_lower)
+                    unique_parts.append(part.strip())
+            
+            if unique_parts:
+                query = " ".join(unique_parts[:5])  # Max 5 kelime
+                if target and target not in query:
+                    query = f"{query} {target}"
+                return query
+        
+        # Son fallback: target varsa kullan
+        if target:
+            return f"web application security vulnerability {target}"
+        
+        return "web application security vulnerability"
     
     def store_scan_results(self, target: str, findings: List[Dict[str, Any]], execution_results: Dict[str, Any]):
         """
