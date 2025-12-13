@@ -225,32 +225,27 @@ class ReportGenerator:
 
 
         if len(findings) == 0:
-            normalized_score = 5
-
-        elif normalized_score == 0 and len(findings) > 0:
-
-            info_only = all(f.get('severity', 'info').lower() == 'info' for f in findings)
-            if info_only:
-                normalized_score = 10
-            else:
-
-                has_critical = any(f.get('severity', '').lower() == 'critical' for f in findings)
-                has_high = any(f.get('severity', '').lower() == 'high' for f in findings)
-                has_medium = any(f.get('severity', '').lower() == 'medium' for f in findings)
-                has_low = any(f.get('severity', '').lower() == 'low' for f in findings)
-                
-                if has_critical:
-                    normalized_score = 85
-                elif has_high:
-                    normalized_score = 65
-                elif has_medium:
-                    normalized_score = 45
-                elif has_low:
-                    normalized_score = 25
-                else:
-                    normalized_score = 15
+            return 5
         
-        return normalized_score
+        if normalized_score < 10:
+            critical_count = severity_counts.get('critical', 0)
+            high_count = severity_counts.get('high', 0)
+            medium_count = severity_counts.get('medium', 0)
+            low_count = severity_counts.get('low', 0)
+            info_count = severity_counts.get('info', 0)
+            
+            if critical_count > 0:
+                normalized_score = min(85 + (critical_count * 3), 100)
+            elif high_count > 0:
+                normalized_score = min(60 + (high_count * 2), 95)
+            elif medium_count > 0:
+                normalized_score = min(40 + (medium_count * 2), 85)
+            elif low_count > 0:
+                normalized_score = min(20 + (low_count * 1), 60)
+            elif info_count > 0:
+                normalized_score = min(10 + int(info_count * 0.5), 30)
+        
+        return max(normalized_score, 10) if len(findings) > 0 else 5
 
     def _get_owasp_reference(self, finding: Dict[str, Any]) -> str:
         """Bulgu başlığına göre ilgili OWASP Top 10 referansını döndürür."""
