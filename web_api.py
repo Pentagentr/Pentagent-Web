@@ -1801,12 +1801,24 @@ Detaylı rapor oluşturulurken teknik bir sorun oluştu. Tarama verileri kaydedi
         logger.info(f"📊 Risk skoru sadece tool bulgularıyla hesaplanacak: {len(cleaned_findings)} bulgu")
         if len(cleaned_findings) > 0:
             severity_dist = {}
-            for f in cleaned_findings:
-                sev = f.get('severity', 'info')
+            for finding in cleaned_findings:
+                sev = finding.get('severity', 'info').lower()
+                # Normalize severity: 'informational' -> 'info'
+                if sev == 'informational':
+                    sev = 'info'
                 severity_dist[sev] = severity_dist.get(sev, 0) + 1
             logger.info(f"📊 Severity dağılımı: {severity_dist}")
         
-        risk_score = report_gen._calculate_risk_score(cleaned_findings)
+        # Normalize severity for risk score calculation
+        normalized_findings = []
+        for finding in cleaned_findings:
+            normalized_finding = finding.copy()
+            severity = finding.get('severity', 'info').lower()
+            if severity == 'informational':
+                normalized_finding['severity'] = 'info'
+            normalized_findings.append(normalized_finding)
+        
+        risk_score = report_gen._calculate_risk_score(normalized_findings)
         logger.info(f"📊 Hesaplanan risk skoru (SADECE tool bulguları): {risk_score} (Toplam bulgu: {len(cleaned_findings)})")
         
         # Vulnerabilities objesini oluştur (frontend için) - normalized severity ile

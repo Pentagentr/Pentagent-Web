@@ -2746,7 +2746,10 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
                 
                 logger.info(f"✅ LLM raporu oluşturuldu: {len(report)} karakter")
                 
-                # Port ve dizin bilgilerini raporun sonuna ekle (basit ve kısa format)
+                # Bulguları ve port/dizin bilgilerini raporun sonuna ekle (basit ve kısa format)
+                if findings_text and "BULGULAR" not in report:
+                    report += "\n\n---\n\n" + findings_text
+                
                 if ports_text or directories_text:
                     report += "\n\n---\n\n"
                     if ports_text:

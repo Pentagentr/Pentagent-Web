@@ -27,8 +27,7 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
     { id: 'yonetici-ozeti', title: 'Yönetici Özeti', icon: FileText },
     { id: 'metodoloji', title: 'Metodoloji', icon: Shield },
     { id: 'cve-detaylari', title: 'CVE Detayları', icon: Database },
-    { id: 'tool-ciktilari', title: 'Tool Çıktıları', icon: Database },
-    { id: 'oneriler', title: 'Öneriler', icon: CheckCircle }
+    { id: 'tool-ciktilari', title: 'Tool Çıktıları', icon: Database }
   ];
 
   const getSeverityColor = (severity) => {
@@ -1143,7 +1142,6 @@ const ReportViewer = ({ report, isOpen, onClose }) => {
       case 'metodoloji': return renderMetodoloji();
       case 'cve-detaylari': return renderCveDetaylari();
       case 'tool-ciktilari': return renderToolCiktilari();
-      case 'oneriler': return renderOneriler();
       default: return <div className="text-center py-12 text-text-secondary">Yükleniyor...</div>;
     }
   };
