@@ -487,37 +487,37 @@ class EnumWebCrawlerTool(MCPTool):
         return recommendations
 
     def run_tool(self, params: Dict[str, Any]) -> Dict[str, Any]:
-         """
-         CRASH KORUNMALI - Tüm hatalar yakalanır, sistem ASLA çökmez
-         """
-         try:
-             start_url = params.get("url")
-             if not start_url: 
-                 return self._create_final_output(
-                     success=False,
-                     ai_summary="URL parametresi zorunludur.",
-                     error="URL parametresi zorunludur."
-                 )
-             if not SELENIUM_AVAILABLE: 
-                 return self._create_final_output(
-                     success=False,
-                     ai_summary="Gerekli kütüphaneler bulunamadı.",
-                     error="Gerekli kütüphaneler bulunamadı. Lütfen 'pip install selenium webdriver-manager' komutunu çalıştırın."
-                 )
-             if not start_url.startswith(('http://', 'https://')): 
-                 start_url = 'https://' + start_url
-             
+        """
+        CRASH KORUNMALI - Tüm hatalar yakalanır, sistem ASLA çökmez
+        """
+        try:
+            start_url = params.get("url")
+            if not start_url: 
+                return self._create_final_output(
+                    success=False,
+                    ai_summary="URL parametresi zorunludur.",
+                    error="URL parametresi zorunludur."
+                )
+            if not SELENIUM_AVAILABLE: 
+                return self._create_final_output(
+                    success=False,
+                    ai_summary="Gerekli kütüphaneler bulunamadı.",
+                    error="Gerekli kütüphaneler bulunamadı. Lütfen 'pip install selenium webdriver-manager' komutunu çalıştırın."
+                )
+            if not start_url.startswith(('http://', 'https://')): 
+                start_url = 'https://' + start_url
+            
             # OPTİMİZE PARAMETRELER - Dengeli ve etkili tarama
             max_depth = min(params.get("depth", 2), 3)   # Max 3 depth - kapsamlı tarama
             max_pages = min(params.get("max_pages", 25), 50)  # Max 50 sayfa - geniş kapsam
-             
-             context = CrawlContext(
-                 base_url=start_url.rstrip('/'), 
-                 target_domain=urlparse(start_url).netloc, 
-                 max_depth=max_depth, 
-                 max_pages=max_pages
-             )
-             self._add_reasoning(context.ai_reasoning_log, "initialization", f"Hedef {context.target_domain} için tarama başlatılıyor.")
+            
+            context = CrawlContext(
+                base_url=start_url.rstrip('/'), 
+                target_domain=urlparse(start_url).netloc, 
+                max_depth=max_depth, 
+                max_pages=max_pages
+            )
+            self._add_reasoning(context.ai_reasoning_log, "initialization", f"Hedef {context.target_domain} için tarama başlatılıyor.")
              
              try:
                  # Selenium'u direkt senkron olarak çalıştır
