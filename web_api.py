@@ -847,8 +847,9 @@ def _filter_cve_results(results: List[Any], query_info: Dict[str, Any]) -> List[
     product = query_info.get('product')
     vendor = query_info.get('vendor')
     exact_match = query_info.get('exact_product_match', False)
-    domain = query_info.get('domain')  # container, os, cloud, iot
+    domain = query_info.get('domain')  # container, os, cloud, iot, web
     language = query_info.get('language')  # python, java, php, javascript
+    protocol_type = query_info.get('protocol_type')  # protocol, product, os_mechanism
     is_pickle_query = query_info.get('is_pickle_query', False)
     negative_keywords = query_info.get('negative_keywords', [])  # Drop edilecek kelimeler
     
