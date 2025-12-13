@@ -1,5 +1,0 @@
-[33mc9b7e3e[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m fix
-[33me4df94d[m fix: Yapay bulgu uretme tamamen kaldirildi - sadece gercek vulnerabilities/findings parse ediliyor
-[33m8627eac[m fix: Web crawler optimize edildi - timeout 10s, depth 3, pages 50, eksik _add_reasoning eklendi
-[33md5fb51c[m fix: Report API optimize edildi - timeout, data filtering, error handling
-[33m128d2fb[m fix: AI prompt'larında tech_detector  enum_tech_detector düzeltildi
