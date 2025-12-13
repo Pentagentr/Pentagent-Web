@@ -3050,8 +3050,8 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
                         report_parts.append(f"\n+ {len(all_directories) - 20} dizin/dosya daha...")
                     report_parts.append("")
             
-        # Detaylı Bulgular
-        if state.findings:
+            # Detaylı Bulgular
+            if state.findings:
             report_parts.append("## 5. DETAYLI BULGULAR")
             report_parts.append("")
             
