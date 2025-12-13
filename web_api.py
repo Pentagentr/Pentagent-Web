@@ -560,6 +560,8 @@ async def optimize_rag_query(user_query: str) -> Dict[str, Any]:
         'year': None,
         'product': None,
         'vendor': None,
+        'domain': None,
+        'negative_keywords': [],
         'exact_product_match': False
     }
     
@@ -574,23 +576,29 @@ KULLANICI SORGUSU: "{user_query}"
 
 GÖREV:
 1. Kullanıcının sorgusunu CVE araması için OPTIMIZE ET
-2. Sorgudan YIL, ÜRÜN ADI ve VENDOR bilgilerini çıkar
+2. Sorgudan YIL, ÜRÜN ADI, VENDOR, DOMAIN ve NEGATIVE KEYWORDS bilgilerini çıkar
 3. Kesin eşleşme gerekip gerekmediğini belirle
 
 KURALLAR:
 1. KISA ve NET sorgu (max 5-7 kelime)
-2. YIL varsa çıkar (örn: "2021", "2024")
-3. ÜRÜN ADI varsa çıkar (örn: "Log4j", "WordPress", "Apache")
-4. VENDOR varsa çıkar (örn: "Apache", "Microsoft")
-5. Kesin eşleşme: Eğer spesifik ürün adı varsa (örn: "Apache Log4j"), sadece o ürüne ait CVE'ler isteniyor demektir
-6. Gereksiz kelimeleri kaldır ("nasıl", "neden", "ne", vb.)
-7. İngilizce terimleri tercih et
+2. YIL varsa MUTLAKA çıkar (örn: "2021", "2024") - CVE ID'den veya published date'ten
+3. ÜRÜN ADI varsa çıkar (örn: "Log4j", "WordPress", "Kubernetes")
+4. VENDOR varsa çıkar (örn: "Apache", "Microsoft", "TP-Link")
+5. DOMAIN belirle: container/kubernetes → "container", os/kernel → "os", cloud → "cloud", iot/router → "iot"
+6. NEGATIVE KEYWORDS: Benzer ama farklı ürünleri belirle
+   - Log4j → ["logback", "slf4j", "java.util.logging"]
+   - Kubernetes → ["windows kernel", "linux kernel"]
+   - Core → [".NET Core", "ASP.NET Core"] (eğer query'de "core" başka bir şeyse)
+7. Kesin eşleşme: Eğer spesifik ürün adı varsa (örn: "Apache Log4j"), sadece o ürüne ait CVE'ler isteniyor demektir
+8. Gereksiz kelimeleri kaldır ("nasıl", "neden", "ne", vb.)
+9. İngilizce terimleri tercih et
 
 ÖRNEKLER:
-"Apache Log4j 2021" → query: "Apache Log4j", product: "Log4j", vendor: "Apache", year: 2021, exact_product_match: true
+"Apache Log4j 2021" → query: "Apache Log4j", product: "Log4j", vendor: "Apache", year: 2021, exact_product_match: true, negative_keywords: ["logback", "slf4j"]
+"TP-Link router authentication bypass" → query: "TP-Link router authentication bypass", vendor: "TP-Link", product: "router", exact_product_match: true, domain: "iot"
+"Kubernetes privilege escalation" → query: "Kubernetes privilege escalation", product: "Kubernetes", exact_product_match: true, domain: "container", negative_keywords: ["windows kernel", "linux kernel"]
 "WordPress XSS 2024" → query: "WordPress XSS", product: "WordPress", year: 2024, exact_product_match: true
 "SQL injection" → query: "SQL injection", exact_product_match: false
-"Apache vulnerabilities" → query: "Apache vulnerabilities", vendor: "Apache", exact_product_match: false
 
 JSON formatında döndür:
 {{
@@ -598,6 +606,8 @@ JSON formatında döndür:
     "year": yıl sayısı veya null,
     "product": "ürün adı" veya null,
     "vendor": "vendor adı" veya null,
+    "domain": "container|os|cloud|iot" veya null,
+    "negative_keywords": ["kelime1", "kelime2"] veya [],
     "exact_product_match": true/false
 }}"""
 
@@ -636,6 +646,17 @@ JSON formatında döndür:
                 vendor = parsed.get('vendor')
                 if vendor:
                     vendor = vendor.strip('"\'` ')
+                domain = parsed.get('domain')
+                if domain:
+                    domain = domain.strip('"\'` ')
+                negative_keywords = parsed.get('negative_keywords', [])
+                if isinstance(negative_keywords, str):
+                    # String ise listeye çevir
+                    negative_keywords = [kw.strip('"\'` ') for kw in negative_keywords.split(',') if kw.strip()]
+                elif isinstance(negative_keywords, list):
+                    negative_keywords = [str(kw).strip('"\'` ') for kw in negative_keywords if kw]
+                else:
+                    negative_keywords = []
                 exact_match = parsed.get('exact_product_match', False)
                 
                 # Çok uzunsa kes (max 100 karakter)
@@ -647,22 +668,60 @@ JSON formatında döndür:
                     'year': year,
                     'product': product,
                     'vendor': vendor,
+                    'domain': domain,
+                    'negative_keywords': negative_keywords,
                     'exact_product_match': exact_match
                 }
                 
                 logger.info(f"🤖 Query optimized: '{user_query}' → '{optimized_query}'")
-                logger.info(f"   📅 Year: {year}, 📦 Product: {product}, 🏢 Vendor: {vendor}, 🎯 Exact match: {exact_match}")
+                logger.info(f"   📅 Year: {year}, 📦 Product: {product}, 🏢 Vendor: {vendor}, 🌐 Domain: {domain}, 🚫 Negative: {negative_keywords}, 🎯 Exact match: {exact_match}")
                 return result
             except json.JSONDecodeError:
                 logger.warning("JSON parse edilemedi, basit query kullanılıyor")
         
-        # Fallback: Basit query
+        # Fallback: Basit query - Yıl ve ürün bilgilerini manuel çıkar
         optimized_query = response_text.strip('"\'` ')
         if len(optimized_query) > 100:
             optimized_query = optimized_query[:100]
         
+        # Fallback: Yıl ve ürün bilgilerini query'den çıkar
+        import re
+        fallback_year = None
+        fallback_product = None
+        fallback_vendor = None
+        fallback_domain = None
+        fallback_negative = []
+        
+        # Yıl çıkar (4 haneli sayı)
+        year_match = re.search(r'\b(19|20)\d{2}\b', user_query)
+        if year_match:
+            try:
+                fallback_year = int(year_match.group(0))
+            except:
+                pass
+        
+        # Domain çıkar
+        query_lower = user_query.lower()
+        if any(kw in query_lower for kw in ['kubernetes', 'container', 'docker', 'pod']):
+            fallback_domain = 'container'
+            fallback_negative = ['windows kernel', 'linux kernel']
+        elif any(kw in query_lower for kw in ['kernel', 'driver', 'os ', 'operating system']):
+            fallback_domain = 'os'
+        elif any(kw in query_lower for kw in ['router', 'firmware', 'iot']):
+            fallback_domain = 'iot'
+        elif any(kw in query_lower for kw in ['cloud', 'aws', 'azure', 'gcp']):
+            fallback_domain = 'cloud'
+        
+        # Negative keywords (Log4j için)
+        if 'log4j' in query_lower:
+            fallback_negative = ['logback', 'slf4j', 'java.util.logging']
+        
         default_response['query'] = optimized_query
+        default_response['year'] = fallback_year
+        default_response['domain'] = fallback_domain
+        default_response['negative_keywords'] = fallback_negative
         logger.info(f"🤖 Query optimized (fallback): '{user_query}' → '{optimized_query}'")
+        logger.info(f"   📅 Year: {fallback_year}, 🌐 Domain: {fallback_domain}, 🚫 Negative: {fallback_negative}")
         return default_response
         
     except Exception as e:
