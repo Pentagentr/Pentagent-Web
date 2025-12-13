@@ -8,7 +8,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -702,11 +702,25 @@ async def rag_search(request: Dict[str, Any]):
         
         logger.info(f"🔍 RAG Search: query='{original_query}', limit={limit} (requested={requested_limit})")
         
-        # 🤖 AI ile query'yi optimize et
-        optimized_query = await optimize_rag_query(original_query)
+        # 🤖 AI ile query'yi optimize et ve filtre bilgilerini çıkar
+        query_info = await optimize_rag_query(original_query)
+        optimized_query = query_info.get('query', original_query)
         
         # CVE araması yap (optimize edilmiş query ile, reranker ZORUNLU)
-        results = rag_service.search_cve(optimized_query, limit=limit, severity=severity, use_reranker=True)
+        # Daha fazla sonuç çek (filtreleme için)
+        results = rag_service.search_cve(
+            optimized_query, 
+            limit=limit * 3,  # Daha fazla sonuç çek (filtreleme için)
+            severity=severity, 
+            use_reranker=True,
+            query_info=query_info  # Filtre bilgilerini geç
+        )
+        
+        # Sonuçları filtrele (yıl, ürün, vendor kontrolü)
+        results = _filter_cve_results(results, query_info)
+        
+        # Limit'e göre kes
+        results = results[:limit]
         
         logger.info(f"✅ RAG Search tamamlandı: {len(results)} sonuç döndürülüyor (reranker aktif)")
         
@@ -716,6 +730,7 @@ async def rag_search(request: Dict[str, Any]):
             "original_query": original_query,
             "optimized_query": optimized_query,
             "query": optimized_query,  # Backward compatibility
+            "query_info": query_info,  # Filtre bilgileri
             "total_results": len(results),
             "severity_filter": severity,
             "results": [r.to_dict() for r in results]
