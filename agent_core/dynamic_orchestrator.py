@@ -452,10 +452,25 @@ Hangi hedefi taramak istersin?"""
                 
             else:
                 error_msg = result.get("error", "Bilinmeyen hata")
-                await status_callback(
-                    f"⚠️ {tool_name} başarısız: {error_msg[:100]}", 
-                    "tool_error"
-                )
+                
+                # ÖNEMLİ: Internal hatalar kullanıcıya gösterilmemeli
+                internal_errors = ["CHROME_NOT_AVAILABLE", "bulunamadı", "not found", "Tool '"]
+                should_hide = any(err in error_msg for err in internal_errors)
+                
+                # Chrome/WebDriver hatalarını da gizle
+                chrome_keywords = ["Chrome", "WebDriver", "chromedriver", "Selenium"]
+                is_chrome_error = any(keyword in error_msg for keyword in chrome_keywords)
+                
+                if should_hide or is_chrome_error:
+                    # Sadece loglara yaz, kullanıcıya gösterme
+                    logger.debug(f"Internal error (gizlendi): {tool_name} - {error_msg}")
+                    # Sessizce devam et - orchestrator otomatik alternatif kullanacak
+                else:
+                    # Gerçek hatalar kullanıcıya gösterilebilir
+                    await status_callback(
+                        f"❌ {tool_name} başarısız: {error_msg[:100]}", 
+                        "tool_error"
+                    )
             
             return result
             
@@ -1119,26 +1134,59 @@ JSON ÇIKTI (Reasoning MUTLAKA TÜRKÇE):
         """Başarısız tool için karar ver - OPTİMİZE"""
         error_msg = error_result.get("error", "Bilinmeyen hata")
         
-        # ÖNEMLİ: Selenium/Chrome hatası mı? Otomatik olarak alternatife geç
+        # ÖNEMLİ: CHROME_NOT_AVAILABLE özel hata kodu - sessizce alternatife geç
+        if "CHROME_NOT_AVAILABLE" in error_msg:
+            logger.info(f"🔄 CHROME_NOT_AVAILABLE: {failed_tool} → alternatif")
+            
+            if failed_tool == "verify_xss":
+                # Kullanıcıya mesaj gösterme - sessizce geç
+                logger.debug("verify_xss → verify_xss_http (otomatik)")
+                return {
+                    "action": "continue",
+                    "tool": "verify_xss_http",
+                    "params": {"url": self.current_target, "parameter": "search", "method": "GET"},
+                    "reasoning": "HTTP-based XSS testi kullanılıyor"
+                }
+            elif failed_tool == "enum_web_crawler":
+                logger.debug("enum_web_crawler → enum_directory_bruteforce (otomatik)")
+                return {
+                    "action": "continue",
+                    "tool": "enum_directory_bruteforce",
+                    "params": {"url": self.current_target, "wordlist_type": "general"},
+                    "reasoning": "Directory bruteforce kullanılıyor"
+                }
+        
+        # Tool bulunamadı hatası - sessizce atla
+        if "bulunamadı" in error_msg or "not found" in error_msg.lower():
+            logger.debug(f"Tool bulunamadı hatası filtrelendi: {failed_tool}")
+            # Sonraki tool'a geç
+            return {
+                "action": "continue",
+                "tool": "enum_directory_bruteforce",  # Fallback
+                "params": {"url": self.current_target, "wordlist_type": "general"},
+                "reasoning": "Alternatif tool kullanılıyor"
+            }
+        
+        # Genel Selenium/Chrome hatası mı?
         chrome_keywords = ["Selenium", "WebDriver", "Chrome binary", "Chrome", "chromedriver", "cannot find Chrome"]
         if any(keyword in error_msg for keyword in chrome_keywords):
             logger.info(f"🔄 Chrome/Selenium hatası tespit edildi: {failed_tool}")
             
             if failed_tool == "verify_xss":
-                await self.status_callback("🔄 Selenium/Chrome mevcut değil → verify_xss_http", "info")
+                logger.debug("verify_xss → verify_xss_http")
                 return {
                     "action": "continue",
                     "tool": "verify_xss_http",
                     "params": {"url": self.current_target, "parameter": "search", "method": "GET"},
-                    "reasoning": "Selenium/Chrome mevcut değil (Render ortamı), HTTP-based XSS testi kullanılıyor"
+                    "reasoning": "HTTP-based XSS testi kullanılıyor"
                 }
             elif failed_tool == "enum_web_crawler":
-                await self.status_callback("🔄 Chrome binary yok → enum_directory_bruteforce", "info")
+                logger.debug("enum_web_crawler → enum_directory_bruteforce")
                 return {
                     "action": "continue",
                     "tool": "enum_directory_bruteforce",
                     "params": {"url": self.current_target, "wordlist_type": "general"},
-                    "reasoning": "Web crawler Chrome gerektirir, directory bruteforce (HTTP-only) alternatifi kullanılıyor"
+                    "reasoning": "Directory bruteforce kullanılıyor"
                 }
         
         prompt = f"""
