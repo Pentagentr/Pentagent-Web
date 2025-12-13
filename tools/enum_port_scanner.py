@@ -42,24 +42,24 @@ logger = logging.getLogger(__name__)
 # 'exploit' gibi tehlikeli script kategorileri kaldırıldı.
 SCAN_PROFILES: Dict[str, Dict[str, str]] = {
     "quick": {
-        "args": "-sT -T4 --top-ports 20 --min-rate 1000",  # OPTIMIZE: 100→20 port, TCP Connect, hızlı rate
-        "description": "Çok Hızlı Tarama: En yaygın 20 port, TCP Connect scan (10-15s)."
+        "args": "-sT -T4 -p 1-1000 --min-rate 1000",  # FIX: 1-1000 port aralığı - daha kapsamlı
+        "description": "Hızlı Tarama: 1-1000 port aralığı, TCP Connect scan (30-60s)."
     },
     "default": {
-        "args": "-sS -sV -T4 --top-ports 1000 -O -A --script vuln",
-        "description": "Standart Tarama: En yaygın 1000 port, servis/versiyon/OS tespiti, vulnerability scripts."
+        "args": "-sS -sV -T4 -p 1-65535 -O -A --script vuln",  # FIX: Tüm portları tara
+        "description": "Standart Tarama: Tüm portlar (1-65535), servis/versiyon/OS tespiti, vulnerability scripts."
     },
     "comprehensive": {
-        "args": "-sS -sV -sC -O -A --top-ports 1000 -T4 --script vuln,auth,discovery",
-        "description": "Kapsamlı Tarama: Top 1000 port, servis/versiyon/OS tespiti, vulnerability/auth/discovery scripts."
+        "args": "-sS -sV -sC -O -A -p- -T4 --script vuln,auth,discovery",  # FIX: -p- tüm portlar
+        "description": "Kapsamlı Tarama: Tüm portlar, servis/versiyon/OS tespiti, vulnerability/auth/discovery scripts."
     },
     "aggressive": {
         "args": "-sS -sV -sC -O -A -p- -T4 --script vuln,auth,discovery,exploit",
         "description": "Agresif Tarama: Tüm 65535 port, tam servis/versiyon/OS tespiti, exploit scripts. (ÇOK YAVAŞ)"
     },
     "stealth": {
-        "args": "-sS -T2 -f --top-ports 1000 --scan-delay 1s",
-        "description": "Gizli Tarama: SYN scan, fragment packets, yavaş timing, IDS bypass."
+        "args": "-sS -T2 -f -p 1-65535 --scan-delay 1s",  # FIX: Tüm portları tara
+        "description": "Gizli Tarama: SYN scan, fragment packets, yavaş timing, IDS bypass, tüm portlar."
     }
 }
 
@@ -320,21 +320,43 @@ class PortScannerModule(MCPTool):
                                                  başarısız ise (None, error_message).
         """
         if not self._is_nmap_installed():
-            # Nmap yoksa: En yaygın portlarda hızlı TCP connect fallback taraması (saf Python)
+            # Nmap yoksa: Genişletilmiş port listesi ile TCP connect fallback taraması (saf Python)
             try:
                 import socket
-                self._add_reasoning(reasoning_log, "fallback_scan", "Nmap bulunamadı. Python tabanlı hızlı port taraması başlatılıyor (top common ports).")
+                import concurrent.futures
+                self._add_reasoning(reasoning_log, "fallback_scan", "Nmap bulunamadı. Python tabanlı kapsamlı port taraması başlatılıyor (1-1000 port aralığı).")
                 parsed_targets = self._parse_target_input(target)
                 host = parsed_targets.split()[0] if parsed_targets else target
-                common_ports = [80, 443, 22, 21, 25, 110, 143, 587, 993, 995, 8080, 8443, 3306, 5432, 6379, 27017, 3389, 5900, 445, 139]
+                
+                # GENİŞLETİLMİŞ PORT LİSTESİ: Kritik portlar + yaygın portlar + geniş aralık
+                critical_ports = [21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445, 993, 995, 1723, 3306, 3389, 5432, 5900, 8080, 8443]
+                common_ports = list(range(1, 1001))  # 1-1000 aralığı - kapsamlı tarama
+                all_ports = sorted(list(set(critical_ports + common_ports)))
+                
                 open_tcp = {}
-                for p in common_ports:
+                
+                # Paralel tarama için thread pool
+                def check_port(port):
                     try:
-                        with socket.create_connection((host, p), timeout=1.0):
-                            open_tcp[p] = {"state": "open", "name": "unknown", "product": "", "version": "", "cpe": ""}
+                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        sock.settimeout(0.5)  # Hızlı timeout
+                        result = sock.connect_ex((host, port))
+                        sock.close()
+                        if result == 0:
+                            return port
+                        return None
                     except Exception:
-                        # closed/filtered - ignore
-                        continue
+                        return None
+                
+                # Paralel port kontrolü - daha hızlı
+                with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
+                    futures = {executor.submit(check_port, p): p for p in all_ports}
+                    for future in concurrent.futures.as_completed(futures):
+                        port = future.result()
+                        if port:
+                            open_tcp[port] = {"state": "open", "name": "unknown", "product": "", "version": "", "cpe": ""}
+                
+                self._add_reasoning(reasoning_log, "fallback_complete", f"Fallback tarama tamamlandı: {len(open_tcp)} açık port bulundu.")
                 scan_data = {"scan": {host: {"tcp": open_tcp}}}
                 return scan_data, None
             except Exception as e:
