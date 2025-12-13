@@ -88,10 +88,11 @@ class EnumDirectoryBruteforcerTool(MCPTool):
         )
 
     async def _establish_baseline(self, session: aiohttp.ClientSession, base_url: str) -> Optional[Baseline]:
-        """Sunucunun var olmayan bir yola nasıl tepki verdiğini öğrenir."""
+        """Sunucunun var olmayan bir yola nasıl tepki verdiğini öğrenir - CRASH KORUNMALI."""
         random_path = f"/{hashlib.md5(str(random.random()).encode()).hexdigest()}"
         try:
-            async with session.get(urljoin(base_url, random_path), timeout=10, allow_redirects=False) as r:
+            timeout = aiohttp.ClientTimeout(total=15, connect=10)
+            async with session.get(urljoin(base_url, random_path), timeout=timeout, allow_redirects=False) as r:
                 content = await r.read()
                 baseline = Baseline(
                     status=r.status,
@@ -101,8 +102,11 @@ class EnumDirectoryBruteforcerTool(MCPTool):
                 )
                 logger.info(f"Baseline tespiti: Status={baseline.status}, Hash={baseline.content_hash[:10]}..., Redirect={baseline.redirect_location}")
                 return baseline
+        except (aiohttp.ClientError, asyncio.TimeoutError, aiohttp.ClientConnectorError) as e:
+            logger.debug(f"Baseline tespiti yapılamadı (normal): {type(e).__name__}")
+            return None
         except Exception as e:
-            logger.warning(f"Baseline tespiti yapılamadı: {e}")
+            logger.debug(f"Baseline tespiti beklenmeyen hata: {type(e).__name__}: {str(e)[:100]}")
             return None
 
     def _build_wordlist(self, wordlist_type: str) -> Set[str]:
@@ -138,11 +142,12 @@ class EnumDirectoryBruteforcerTool(MCPTool):
         return final_list
 
     async def _check_path(self, session: aiohttp.ClientSession, path: str, context: BruteforceContext):
-        """Tek bir yolu kontrol eder ve baseline'a göre filtreler."""
+        """Tek bir yolu kontrol eder ve baseline'a göre filtreler - CRASH KORUNMALI."""
         full_url = urljoin(context.base_url, path)
         try:
             context.checked_paths_count += 1
-            async with session.get(full_url, timeout=15, allow_redirects=False) as r:
+            timeout = aiohttp.ClientTimeout(total=15, connect=10)
+            async with session.get(full_url, timeout=timeout, allow_redirects=False) as r:
                 # 1. WAF/Bloklama tespiti
                 if r.status in [403, 429, 503]:
                     if not context.waf_detected:
@@ -188,10 +193,11 @@ class EnumDirectoryBruteforcerTool(MCPTool):
                 context.found_paths.append(finding)
                 logger.info(f"✅ Bulundu (404 ama farklı): [{finding['status_code']}] {finding['url']} (Boyut: {finding['content_length']})")
 
-        except (aiohttp.ClientError, asyncio.TimeoutError):
+        except (aiohttp.ClientError, asyncio.TimeoutError, aiohttp.ClientConnectorError):
             pass # Bağlantı hatalarını sessizce geç
         except Exception as e:
-            logger.debug(f"Hata {full_url}: {e}")
+            logger.debug(f"Path kontrol hatası (sessizce geçildi): {full_url} - {type(e).__name__}: {str(e)[:100]}")
+            # Crash'e izin verme - sadece logla ve devam et
 
     def _build_final_json(self, context: BruteforceContext, error: Exception = None) -> Dict[str, Any]:
         if error:
@@ -232,14 +238,16 @@ class EnumDirectoryBruteforcerTool(MCPTool):
                 )
             )
         if any('.env' in f['path'] for f in critical_findings):
-            recommendations.append(
-                self._create_recommendation(
-                    priority=PriorityLevel.CRITICAL,
-                    tool_name="vuln_lfi_detector",
-                    reason=".env dosyası bulundu. Hassas konfigürasyon bilgileri (API key, DB şifresi) içerebilir.",
-                    params={"url": f['url']}
+            env_finding = next((f for f in critical_findings if '.env' in f['path']), None)
+            if env_finding:
+                recommendations.append(
+                    self._create_recommendation(
+                        priority=PriorityLevel.CRITICAL,
+                        tool_name="vuln_lfi_detector",
+                        reason=".env dosyası bulundu. Hassas konfigürasyon bilgileri (API key, DB şifresi) içerebilir.",
+                        params={"url": env_finding.get('url', context.base_url)}
+                    )
                 )
-            )
         if high_findings:
             recommendations.append(
                 self._create_recommendation(
@@ -338,23 +346,49 @@ class EnumDirectoryBruteforcerTool(MCPTool):
                     task.add_done_callback(lambda t: rate_limiter.release())
                     tasks.append(task)
                 
-                await asyncio.gather(*tasks)
+                # CRASH KORUNMALI: Tüm task'ları exception handling ile çalıştır
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                # Exception'ları logla ama crash'e izin verme
+                for i, result in enumerate(results):
+                    if isinstance(result, Exception):
+                        logger.debug(f"Task {i} hatası (sessizce geçildi): {type(result).__name__}: {str(result)[:100]}")
 
             return self._build_final_json(context)
-        except aiohttp.ClientConnectorError as e:
+        except (aiohttp.ClientConnectorError, aiohttp.ClientError) as e:
+            logger.warning(f"Bağlantı hatası (graceful): {type(e).__name__}")
+            # Kısmi sonuç varsa döndür, yoksa hata döndür
+            if context.checked_paths_count > 0:
+                logger.info(f"Kısmi sonuç döndürülüyor: {context.checked_paths_count} yol kontrol edildi")
+                return self._build_final_json(context)
             return self._create_final_output(
                 success=False,
                 ai_summary=f"Bağlantı hatası: Hedef URL '{context.base_url}' ulaşılamaz.",
                 ai_reasoning=context.ai_reasoning_log,
-                error=f"Bağlantı hatası: Hedef URL '{context.base_url}' ulaşılamaz. Hata: {e}"
+                error=f"Bağlantı hatası: {type(e).__name__}"
             )
-        except Exception as e:
-            logger.error(f"Execute metodunda kritik hata: {repr(e)}", exc_info=True)
+        except asyncio.TimeoutError as e:
+            logger.warning(f"Timeout hatası (graceful): {type(e).__name__}")
+            # Kısmi sonuç varsa döndür
+            if context.checked_paths_count > 0:
+                logger.info(f"Kısmi sonuç döndürülüyor: {context.checked_paths_count} yol kontrol edildi")
+                return self._build_final_json(context)
             return self._create_final_output(
                 success=False,
-                ai_summary="Dizin keşfi sırasında kritik bir hata oluştu.",
+                ai_summary="Tarama zaman aşımına uğradı.",
                 ai_reasoning=context.ai_reasoning_log,
-                error=str(e)
+                error="Timeout"
+            )
+        except Exception as e:
+            logger.error(f"Kritik hata (graceful fail): {type(e).__name__}: {str(e)[:200]}", exc_info=False)
+            # Kısmi sonuç varsa döndür - sistem ASLA çökmesin
+            if context.checked_paths_count > 0:
+                logger.info(f"Kısmi sonuç döndürülüyor: {context.checked_paths_count} yol kontrol edildi")
+                return self._build_final_json(context)
+            return self._create_final_output(
+                success=False,
+                ai_summary="Dizin keşfi sırasında bir hata oluştu ama sistem korundu.",
+                ai_reasoning=context.ai_reasoning_log,
+                error=f"{type(e).__name__}: {str(e)[:100]}"
             )
 
 async def main():
@@ -397,97 +431,11 @@ async def main():
         print("\n Eylem Onerileri:")
         for rec in recommendations: print(f"  - [{rec['priority'].upper()}] -> Calistir: {rec['tool']}\n    Neden: {rec['reason']}")
     
-        print("\nAI Dusunce Akisi:")
+    print("\nAI Dusunce Akisi:")
     for thought in result.get("ai_reasoning", []):
         print(f"   [{thought['phase']}] {thought['thought'].encode('ascii', 'ignore').decode('ascii')}")
 
     print("="*50)
-
-    def _generate_dynamic_directory_recommendations(self, critical_findings: List[Dict], high_findings: List[Dict], info_findings: List[Dict], context: BruteforceContext) -> List[Dict]:
-        """Dinamik directory bruteforce önerileri oluşturur."""
-        recommendations = []
-        
-        # Kritik bulgular için özel öneriler
-        if critical_findings:
-            for finding in critical_findings[:2]:  # İlk 2 kritik finding
-                path_lower = finding['path'].lower()
-                if '.git' in path_lower:
-                    recommendations.append({
-                        "priority": "critical",
-                        "tool": "human_intervention_alert",
-                        "reason": f"🚨 KRİTİK: .git dizini bulundu. Kaynak kod sızıntısı riski var.",
-                        "params": {
-                            "path": finding['path'],
-                            "url": finding['url'],
-                            "vulnerability_type": "Source Code Exposure",
-                            "urgent_review": True,
-                            "rag_query": f"Git directory exposure remediation for {finding['path']}"
-                        },
-                        "expert_context": f"Git dizini için kritik analiz. {finding['path']} dizini kaynak kod sızıntısına yol açabilir. Detaylı güvenlik analizi ve remediation planı gerekli."
-                    })
-                elif '.env' in path_lower:
-                    recommendations.append({
-                        "priority": "critical",
-                        "tool": "human_intervention_alert",
-                        "reason": f"🚨 KRİTİK: .env dosyası bulundu. Hassas konfigürasyon bilgileri içerebilir.",
-                        "params": {
-                            "path": finding['path'],
-                            "url": finding['url'],
-                            "vulnerability_type": "Configuration Exposure",
-                            "urgent_review": True,
-                            "rag_query": f"Environment file exposure remediation for {finding['path']}"
-                        },
-                        "expert_context": f"Environment dosyası için kritik analiz. {finding['path']} dosyası API key, database şifresi gibi hassas bilgiler içerebilir. Detaylı güvenlik analizi ve remediation planı gerekli."
-                    })
-        
-        # Yüksek riskli bulgular için özel öneriler
-        if high_findings:
-            for finding in high_findings[:2]:  # İlk 2 yüksek riskli finding
-                path_lower = finding['path'].lower()
-                if 'admin' in path_lower:
-                    recommendations.append({
-                        "priority": "high",
-                        "tool": "vuln_dependency_scanner",
-                        "reason": f"⚠️ YÜKSEK RİSK: Admin paneli bulundu. Yetkilendirme kontrolleri kontrol edilmeli.",
-                        "params": {
-                            "path": finding['path'],
-                            "url": finding['url'],
-                            "vulnerability_type": "Admin Panel Exposure",
-                            "rag_query": f"Admin panel security analysis for {finding['path']}"
-                        },
-                        "expert_context": f"Admin paneli için kritik analiz. {finding['path']} dizini admin paneline erişim sağlayabilir. Yetkilendirme kontrolleri ve güvenlik analizi gerekli."
-                    })
-                elif 'login' in path_lower:
-                    recommendations.append({
-                        "priority": "high",
-                        "tool": "vuln_dependency_scanner",
-                        "reason": f"⚠️ YÜKSEK RİSK: Login sayfası bulundu. Authentication kontrolleri kontrol edilmeli.",
-                        "params": {
-                            "path": finding['path'],
-                            "url": finding['url'],
-                            "vulnerability_type": "Login Page Exposure",
-                            "rag_query": f"Login page security analysis for {finding['path']}"
-                        },
-                        "expert_context": f"Login sayfası için kritik analiz. {finding['path']} dizini login sayfasına erişim sağlayabilir. Authentication kontrolleri ve güvenlik analizi gerekli."
-                    })
-        
-        # Genel directory güvenlik önerileri
-        if critical_findings or high_findings:
-            recommendations.append({
-                "priority": "high",
-                "tool": "vuln_dependency_scanner",
-                "reason": f"🔍 DİZİN GÜVENLİK ANALİZİ: {len(critical_findings)} kritik, {len(high_findings)} yüksek riskli dizin bulundu. Güvenlik kontrolleri gözden geçirilmeli.",
-                "params": {
-                    "target_url": context.base_url,
-                    "critical_findings": len(critical_findings),
-                    "high_findings": len(high_findings),
-                    "total_findings": len(context.found_paths),
-                    "directory_security_review": True
-                },
-                "expert_context": f"Dizin güvenlik analizi için kapsamlı inceleme. {len(critical_findings)} kritik, {len(high_findings)} yüksek riskli dizin için detaylı güvenlik kontrolleri ve access control mekanizmaları analiz edilmeli."
-            })
-        
-        return recommendations
 
 if __name__ == "__main__":
     asyncio.run(main())

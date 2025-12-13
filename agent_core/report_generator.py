@@ -1,11 +1,11 @@
-# agent_core/report_generator.py
+
 
 import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 from agent_core.state import AgentState
 
-# PDF generation imports
+
 try:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -16,7 +16,7 @@ try:
 except ImportError:
     PDF_GENERATION_AVAILABLE = False
 
-# LLM Processing entegrasyonu
+
 try:
     from src.llm_processing.llm_report_generator import LLMReportGenerator
     from src.llm_processing.domain_vocab_injector import DomainVocabInjector
@@ -39,14 +39,14 @@ class ReportGenerator:
             self.llm_generator = None
             self.vocab_injector = None
         
-        # RAG entegrasyonu için CVE/CVSS veritabanı
+
         self.cve_database = {}
         self.cvss_cache = {}
         logger.info("Professional Pentest Report Generator başlatıldı - RAG entegrasyonu hazır.")
         
-    # ==========================================================================
-    # YENİ VE GÜNCELLENMİŞ YARDIMCI FONKSİYONLAR
-    # ==========================================================================
+
+
+
 
     def _calculate_risk_score(self, findings: List[Dict[str, Any]]) -> int:
         """
@@ -58,7 +58,7 @@ class ReportGenerator:
         
         total_score = 0
         
-        # 1. SEVERITY BAZLI SKORLAMA (EN YÜKSEK ÖNCELİK)
+
         severity_weights = {
             'critical': 15,  # Her kritik bulgu +15
             'high': 10,      # Her yüksek bulgu +10
@@ -72,8 +72,8 @@ class ReportGenerator:
             weight = severity_weights.get(severity, 1)
             total_score += weight
         
-        # 2. TOOL ÇIKTILARININ DETAY SEVİYESİNE GÖRE BONUS
-        # Port scanning
+
+
         open_ports = [f for f in findings if 'port' in f.get('title', '').lower() or 'service' in f.get('title', '').lower()]
         if len(open_ports) >= 10:
             total_score += 20  # Çok fazla açık port = kritik
@@ -82,10 +82,10 @@ class ReportGenerator:
         elif len(open_ports) >= 1:
             total_score += 5
         
-        # Endpoint discovery
+
         endpoints = [f for f in findings if 'endpoint' in f.get('title', '').lower() or 'api' in f.get('title', '').lower()]
         if len(endpoints) >= 1:  # Endpoint bulgusu varsa
-            # Endpoint count'u title'dan çıkar
+
             for ep in endpoints:
                 title = ep.get('title', '')
                 if 'endpoint bulundu' in title.lower():
@@ -105,12 +105,12 @@ class ReportGenerator:
                     except:
                         total_score += 10  # Parse edemediyse default
         
-        # Web crawling (forms, paths, pages)
+
         web_findings = [f for f in findings if 'crawling' in f.get('title', '').lower() or 'form' in f.get('title', '').lower()]
         if len(web_findings) >= 1:
             for wf in web_findings:
                 title = wf.get('title', '')
-                # Form count'u çıkar
+
                 if 'form' in title.lower():
                     try:
                         form_count = int([x for x in title.split() if 'form' in x.lower()][0].split('form')[0].strip().split()[-1])
@@ -124,7 +124,7 @@ class ReportGenerator:
                     except:
                         total_score += 10
         
-        # Directory bruteforce
+
         directory_findings = [f for f in findings if 'directory' in f.get('title', '').lower() or 'dizin' in f.get('title', '').lower()]
         for df in directory_findings:
             severity = df.get('severity', '').lower()
@@ -135,7 +135,7 @@ class ReportGenerator:
             elif severity == 'info':
                 total_score += 2   # Info dizin (images vb)
         
-        # Teknoloji tespiti
+
         tech_findings = [f for f in findings if 'teknoloji' in f.get('title', '').lower() or 'technology' in f.get('title', '').lower()]
         if len(tech_findings) >= 1:
             for tf in tech_findings:
@@ -152,7 +152,7 @@ class ReportGenerator:
                 except:
                     total_score += 5
         
-        # Subdomain discovery
+
         subdomain_findings = [f for f in findings if 'subdomain' in f.get('title', '').lower() or 'altdomain' in f.get('title', '').lower()]
         if len(subdomain_findings) >= 1:
             for sf in subdomain_findings:
@@ -169,13 +169,13 @@ class ReportGenerator:
                 except:
                     total_score += 5
         
-        # 3. GERÇEK ZAFİYET TESPİTLERİ (SQL, XSS, LFI vb)
+
         real_vulns = [f for f in findings if any(keyword in f.get('title', '').lower() 
                      for keyword in ['sql', 'xss', 'injection', 'lfi', 'rfi', 'ssrf', 'xxe', 'rce', 'csrf'])]
         if len(real_vulns) > 0:
             total_score += min(len(real_vulns) * 20, 50)  # Her gerçek zafiyet +20, max +50
         
-        # 4. KRİTİK YOL/ENDPOINT TESPİTİ (admin, login, api)
+
         critical_paths = [f for f in findings if any(keyword in f.get('title', '').lower() 
                          for keyword in ['admin', 'login', 'auth', 'dashboard', 'panel', 'config', 'backup'])]
         if len(critical_paths) >= 5:
@@ -185,21 +185,21 @@ class ReportGenerator:
         elif len(critical_paths) >= 1:
             total_score += 8
         
-        # Skorı 0-100 arası normalize et
+
         normalized_score = min(int(total_score), 100)
         
-        # Minimum skor mantığını kaldırdık - gerçek skor kullanılacak
-        # Ancak eğer hiç bulgu yoksa ve skor 0 ise, minimum 5 puan ver
+
+
         if len(findings) == 0:
             normalized_score = 5
-        # Eğer bulgular varsa ama skor çok düşükse (sadece info bulguları varsa), minimum skor ver
+
         elif normalized_score == 0 and len(findings) > 0:
-            # Sadece info bulguları varsa minimum skor
+
             info_only = all(f.get('severity', 'info').lower() == 'info' for f in findings)
             if info_only:
                 normalized_score = 10
             else:
-                # Diğer severity'ler varsa ama skor 0 ise, severity'ye göre minimum skor ver
+
                 has_critical = any(f.get('severity', '').lower() == 'critical' for f in findings)
                 has_high = any(f.get('severity', '').lower() == 'high' for f in findings)
                 has_medium = any(f.get('severity', '').lower() == 'medium' for f in findings)
@@ -252,7 +252,7 @@ class ReportGenerator:
         title = finding.get("title", "").lower()
         severity = finding.get("severity", "low")
         
-        # Dinamik remediation - bulgu tipine ve ciddiyetine göre
+
         if "origin ip" in title:
             if severity == "critical":
                 return """🚨 ACİL MÜDAHALE GEREKLİ:
@@ -296,7 +296,7 @@ class ReportGenerator:
 2. **Acil Yama Politikası:** Kritik zafiyetler için 48 saat içinde yama uygulama politikası oluşturun.
 3. **Software Bill of Materials (SBOM):** Tüm kullanılan bileşenlerin envanterini çıkarın."""
         
-        # Genel fallback
+
         return finding.get('recommendation_summary', 'İlgili bileşen için yayınlanan güvenlik güncellemelerini ve yamalarını uygulayın.')
     
     def _categorize_findings_by_owasp(self, findings: List[Dict[str, Any]]) -> Dict[str, int]:
@@ -333,9 +333,9 @@ class ReportGenerator:
             return "LOW"
         return "MINIMAL"
 
-    # ==========================================================================
-    # RAG ENTEGRASYONU - CVE/CVSS VE TARAMA SONUÇLARI
-    # ==========================================================================
+
+
+
 
     async def _rag_search_cve_info(self, vulnerability_type: str, technology: str = None) -> Dict[str, Any]:
         """RAG ile CVE bilgilerini ara ve CVSS skorlarını al"""
@@ -343,17 +343,17 @@ class ReportGenerator:
             if not self.rag_client:
                 return {"error": "RAG client not available"}
             
-            # Spesifik RAG sorgusu oluştur
+
             if technology and technology != "N/A":
                 query = f"{technology} {vulnerability_type} CVE vulnerability"
             else:
                 query = f"{vulnerability_type} CVE vulnerability"
             
-            # RAG'dan CVE bilgilerini al
+
             rag_results = await self.rag_client.search(query)
             
             if rag_results and len(rag_results) > 0:
-                # En relevant sonucu al
+
                 best_match = rag_results[0]
                 
                 return {
@@ -367,7 +367,7 @@ class ReportGenerator:
                     "references": best_match.get("references", [])
                 }
             else:
-                # Fallback: generic CVE bilgisi
+
                 return {
                     "cve_id": "N/A",
                     "cvss_score": "N/A",
@@ -389,14 +389,14 @@ class ReportGenerator:
             if not self.rag_client:
                 return {"error": "RAG client not available"}
             
-            # RAG sorgusu oluştur
+
             query = f"penetration test results for {target} {scan_type} vulnerabilities"
             
-            # RAG'dan benzer tarama sonuçlarını al
+
             rag_results = await self.rag_client.search(query)
             
             if rag_results and len(rag_results) > 0:
-                # Benzer sonuçları analiz et
+
                 similar_findings = []
                 for result in rag_results[:5]:  # İlk 5 sonucu al
                     similar_findings.append({
@@ -425,7 +425,7 @@ class ReportGenerator:
         try:
             enhanced_finding = finding.copy()
             
-            # CVE bilgilerini RAG'dan al
+
             cve_info = await self._rag_search_cve_info(
                 finding.get("title", ""), 
                 finding.get("technology", None)
@@ -442,7 +442,7 @@ class ReportGenerator:
                     "cve_references": cve_info.get("references", [])
                 })
             
-            # Benzer tarama sonuçlarını RAG'dan al
+
             scan_results = await self._rag_search_scan_results(
                 finding.get("target", ""),
                 finding.get("title", "")
@@ -463,7 +463,7 @@ class ReportGenerator:
     async def _rag_store_scan_results(self, target: str, findings: List[Dict[str, Any]], execution_results: Dict[str, Any]):
         """RAG'a tarama sonuçlarını kaydet - Firebase entegrasyonu ile"""
         try:
-            # RAG servisini import et ve kullan
+
             from services.rag_service import get_rag_service
             rag_service = get_rag_service()
             
@@ -471,7 +471,7 @@ class ReportGenerator:
                 logger.warning("RAG service not available - cannot store scan results")
                 return
             
-            # RAG servisinin store_scan_results metodunu kullan
+
             success = rag_service.store_scan_results(target, findings, execution_results)
             
             if success:
@@ -491,9 +491,9 @@ class ReportGenerator:
                 counts[severity] += 1
         return counts
 
-    # ==========================================================================
-    # DİNAMİK RAPORLAMA FONKSİYONLARI - UZMAN SEVİYESİ
-    # ==========================================================================
+
+
+
 
     def _generate_conclusion(self, state: AgentState) -> List[str]:
         """Testin genel sonucunu, bulguların temasına göre dinamik olarak özetler"""
@@ -506,7 +506,7 @@ class ReportGenerator:
             parts.append(f"{state.target} üzerinde gerçekleştirilen güvenlik değerlendirmesi sonucunda kritik bir güvenlik açığına rastlanmamıştır. Sistemin genel güvenlik duruşu temel seviyede yeterli görünmektedir. Ancak, proaktif güvenlik iyileştirmeleri için rapordaki genel önerilerin dikkate alınması tavsiye edilir.")
             return parts
 
-        # Bulguların ana temasını belirle
+
         categories = self._categorize_findings_by_owasp(findings)
         top_category = max(categories, key=categories.get, default="").split(' - ')[-1] if categories else ""
 
@@ -542,7 +542,7 @@ class ReportGenerator:
             parts.append("")
             return parts
 
-        # 1. Acil ve Kısa Vadeli Aksiyonlar
+
         if findings_summary['by_severity']['critical'] > 0:
             parts.append("🚨 ACİL AKSİYONLAR (0-48 Saat İçinde):")
             for f in findings:
@@ -559,7 +559,7 @@ class ReportGenerator:
                     parts.append(f"  • {f.get('title')}: {rec}")
             parts.append("")
         
-        # 2. Stratejik İyileştirmeler
+
         parts.append("📈 STRATEJİK İYİLEŞTİRMELER (Orta ve Uzun Vade):")
         categories = self._categorize_findings_by_owasp(findings)
         
@@ -581,27 +581,27 @@ class ReportGenerator:
         parts.append("")
         return parts
 
-    # ==========================================================================
-    # RAPOR BÖLÜMLERİNİ OLUŞTURAN ANA FONKSİYONLAR
-    # ==========================================================================
+
+
+
 
     def _generate_executive_summary(self, state: AgentState) -> List[str]:
         """(LLM İÇİN İDEAL) Güçlendirilmiş Yönetici Özeti bölümünü oluşturur."""
         try:
             parts = ["1. YÖNETİCİ ÖZETİ", "-" * 50, ""]
             
-            # Güvenli veri çıkarma
+
             findings = state.findings if hasattr(state, 'findings') and state.findings else []
             if not isinstance(findings, list):
                 findings = []
             
-            # Findings summary'yi güvenli şekilde al
+
             try:
                 findings_summary = state.get_findings_summary() if hasattr(state, 'get_findings_summary') else {}
             except Exception:
                 findings_summary = {}
             
-            # Risk hesaplamalarını güvenli şekilde yap
+
             try:
                 overall_risk = self._calculate_overall_risk_level(findings_summary)
             except Exception:
@@ -612,13 +612,13 @@ class ReportGenerator:
             except Exception:
                 risk_score = 50
             
-            # 1. Genel Değerlendirme
+
             parts.append("1.1. Genel Değerlendirme")
             target = getattr(state, 'target', 'Hedef Sistem')
             parts.append(f"Bu rapor, {target} sistemine yönelik gerçekleştirilen penetrasyon testinin sonuçlarını özetlemektedir. Testler, sistemin genel güvenlik duruşunu ve potansiyel risklerini değerlendirmek amacıyla yapılmıştır. Değerlendirme sonucunda, sistemin güvenlik seviyesi '{overall_risk}' olarak belirlenmiştir.")
             parts.append("")
 
-            # 2. Risk Postürü ve Puanlama
+
             parts.append("1.2. Risk Postürü ve Puanlama")
             try:
                 filled_blocks = max(0, min(10, int(risk_score / 10)))
@@ -631,10 +631,10 @@ class ReportGenerator:
             parts.append(risk_bar)
             parts.append("")
 
-            # 3. En Kritik Bulgular ve İş Etkileri
+
             parts.append("1.3. En Kritik Bulgular ve İş Etkileri")
             try:
-                # Findings'leri güvenli şekilde sırala
+
                 def safe_get_severity(finding):
                     if isinstance(finding, dict):
                         return finding.get("severity", "low")
@@ -665,7 +665,7 @@ class ReportGenerator:
                 logger.warning(f"Executive summary findings processing hatası: {e}")
                 parts.append("Testler sırasında kritik veya yüksek seviyede bir bulguya rastlanmamıştır.")
             
-            # 4. Öncelikli Aksiyon Planı
+
             parts.append("1.4. Öncelikli Aksiyon Planı")
             try:
                 if not top_findings:
@@ -685,7 +685,7 @@ class ReportGenerator:
             return parts
             
         except Exception as e:
-            # Fallback: Basit özet döndür
+
             logger.error(f"Executive summary oluşturma hatası: {e}", exc_info=True)
             target = getattr(state, 'target', 'Hedef Sistem') if state else 'Hedef Sistem'
             return [
@@ -796,7 +796,7 @@ class ReportGenerator:
             parts.append("")
             return parts
 
-        # 1. Acil ve Kısa Vadeli Aksiyonlar
+
         if findings_summary['by_severity']['critical'] > 0:
             parts.append("🚨 ACİL AKSİYONLAR (0-48 Saat İçinde):")
             for f in findings:
@@ -813,7 +813,7 @@ class ReportGenerator:
                     parts.append(f"  • {f.get('title')}: {rec}")
             parts.append("")
         
-        # 2. Stratejik İyileştirmeler
+
         parts.append("📈 STRATEJİK İYİLEŞTİRMELER (Orta ve Uzun Vade):")
         categories = self._categorize_findings_by_owasp(findings)
         
@@ -846,7 +846,7 @@ class ReportGenerator:
             parts.append(f"{state.target} üzerinde gerçekleştirilen güvenlik değerlendirmesi sonucunda kritik bir güvenlik açığına rastlanmamıştır. Sistemin genel güvenlik duruşu temel seviyede yeterli görünmektedir. Ancak, proaktif güvenlik iyileştirmeleri için rapordaki genel önerilerin dikkate alınması tavsiye edilir.")
             return parts
 
-        # Bulguların ana temasını belirle
+
         categories = self._categorize_findings_by_owasp(findings)
         top_category = max(categories, key=categories.get, default="").split(' - ')[-1] if categories else ""
 
@@ -866,9 +866,9 @@ class ReportGenerator:
         parts.append("")
         return parts
 
-    # ==========================================================================
-    # ANA RAPOR OLUŞTURMA METODU
-    # ==========================================================================
+
+
+
     
     def _prepare_professional_report_text(self, state: AgentState) -> str:
         """
@@ -877,16 +877,16 @@ class ReportGenerator:
         """
         report_parts = []
         
-        # --- YARATICI KAPAK SAYFASI ---
+
         report_parts.extend(self._generate_creative_cover_page(state))
         
-        # --- YARATICI İÇİNDEKİLER ---
+
         report_parts.extend(self._generate_creative_table_of_contents())
         
-        # --- BÖLÜM 1: YÖNETİCİ ÖZETİ ---
+
         report_parts.extend(self._generate_executive_summary(state))
         
-        # --- BÖLÜM 2: METODOLOJİ VE KAPSAM ---
+
         report_parts.extend([
             "2. METODOLOJİ VE KAPSAM", "-" * 50, "",
             "Bu güvenlik değerlendirmesi, OWASP Testing Guide, PTES ve NIST SP 800-115 gibi endüstri standartlarına uygun, otomatize edilmiş bir metodoloji ile gerçekleştirilmiştir.",
@@ -894,7 +894,7 @@ class ReportGenerator:
             "Kapsam Dışı: Sosyal mühendislik, fiziksel güvenlik ve DoS/DDoS saldırıları bu testin kapsamı dışındadır.", ""
         ])
         
-        # --- BÖLÜM 3: RİSK DERECELENDİRME MATRİSİ ---
+
         report_parts.extend([
             "3. RİSK DERECELENDİRME MATRİSİ", "-" * 50, "",
             "Risk seviyeleri CVSS v3.1 ve OWASP Risk Rating Metodolojisi'ne göre belirlenmiştir:",
@@ -904,10 +904,10 @@ class ReportGenerator:
             "  • DÜŞÜK (0.1-3.9): Planlı olarak giderilmelidir. Minimal etki.", ""
         ])
         
-        # --- BÖLÜM 4: BULGULAR ÖZETİ ---
+
         report_parts.extend(self._generate_findings_summary(state))
         
-        # --- BÖLÜM 5: DETAYLI TEKNİK BULGULAR ---
+
         report_parts.extend(["5. DETAYLI TEKNİK BULGULAR", "-" * 50, ""])
         sorted_findings = sorted(state.findings, key=lambda x: {"critical": 3, "high": 2, "medium": 1, "low": 0}.get(x.get("severity"), 0), reverse=True)
         if not sorted_findings:
@@ -916,12 +916,12 @@ class ReportGenerator:
             for i, finding in enumerate(sorted_findings, 1):
                 report_parts.extend(self._format_single_finding(finding, i))
         
-        # --- BÖLÜM 6: SONUÇ VE STRATEJİK ÖNERİLER (DİNAMİK) ---
+
         report_parts.extend(["", "6. SONUÇ VE STRATEJİK ÖNERİLER", "-" * 50, ""])
         report_parts.extend(self._generate_strategic_recommendations(state))
         report_parts.extend(self._generate_conclusion(state))
         
-        # --- BÖLÜM 7: EKLER ---
+
         report_parts.extend(["7. EKLER", "-" * 50, ""])
         report_parts.append("Ek A: Test Kapsamı")
         report_parts.append(f"• {state.target}")
@@ -949,21 +949,21 @@ class ReportGenerator:
         report_parts.append("• CVSS v3.1")
         report_parts.append("")
 
-        # Yaratıcı rapor sonu template'i
+
         report_parts.extend(self._generate_creative_report_footer(state))
 
         return "\n".join(report_parts)
 
-    # ==========================================================================
-    # YARATICI TEMPLATE METODLARI
-    # ==========================================================================
+
+
+
 
     def _generate_creative_report_footer(self, state: AgentState) -> List[str]:
         """Yaratıcı rapor sonu template'i oluşturur - Kurumsal Premium Tasarım"""
         findings_summary = state.get_findings_summary()
         risk_level = self._calculate_overall_risk_level(findings_summary)
         
-        # Risk seviyesine göre soft ve kurumsal footer'lar
+
         if risk_level == "CRITICAL":
             return [
                 "┌─────────────────────────────────────────────────────────────────────────────┐",
@@ -1035,7 +1035,7 @@ class ReportGenerator:
         """Yaratıcı bulgu kutusu oluşturur - Kurumsal Premium Tasarım"""
         severity = finding.get("severity", "low").lower()
         
-        # Soft ve kurumsal severity indicators
+
         severity_indicators = {
             "critical": "CRITICAL",
             "high": "HIGH", 
@@ -1063,7 +1063,7 @@ class ReportGenerator:
         """Yaratıcı öneri kutusu oluşturur - Kurumsal Premium Tasarım"""
         priority = recommendation.get("priority", "low").lower()
         
-        # Soft ve kurumsal priority indicators
+
         priority_indicators = {
             "immediate": "IMMEDIATE",
             "short_term": "SHORT-TERM",
@@ -1090,7 +1090,7 @@ class ReportGenerator:
         findings_summary = state.get_findings_summary()
         risk_level = self._calculate_overall_risk_level(findings_summary)
         
-        # Risk seviyesine göre soft ve kurumsal renkler
+
         if risk_level == "CRITICAL":
             risk_icon = "●"
             risk_text = "CRITICAL RISK LEVEL"
@@ -1189,7 +1189,7 @@ class ReportGenerator:
         risk_score = summary.get("risk_score", 0)
         risk_level = summary.get("risk_level", "UNKNOWN")
         
-        # Soft ve kurumsal risk indicators
+
         if risk_score >= 80:
             risk_indicator = "HIGH"
         elif risk_score >= 60:
@@ -1213,9 +1213,9 @@ class ReportGenerator:
             ""
         ]
 
-    # ==========================================================================
-    # MEVCUT DİĞER FONKSİYONLAR
-    # ==========================================================================
+
+
+
     
     def get_structured_report_data_with_cves(self, state: AgentState, cve_findings: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
@@ -1224,7 +1224,7 @@ class ReportGenerator:
         """
         data = self.get_structured_report_data(state)
         
-        # CVE tablosunu ekle
+
         cve_table = []
         for cve in cve_findings:
             cve_table.append({
@@ -1247,14 +1247,14 @@ class ReportGenerator:
         overall_risk = self._calculate_overall_risk_level(findings_summary)
         risk_score = self._calculate_risk_score(state.findings)
         
-        # Bulguları severity'ye göre sırala
+
         sorted_findings = sorted(
             state.findings, 
             key=lambda x: {"critical": 4, "high": 3, "medium": 2, "low": 1}.get(x.get("severity", "low"), 0), 
             reverse=True
         )
         
-        # 1. EXECUTIVE SUMMARY
+
         top_findings = sorted_findings[:3]
         executive_summary = {
             "genel_degerlendirme": f"Bu rapor, {state.target} sistemine yönelik gerçekleştirilen penetrasyon testinin sonuçlarını özetlemektedir. Testler, sistemin genel güvenlik duruşunu ve potansiyel risklerini değerlendirmek amacıyla yapılmıştır. Değerlendirme sonucunda, sistemin güvenlik seviyesi '{overall_risk}' olarak belirlenmiştir.",
@@ -1277,7 +1277,7 @@ class ReportGenerator:
             ] if top_findings else []
         }
         
-        # 2. METHODOLOGY
+
         methodology = {
             "standartlar": "OWASP Testing Guide, PTES ve NIST SP 800-115",
             "kapsam": state.target,
@@ -1286,9 +1286,9 @@ class ReportGenerator:
             "aciklama": "Bu güvenlik değerlendirmesi, OWASP Testing Guide, PTES ve NIST SP 800-115 gibi endüstri standartlarına uygun, otomatize edilmiş bir metodoloji ile gerçekleştirilmiştir."
         }
         
-        # 3. TECHNICAL FINDINGS (Risk Matrix ve Findings Summary kaldırıldı)
+
         
-        # 3. DETAILED FINDINGS
+
         detailed_findings = []
         for i, finding in enumerate(sorted_findings, 1):
             detailed_findings.append({
@@ -1306,7 +1306,7 @@ class ReportGenerator:
                 "teknoloji": finding.get("technology", "N/A")
             })
         
-        # 4. RECOMMENDATIONS & CONCLUSION
+
         recommendations = {
             "acil_aksiyonlar": [],
             "kisa_vade_aksiyonlar": [],
@@ -1314,7 +1314,7 @@ class ReportGenerator:
             "sonuc": ""
         }
         
-        # Acil aksiyonlar
+
         for f in sorted_findings:
             if f.get('severity') == 'critical':
                 recommendations["acil_aksiyonlar"].append({
@@ -1322,7 +1322,7 @@ class ReportGenerator:
                     "oneri": self._get_remediation(f).split('\n')[0]
                 })
         
-        # Kısa vade aksiyonlar
+
         for f in sorted_findings:
             if f.get('severity') == 'high':
                 recommendations["kisa_vade_aksiyonlar"].append({
@@ -1330,7 +1330,7 @@ class ReportGenerator:
                     "oneri": self._get_remediation(f).split('\n')[0]
                 })
         
-        # Stratejik iyileştirmeler
+
         categories = self._categorize_findings_by_owasp(state.findings)
         if "A05:2021 - Security Misconfiguration" in categories:
             recommendations["stratejik_iyilestirmeler"].append({
@@ -1348,7 +1348,7 @@ class ReportGenerator:
                 "oneri": "Zero Trust model ve rol-bazlı erişim kontrolü (RBAC) uygulayın."
             })
         
-        # Sonuç
+
         top_category = max(categories, key=categories.get, default="").split(' - ')[-1] if categories else ""
         conclusion = f"Bu güvenlik değerlendirmesi, {state.target} sisteminin genel güvenlik durumunu '{overall_risk}' olarak belirlemiştir. "
         if top_category:
@@ -1360,7 +1360,7 @@ class ReportGenerator:
         conclusion += "Raporda detaylandırılan stratejik ve taktiksel önerilerin uygulanması, sistemin siber saldırılara karşı dayanıklılığını önemli ölçüde artıracaktır."
         recommendations["sonuc"] = conclusion
         
-        # APPENDIX
+
         appendix = {
             "test_kapsami": [state.target],
             "subdomainler": state.context_summary.get("subdomains", [])[:10] if state.context_summary else [],
@@ -1373,7 +1373,7 @@ class ReportGenerator:
             ]
         }
         
-        # CVE referansları ekle
+
         cve_references = []
         for finding in sorted_findings:
             if finding.get("cve_id") and finding.get("cve_id") != "N/A":
@@ -1401,29 +1401,29 @@ class ReportGenerator:
         try:
             logger.info(f"Profesyonel pentest raporu '{output_path}' için oluşturuluyor...")
 
-            # RAG ile bulguları zenginleştirme adımı
+
             if self.rag_client:
                 logger.info("RAG ile bulgular zenginleştiriliyor...")
                 state.findings = await self._rag_ile_zenginlestir_bulgular(state.findings)
 
-            # Rapor metnini yeni profesyonel formatla oluştur
+
             report_content_text = self._prepare_professional_report_text(state)
             
-            # --- RAPORU FARKLI FORMATLARDA KAYDET ---
 
-            # 1. TXT olarak kaydet
+
+
             txt_path = output_path.rsplit('.', 1)[0] + '.txt'
             with open(txt_path, 'w', encoding='utf-8') as f:
                 f.write(report_content_text)
             logger.info(f"Metin raporu başarıyla kaydedildi: {txt_path}")
 
-            # 2. PDF olarak kaydet (eğer kütüphane varsa)
+
             if PDF_GENERATION_AVAILABLE:
                 pdf_path = output_path.rsplit('.', 1)[0] + '.pdf'
                 self._create_simple_pdf_from_text(report_content_text, pdf_path)
                 logger.info(f"PDF raporu başarıyla kaydedildi: {pdf_path}")
 
-            # 3. JSON olarak kaydet
+
             json_path = output_path.rsplit('.', 1)[0] + '.json'
             self._create_json_report(state, json_path)
             logger.info(f"JSON raporu başarıyla kaydedildi: {json_path}")
@@ -1437,11 +1437,11 @@ class ReportGenerator:
     def _clean_text_for_pdf(self, text: str) -> str:
         """PDF için metni temizle - emoji ve özel karakterleri kaldır"""
         import re
-        # Emoji ve özel karakterleri temizle
+
         text = text.encode('ascii', 'ignore').decode('ascii')
-        # Çoklu boşlukları tek boşluğa çevir
+
         text = re.sub(r'\s+', ' ', text)
-        # Özel karakterleri değiştir
+
         replacements = {
             '🔍': '[Arama]',
             '🛡️': '[Guvenlik]',
@@ -1484,8 +1484,8 @@ class ReportGenerator:
         )
         styles = getSampleStyleSheet()
         
-        # PROFESYONEL STİLLER - DÜZENLİ BOŞLUKLAR
-        # Kapak başlığı (Normal boyut)
+
+
         cover_title = ParagraphStyle(
             'CoverTitle',
             parent=styles['Title'],
@@ -1496,7 +1496,7 @@ class ReportGenerator:
             fontName='Helvetica-Bold'
         )
         
-        # Ana başlıklar (Normal boyut, düzenli boşluklar)
+
         heading1_style = ParagraphStyle(
             'CustomHeading1',
             parent=styles['Heading1'],
@@ -1508,7 +1508,7 @@ class ReportGenerator:
             alignment=0  # Left align
         )
         
-        # Alt başlıklar (Küçük, düzenli)
+
         heading2_style = ParagraphStyle(
             'CustomHeading2',
             parent=styles['Heading2'],
@@ -1519,7 +1519,7 @@ class ReportGenerator:
             spaceBefore=12
         )
         
-        # Normal metin (Düzenli, okunabilir)
+
         normal_style = ParagraphStyle(
             'CustomNormal',
             parent=styles['Normal'],
@@ -1530,7 +1530,7 @@ class ReportGenerator:
             textColor=colors.black
         )
         
-        # Liste öğeleri (Düzenli boşluklar)
+
         bullet_style = ParagraphStyle(
             'CustomBullet',
             parent=styles['Bullet'],
@@ -1542,7 +1542,7 @@ class ReportGenerator:
             textColor=colors.black
         )
         
-        # Kod/URL satırları (Küçük, düzenli)
+
         code_style = ParagraphStyle(
             'CustomCode',
             parent=styles['Normal'],
@@ -1554,7 +1554,7 @@ class ReportGenerator:
             textColor=colors.black
         )
         
-        # Metni temizle
+
         text_content = self._clean_text_for_pdf(text_content)
         
         story = []
@@ -1567,18 +1567,18 @@ class ReportGenerator:
         while i < len(lines):
             line = lines[i].strip()
             
-            # Boş satırları atla
+
             if not line:
                 story.append(Spacer(1, 12))
                 i += 1
                 continue
             
-            # === veya --- ayırıcıları atla
+
             if all(c in '=-' for c in line) and len(line) > 10:
                 i += 1
                 continue
             
-            # KAPAK SAYFASI - İlk başlık
+
             if is_cover_page and ('PENETRATION' in line.upper() or 'SECURITY' in line.upper() or 'SIZMA' in line.upper()):
                 story.append(Spacer(1, 150))  # Üstten boşluk
                 story.append(Paragraph(line.upper(), cover_title))
@@ -1587,14 +1587,14 @@ class ReportGenerator:
                 i += 1
                 continue
             
-            # Bölüm başlıkları (1., 2., 3. ile başlayan)
+
             if line and len(line) < 80 and line[0].isdigit() and '.' in line[:5]:
                 story.append(PageBreak())  # Her bölüm yeni sayfa
                 story.append(Paragraph(line, heading1_style))
                 i += 1
                 continue
             
-            # Alt başlıklar (1.1, 1.2 gibi veya [...] formatında)
+
             if ((line and len(line) < 80 and line[0].isdigit() and line.count('.') == 2) or 
                 (line.startswith('[') and line.endswith(']'))):
                 clean_line = line[1:-1] if line.startswith('[') else line
@@ -1602,26 +1602,26 @@ class ReportGenerator:
                 i += 1
                 continue
             
-            # CVE Bölümü tespit et (Detaylı Bulgular kısmı)
+
             if 'DETAYLI' in line.upper() and 'BULGULAR' in line.upper():
                 in_cve_section = True
                 story.append(Paragraph(line, heading1_style))
                 i += 1
                 continue
             
-            # Liste öğeleri
+
             if line.startswith(('*', '-', '•', '  •', '  -', '  *')):
                 story.append(Paragraph(line, bullet_style))
                 i += 1
                 continue
             
-            # Kod/URL satırları
+
             if "HTTP/" in line or "curl" in line or "://" in line:
                 story.append(Paragraph(line.replace(" ", "&nbsp;"), code_style))
                 i += 1
                 continue
             
-            # Normal paragraflar
+
             story.append(Paragraph(line, normal_style))
             i += 1
         
@@ -1630,7 +1630,7 @@ class ReportGenerator:
             logger.info(f"✅ Profesyonel PDF başarıyla oluşturuldu: {pdf_path}")
         except Exception as e:
             logger.error(f"❌ PDF oluşturma hatası: {e}, fallback kullanılıyor")
-            # Fallback: Canvas ile basit PDF
+
             from reportlab.pdfgen import canvas
             c = canvas.Canvas(pdf_path, pagesize=A4)
             c.setFont("Helvetica", 10)
@@ -1695,7 +1695,7 @@ class ReportGenerator:
         try:
             report_parts = []
             
-            # Profesyonel Başlık
+
             report_parts.append("# PROFESYONEL SIZMA TESTİ RAPORU")
             report_parts.append("")
             report_parts.append("---")
@@ -1708,7 +1708,7 @@ class ReportGenerator:
             report_parts.append("---")
             report_parts.append("")
             
-            # Yönetici Özeti
+
             report_parts.append("## 1. YÖNETİCİ ÖZETİ")
             report_parts.append("")
             findings_count = len(state.findings)
@@ -1720,7 +1720,7 @@ class ReportGenerator:
             report_parts.append(f"Yüksek seviye: {high_count}")
             report_parts.append("")
             
-            # Detaylı Bulgular
+
             if state.findings:
                 report_parts.append("## 2. DETAYLI BULGULAR")
                 report_parts.append("")
@@ -1732,7 +1732,7 @@ class ReportGenerator:
                     report_parts.append(f"   Kanıt: {finding.get('evidence', 'Kanıt yok')}")
                     report_parts.append("")
             
-            # Tool çıktıları
+
             if state.discovered_information:
                 tool_outputs = {k: v for k, v in state.discovered_information.items() if k.startswith('tool_')}
                 if tool_outputs:
@@ -1745,7 +1745,7 @@ class ReportGenerator:
                         report_parts.append(f"Çıktı: {str(tool_data)[:500]}...")
                         report_parts.append("")
             
-            # CVE Analizi
+
             if cve_results:
                 report_parts.append("## 3. CVE ANALİZİ")
                 report_parts.append("")
@@ -1763,7 +1763,7 @@ class ReportGenerator:
                         report_parts.append(f"**Description:** {description}")
                         report_parts.append("")
             
-            # Tool Çıktıları
+
             if hasattr(state, 'discovered_information') and state.discovered_information:
                 report_parts.append("## 4. TOOL ÇIKTILARI")
                 report_parts.append("")
@@ -1783,21 +1783,21 @@ class ReportGenerator:
             logger.error(f"Rapor içeriği oluşturma hatası: {e}")
             return "Rapor içeriği oluşturulamadı"
 
-    # Web API için sync metod
+
     def generate_llm_enhanced_report(self, findings: List[Dict[str, Any]], target: str, cve_results: List[Dict[str, Any]] = None, tool_outputs: Dict[str, Any] = None, scan_results: Dict[str, Any] = None) -> str:
         """LLM ile gelişmiş rapor üretimi"""
         try:
-            # Bulguları kategorize et
+
             critical_findings = [f for f in findings if f.get('severity') == 'critical']
             high_findings = [f for f in findings if f.get('severity') == 'high']
             medium_findings = [f for f in findings if f.get('severity') == 'medium']
             low_findings = [f for f in findings if f.get('severity') == 'low']
             
-            # Risk skoru hesapla
+
             risk_score = self._calculate_risk_score(findings)
             risk_level = self._get_risk_level_from_score(risk_score)
             
-            # LLM prompt oluştur
+
             prompt = f"""
 Sen bir siber güvenlik uzmanısın. Aşağıdaki penetrasyon testi sonuçlarına dayanarak profesyonel bir güvenlik raporu oluştur.
 
@@ -1822,47 +1822,47 @@ KULLANILAN ARAÇLAR VE SONUÇLARI:
 
 Lütfen aşağıdaki yapıda profesyonel bir rapor oluştur:
 
-# GÜVENLİK RAPORU - {target}
 
-## YÖNETİCİ ÖZETİ
+
+
 - Risk seviyesi ve genel değerlendirme
 - Kritik bulguların özeti
 - Acil aksiyon gereken alanlar
 
-## METODOLOJİ
+
 - Kullanılan test yöntemleri
 - Test kapsamı ve sınırları
 
-## BULGULAR
-### Kritik Bulgular
+
+
 - Her kritik bulgu için detaylı açıklama
 - CVSS skoru ve etki analizi
 - Önerilen çözümler
 
-### Yüksek Risk Bulgular
+
 - Yüksek risk bulguların detayları
 - İş etkisi analizi
 
-### Orta ve Düşük Risk Bulgular
+
 - Orta ve düşük risk bulguların özeti
 
-## CVE ANALİZİ
+
 - Tespit edilen CVE'ler
 - Etkilenen sistemler
 - Güncelleme önerileri
 
-## ÖNERİLER
+
 - Genel güvenlik önerileri
 - Acil aksiyon planı
 - Uzun vadeli güvenlik stratejisi
 
-## EKLER
+
 - Teknik detaylar
 - Referanslar
 """
             
-            # LLM'den yanıt al (basit implementasyon)
-            # Gerçek implementasyonda Groq API kullanılabilir
+
+
             return self._generate_llm_response(prompt, findings, target, tool_outputs)
             
         except Exception as e:
@@ -1916,8 +1916,8 @@ Lütfen aşağıdaki yapıda profesyonel bir rapor oluştur:
     
     def _generate_llm_response(self, prompt: str, findings: List[Dict[str, Any]], target: str, tool_outputs: Dict[str, Any] = None) -> str:
         """LLM'den yanıt al (basit implementasyon)"""
-        # Bu kısımda gerçek LLM API çağrısı yapılabilir
-        # Şimdilik template-based response döndürelim
+
+
         
         critical_count = len([f for f in findings if f.get('severity') == 'critical'])
         high_count = len([f for f in findings if f.get('severity') == 'high'])
@@ -1929,22 +1929,22 @@ Lütfen aşağıdaki yapıda profesyonel bir rapor oluştur:
         
         return f"""# GÜVENLİK RAPORU - {target}
 
-## YÖNETİCİ ÖZETİ
+
 
 Bu rapor, {target} hedef sistemine yönelik gerçekleştirilen penetrasyon testinin sonuçlarını özetlemektedir. Test sonucunda toplam {len(findings)} güvenlik bulgusu tespit edilmiştir.
 
 **Risk Seviyesi: {risk_level} ({risk_score}/100)**
 
-### Bulgu Dağılımı:
+
 - 🔴 Kritik: {critical_count} bulgu
 - 🟠 Yüksek: {high_count} bulgu  
 - 🟡 Orta: {medium_count} bulgu
 - 🟢 Düşük: {low_count} bulgu
 
-### Acil Aksiyon Gereken Alanlar:
+
 {self._get_critical_summary(findings)}
 
-## METODOLOJİ
+
 
 Bu penetrasyon testi aşağıdaki metodoloji ile gerçekleştirilmiştir:
 
@@ -1954,25 +1954,25 @@ Bu penetrasyon testi aşağıdaki metodoloji ile gerçekleştirilmiştir:
 4. **Exploit Geliştirme**: Tespit edilen zafiyetlerin exploit edilebilirliği
 5. **Raporlama**: Bulguların analizi ve önerilerin hazırlanması
 
-### Kullanılan Araçlar ve Sonuçları:
+
 {self._format_tool_outputs_for_llm(tool_outputs) if tool_outputs else 'Tool çıktıları mevcut değil'}
 
-## BULGULAR
+
 
 {self._generate_detailed_findings(findings)}
 
-## ÖNERİLER
 
-### Acil Aksiyon Planı (0-7 gün):
+
+
 {self._get_urgent_recommendations(findings)}
 
-### Kısa Vadeli Öneriler (1-4 hafta):
+
 {self._get_short_term_recommendations(findings)}
 
-### Uzun Vadeli Strateji (1-6 ay):
+
 {self._get_long_term_recommendations(findings)}
 
-## SONUÇ
+
 
 {target} sisteminde tespit edilen güvenlik bulguları, sistemin güvenlik duruşunun iyileştirilmesi gerektiğini göstermektedir. Özellikle kritik ve yüksek risk bulgularının acil olarak ele alınması önerilmektedir.
 
@@ -2000,21 +2000,21 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
         """Detaylı bulgular bölümü"""
         sections = []
         
-        # Kritik bulgular
+
         critical_findings = [f for f in findings if f.get('severity') == 'critical']
         if critical_findings:
             sections.append("### 🔴 Kritik Bulgular")
             for finding in critical_findings:
                 sections.append(self._format_finding_detail(finding))
         
-        # Yüksek bulgular
+
         high_findings = [f for f in findings if f.get('severity') == 'high']
         if high_findings:
             sections.append("### 🟠 Yüksek Risk Bulgular")
             for finding in high_findings:
                 sections.append(self._format_finding_detail(finding))
         
-        # Orta bulgular
+
         medium_findings = [f for f in findings if f.get('severity') == 'medium']
         if medium_findings:
             sections.append("### 🟡 Orta Risk Bulgular")
@@ -2091,7 +2091,7 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
         if not isinstance(data, dict):
             return "Veri formatı uygun değil"
         
-        # Tool tipine göre özet çıkar
+
         if 'vulnerabilities' in data:
             vulns = data.get('vulnerabilities', [])
             return f"{len(vulns)} zafiyet tespit edildi"
@@ -2114,22 +2114,22 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
         """LLM hatası durumunda fallback rapor"""
         return f"""# GÜVENLİK RAPORU - {target}
 
-## YÖNETİCİ ÖZETİ
+
 
 {target} sistemine yönelik penetrasyon testi tamamlanmıştır.
 
 **Toplam Bulgu**: {len(findings)}
 
-### Bulgu Dağılımı:
+
 - Kritik: {len([f for f in findings if f.get('severity') == 'critical'])}
 - Yüksek: {len([f for f in findings if f.get('severity') == 'high'])}
 - Orta: {len([f for f in findings if f.get('severity') == 'medium'])}
 - Düşük: {len([f for f in findings if f.get('severity') == 'low'])}
 
-### Kullanılan Araçlar:
+
 {self._format_tool_outputs_for_llm(tool_outputs) if tool_outputs else 'Tool çıktıları mevcut değil'}
 
-## BULGULAR
+
 
 {self._generate_detailed_findings(findings)}
 
@@ -2140,22 +2140,22 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
     def generate_comprehensive_report_sync(self, enriched_data: Dict[str, Any]) -> str:
         """Web API için sync rapor oluşturma"""
         try:
-            # Enriched data'dan state oluştur
+
             state = AgentState(
                 target=enriched_data.get("target", "Unknown"),
                 user_task=enriched_data.get("user_task", "Güvenlik raporu oluştur")
             )
-            # Findings'i al - tool bulguları dahil olmalı
+
             findings = enriched_data.get("findings", [])
             state.findings = findings if isinstance(findings, list) else []
             state.discovered_information = enriched_data.get("discovered_information", {})
             
-            # Tool çıktılarını ekle
+
             tool_outputs = enriched_data.get("all_tool_outputs", {})
             cve_results = enriched_data.get("cve_results", [])
             scan_results = enriched_data.get("scan_results", {})
             
-            # LLM ile gelişmiş rapor oluştur - TÜM BULGULAR İLE
+
             llm_report = self.generate_llm_enhanced_report(
                 findings=state.findings,  # Tool bulguları dahil
                 target=state.target,
@@ -2170,22 +2170,22 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
             logger.error(f"Sync rapor oluşturma hatası: {e}")
             return f"Rapor oluşturulamadı: {str(e)}"
 
-    # Dynamic orchestrator ile entegrasyon için yeni metod - RAG ENTEGRASYONU
+
     async def generate_comprehensive_report_async(self, state: AgentState, final_analysis: Dict[str, Any], execution_results: Dict[str, Any]) -> Dict[str, Any]:
         """Dynamic orchestrator için kapsamlı ve dinamik rapor oluşturur - RAG entegrasyonu ile"""
         try:
-            # State'den findings al - MEVCUT BULGULARI KORU!
+
             if not hasattr(state, 'findings'):
                 state.findings = []
             
             existing_findings_count = len(state.findings)
             logger.info(f"📊 Mevcut bulgu sayısı: {existing_findings_count}")
             
-            # Eğer hiç bulgu yoksa execution_results'tan ek bulgular oluştur
+
             if not state.findings:
                 logger.warning("⚠️ State'de bulgu yok, execution_results'tan oluşturuluyor")
                 
-                # Execution history'den ek findings oluştur (mevcut bulguları koru)
+
                 additional_findings = []
                 if isinstance(execution_results, list):
                     for step in execution_results:
@@ -2196,7 +2196,7 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
                             if result.get("success", False):
                                 data = result.get("data", {})
                                 
-                                # Tool'a göre finding oluştur
+
                                 if "vulnerabilities" in data:
                                     for vuln in data["vulnerabilities"]:
                                         finding = {
@@ -2209,7 +2209,7 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
                                         }
                                         additional_findings.append(finding)
                                 
-                                # Admin panel bulguları
+
                                 elif "discovered_panels" in data:
                                     panels = data["discovered_panels"]
                                     if panels:
@@ -2223,7 +2223,7 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
                                         }
                                         additional_findings.append(finding)
                                 
-                                # Missing headers
+
                                 elif "missing_security_headers" in data:
                                     headers = data["missing_security_headers"]
                                     if headers:
@@ -2237,7 +2237,7 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
                                         }
                                         additional_findings.append(finding)
                                 
-                                # Web crawler bulguları
+
                                 elif "forms" in data or "parameters" in data:
                                     forms = data.get("forms", [])
                                     parameters = data.get("parameters", [])
@@ -2252,7 +2252,7 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
                                         }
                                         additional_findings.append(finding)
                                 
-                                # Technology detection
+
                                 elif "technologies" in data:
                                     technologies = data["technologies"]
                                     if technologies:
@@ -2266,7 +2266,7 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
                                         }
                                         additional_findings.append(finding)
                                 
-                                # Open ports
+
                                 elif "open_ports" in data:
                                     ports = data["open_ports"]
                                     if ports:
@@ -2280,31 +2280,31 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
                                         }
                                         additional_findings.append(finding)
                 
-                # Ek bulguları state'e ekle
+
                 if additional_findings:
                     state.findings.extend(additional_findings)
                     logger.info(f"✅ Execution results'tan {len(additional_findings)} ek bulgu eklendi")
             
-            # Bulguları RAG ile zenginleştir - CVE'leri ekle
+
             enhanced_findings = []
             for finding in state.findings:
-                # RAG ile bulguyu zenginleştir - CVE'leri dahil et
+
                 enhanced_finding = await self._rag_enhance_finding(finding)
                 enhanced_findings.append(enhanced_finding)
             
-            # State'e enhanced findings'leri geri ekle
+
             state.findings = enhanced_findings
             
-            # RAG'a tarama sonuçlarını kaydet - CVE'leri dahil et
+
             await self._rag_store_scan_results(state.target, enhanced_findings, execution_results)
             
-            # Dinamik rapor metnini oluştur
+
             report_content = self._prepare_professional_report_text(state)
             
-            # Risk skorunu hesapla
+
             risk_score = self._calculate_risk_score(state.findings)
             
-            # Dinamik executive summary
+
             executive_summary = {
                 "risk_level": final_analysis.get("risk_level", "unknown"),
                 "risk_score": risk_score,
@@ -2317,10 +2317,10 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
                 "compliance_gaps": len([k for k, v in final_analysis.get("compliance_status", {}).items() if v != "compliant"])
             }
             
-            # Frontend için structured_data formatında döndür
+
             structured_data = self.get_structured_report_data(state)
             
-            # JSON formatında döndür - frontend uyumlu
+
             return {
                 "report_type": "professional_dynamic",
                 "target": state.target,
@@ -2392,9 +2392,9 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
         
         return recommendations
 
-    # ==========================================================================
-    # RAG ENTEGRASYONU - EK METODLAR
-    # ==========================================================================
+
+
+
 
     async def _rag_ile_zenginlestir_bulgular(self, findings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """RAG ile bulguları zenginleştirir - Legacy metod"""
@@ -2420,7 +2420,7 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
         try:
             logger.info("🤖 AI ile geliştirilmiş rapor oluşturuluyor...")
             
-            # Bulguları hazırla
+
             findings_text = ""
             for i, finding in enumerate(state.findings, 1):
                 findings_text += f"""
@@ -2432,7 +2432,7 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
    Teknoloji: {finding.get('technology', 'N/A')}
 """
 
-            # CVE bilgilerini hazırla
+
             cve_text = ""
             for i, cve in enumerate(cve_results[:5], 1):  # Top 5 CVE
                 if isinstance(cve, dict):
@@ -2443,7 +2443,7 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
    Açıklama: {cve.get('description', 'N/A')[:200]}...
 """
 
-            # Tool çıktılarını hazırla
+
             tool_outputs_text = ""
             if hasattr(state, 'discovered_information'):
                 for key, value in state.discovered_information.items():
@@ -2451,7 +2451,7 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
                         tool_name = key[5:]
                         tool_outputs_text += f"\n{tool_name}: {str(value)[:300]}...\n"
 
-            # AI prompt oluştur
+
             ai_prompt = f"""
 Sen profesyonel bir siber güvenlik uzmanısın. Aşağıdaki penetrasyon testi sonuçlarına dayanarak kapsamlı bir güvenlik raporu oluştur.
 
@@ -2469,33 +2469,33 @@ TOOL ÇIKTILARI:
 
 Lütfen aşağıdaki formatda profesyonel bir rapor oluştur:
 
-# PENETRASYON TESTİ RAPORU
 
-## 1. YÖNETİCİ ÖZETİ
+
+
 - Genel güvenlik durumu değerlendirmesi
 - Risk seviyesi ve kritik bulgular
 - Acil aksiyon gerektiren konular
 
-## 2. METODOLOJİ VE KAPSAM
+
 - Kullanılan test metodolojisi
 - Test kapsamı ve sınırları
 - Kullanılan araçlar
 
-## 3. DETAYLI BULGULAR
+
 - Her zafiyet için detaylı açıklama
 - Teknik kanıtlar ve proof-of-concept
 - İş etkisi analizi
 
-## 4. CVE ANALİZİ
+
 - İlişkili CVE'lerin detaylı analizi
 - CVSS skorları ve severity değerlendirmesi
 
-## 5. ÖNERİLER VE ÇÖZÜMLER
+
 - Acil aksiyonlar (0-48 saat)
 - Kısa vadeli çözümler (1-7 gün)
 - Uzun vadeli stratejik öneriler
 
-## 6. SONUÇ
+
 - Genel değerlendirme
 - Risk matrisi
 - Compliance durumu
@@ -2503,7 +2503,7 @@ Lütfen aşağıdaki formatda profesyonel bir rapor oluştur:
 Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygun hazırla.
 """
 
-            # Eğer LLM generator varsa kullan
+
             if self.llm_generator:
                 try:
                     ai_report = await self.llm_generator.generate_report(ai_prompt)
@@ -2512,7 +2512,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
                 except Exception as e:
                     logger.error(f"❌ LLM rapor oluşturma hatası: {e}")
             
-            # Fallback: Template-based rapor
+
             logger.info("⚠️ LLM kullanılamıyor, template-based rapor oluşturuluyor")
             return self._generate_fallback_ai_report(state, scan_results, cve_results)
             
@@ -2532,7 +2532,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
         try:
             logger.info("🤖 LLM ile gelişmiş markdown raporu oluşturuluyor...")
             
-            # Tool çıktılarını metne çevir - OPTİMİZE (TOKEN TASARRUFU)
+
             tool_outputs_text = ""
             if tool_outputs:
                 tool_outputs_text = "## TOOL ÇIKTILARI (ÖZET):\n\n"
@@ -2540,13 +2540,13 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
                     tool_outputs_text += f"\n**{tool_name}:** "
                     if isinstance(tool_data, dict):
                         if tool_data.get('success'):
-                            # Sadece AI Summary ve önemli metrikleri ekle
+
                             if tool_data.get('ai_summary'):
                                 tool_outputs_text += f"{tool_data['ai_summary'][:150]}... "
                             
                             data = tool_data.get('data', {})
                             if isinstance(data, dict):
-                                # Sadece önemli alanların sayısını göster
+
                                 important_keys = ['vulnerabilities', 'findings', 'open_ports', 'endpoints', 'forms']
                                 metrics = []
                                 for key in important_keys:
@@ -2563,17 +2563,17 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
             else:
                 tool_outputs_text = "Tool çıktıları bulunamadı.\n"
             
-            # Bulguları metne çevir - OPTİMİZE (TOKEN TASARRUFU)
+
             findings_text = ""
             if findings:
-                # Severity'ye göre grupla
+
                 critical = [f for f in findings if f.get('severity') == 'critical']
                 high = [f for f in findings if f.get('severity') == 'high']
                 medium = [f for f in findings if f.get('severity') == 'medium']
                 
                 findings_text = f"## BULGULAR ({len(findings)} toplam: {len(critical)} critical, {len(high)} high, {len(medium)} medium):\n\n"
                 
-                # Sadece critical ve high severity bulguları detaylı göster
+
                 priority_findings = critical[:5] + high[:5]  # Maksimum 10 bulgu
                 if priority_findings:
                     findings_text += "🔴 ÖNCELİKLİ BULGULAR:\n"
@@ -2584,25 +2584,25 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
                             findings_text += f"(CVSS: {finding.get('cvss_score')})"
                         findings_text += "\n"
                 
-                # Diğer bulguları sadece sayı olarak göster
+
                 other_count = len(findings) - len(priority_findings)
                 if other_count > 0:
                     findings_text += f"\n+ {other_count} ek bulgu (düşük/orta severity)\n"
             else:
                 findings_text = "Bulgu bulunamadı.\n"
             
-            # Açık portları ve dizin bulgularını çıkar - BASİT VE KISA FORMAT
+
             ports_text = ""
             directories_text = ""
             
             if scan_results:
-                # Açık portları bul
+
                 all_open_ports = []
                 for tool_name, tool_data in scan_results.items():
                     if isinstance(tool_data, dict) and tool_data.get('success'):
                         data = tool_data.get('data', {})
                         if isinstance(data, dict):
-                            # open_ports alanını kontrol et
+
                             open_ports = data.get('open_ports', [])
                             if open_ports:
                                 for port_info in open_ports:
@@ -2623,19 +2623,19 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
                 
                 if all_open_ports:
                     ports_text = f"\n## AÇIK PORTLAR ({len(all_open_ports)} adet):\n\n"
-                    # İlk 20 portu göster, kısa format
+
                     for port in all_open_ports[:20]:
                         ports_text += f"- {port}\n"
                     if len(all_open_ports) > 20:
                         ports_text += f"\n+ {len(all_open_ports) - 20} port daha...\n"
                 
-                # Dizin bulgularını bul
+
                 all_directories = []
                 for tool_name, tool_data in scan_results.items():
                     if isinstance(tool_data, dict) and tool_data.get('success'):
                         data = tool_data.get('data', {})
                         if isinstance(data, dict):
-                            # Directory bruteforce findings kontrolü
+
                             findings_dict = data.get('findings', {})
                             if isinstance(findings_dict, dict):
                                 critical_dirs = findings_dict.get('critical', [])
@@ -2653,7 +2653,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
                                                 dir_str += f" [{status}]"
                                             all_directories.append(dir_str)
                             
-                            # Alternatif: found_paths kontrolü
+
                             found_paths = data.get('found_paths', [])
                             if found_paths:
                                 for path_info in found_paths[:15]:  # İlk 15
@@ -2664,16 +2664,16 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
             
                 if all_directories:
                     directories_text = f"\n## BULUNAN DİZİNLER/DOSYALAR ({len(all_directories)} adet):\n\n"
-                    # İlk 20 dizini göster, kısa format
+
                     for directory in all_directories[:20]:
                         directories_text += f"- {directory}\n"
                     if len(all_directories) > 20:
                         directories_text += f"\n+ {len(all_directories) - 20} dizin/dosya daha...\n"
             
-            # CVE'leri metne çevir - OPTİMİZE (TOKEN TASARRUFU)
+
             cve_text = ""
             if cve_results:
-                # Sadece critical/high severity CVE'leri göster
+
                 priority_cves = [c for c in cve_results if isinstance(c, dict) and 
                                c.get('severity', '').lower() in ['critical', 'high']][:5]
                 
@@ -2692,11 +2692,11 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
             else:
                 cve_text = ""
             
-            # Unified LLM kullanarak rapor oluştur
+
             from model_wrapper import UnifiedLLM
             model = UnifiedLLM()
             
-            # Tarama özeti varsa ekle (UI'da gözükmez, sadece LLM context için)
+
             scan_context = ""
             if scan_summary:
                 scan_context = f"\n## TARAMA ÖZETİ:\n{scan_summary}\n"
@@ -2725,30 +2725,30 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
 
 **Report Structure:**
 
-# PENETRASYON TESTİ RAPORU
 
-## 1. YÖNETİCİ ÖZETİ
+
+
 - Güvenlik durumu (1 paragraf)
 - Risk skoru ve top 3 bulgu
 
-## 2. TEKNİK BULGULAR
+
 - List priority findings with severity, description, solution
 
-## 3. TOOL ANALİZİ
+
 - Summarize tool outputs and security implications
 
-## 4. ÖNERİLER
+
 - Acil (0-48h)
 - Kısa vadeli (1-7 gün)
 
 **Write concisely but cover ALL data!**"""
 
-            # LLM'den rapor al
+
             try:
                 import asyncio
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
-                    # Event loop zaten çalışıyor - thread pool kullan
+
                     import concurrent.futures
                     with concurrent.futures.ThreadPoolExecutor() as pool:
                         response = pool.submit(
@@ -2756,12 +2756,12 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
                             model.generate_content_async(prompt)
                         ).result(timeout=120)  # 2 dakika timeout
                 else:
-                    # Event loop çalışmıyor - direkt çalıştır
+
                     response = loop.run_until_complete(
                         model.generate_content_async(prompt)
                     )
                 
-                # Response'u string'e çevir
+
                 if isinstance(response, str):
                     report = response
                 elif hasattr(response, 'text'):
@@ -2773,7 +2773,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
                 
                 logger.info(f"✅ LLM raporu oluşturuldu: {len(report)} karakter")
                 
-                # Bulguları ve port/dizin bilgilerini raporun sonuna ekle (basit ve kısa format)
+
                 if findings_text and "BULGULAR" not in report:
                     report += "\n\n---\n\n" + findings_text
                 
@@ -2788,7 +2788,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
                 
             except Exception as e:
                 logger.error(f"LLM rapor oluşturma hatası: {e}")
-                # Fallback: template-based rapor
+
                 return self._generate_template_llm_report(findings, target, cve_results, tool_outputs, scan_results)
                 
         except Exception as e:
@@ -2799,7 +2799,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
         """Template-based fallback rapor"""
         report_parts = []
         
-        # Başlık
+
         report_parts.append("# PENETRASYON TESTİ RAPORU")
         report_parts.append("")
         report_parts.append(f"**Hedef Sistem:** {target}")
@@ -2809,7 +2809,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
         report_parts.append("---")
         report_parts.append("")
         
-        # Yönetici Özeti
+
         report_parts.append("## 1. YÖNETİCİ ÖZETİ")
         report_parts.append("")
         findings_count = len(findings)
@@ -2827,9 +2827,9 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
         
         report_parts.append("")
         
-        # Açık Portlar ve Dizin Bulguları - BASİT VE KISA FORMAT
+
         if scan_results:
-            # Açık portları bul
+
             all_open_ports = []
             for tool_name, tool_data in scan_results.items():
                 if isinstance(tool_data, dict) and tool_data.get('success'):
@@ -2858,14 +2858,14 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
                 report_parts.append("")
                 report_parts.append(f"**Toplam:** {len(all_open_ports)} açık port tespit edildi")
                 report_parts.append("")
-                # İlk 20 portu göster, kısa format
+
                 for port in all_open_ports[:20]:
                     report_parts.append(f"- {port}")
                 if len(all_open_ports) > 20:
                     report_parts.append(f"\n+ {len(all_open_ports) - 20} port daha...")
                 report_parts.append("")
             
-            # Dizin bulgularını bul
+
             all_directories = []
             for tool_name, tool_data in scan_results.items():
                 if isinstance(tool_data, dict) and tool_data.get('success'):
@@ -2900,19 +2900,19 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
                 report_parts.append("")
                 report_parts.append(f"**Toplam:** {len(all_directories)} dizin/dosya bulundu")
                 report_parts.append("")
-                # İlk 20 dizini göster, kısa format
+
                 for directory in all_directories[:20]:
                     report_parts.append(f"- {directory}")
                 if len(all_directories) > 20:
                     report_parts.append(f"\n+ {len(all_directories) - 20} dizin/dosya daha...")
                 report_parts.append("")
         
-        # Detaylı Bulgular - TOOL BULGULARI DAHİL
+
         if findings:
             report_parts.append("## 4. DETAYLI BULGULAR")
             report_parts.append("")
             
-            # Bulguları severity'ye göre sırala
+
             sorted_findings = sorted(
                 findings,
                 key=lambda x: {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}.get(x.get("severity", "info").lower(), 0),
@@ -2935,7 +2935,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
                     report_parts.append(f"**Öneri:** {recommendation}")
                 report_parts.append("")
         
-        # Tool Çıktıları
+
         if tool_outputs:
             report_parts.append("## 5. TOOL ÇIKTILARI")
             report_parts.append("")
@@ -2947,7 +2947,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
                         report_parts.append(f"**Özet:** {tool_data['ai_summary']}")
                     report_parts.append("")
         
-        # CVE Analizi
+
         if cve_results:
             report_parts.append("## 6. CVE ANALİZİ")
             report_parts.append("")
@@ -2960,7 +2960,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
                     report_parts.append(f"**Açıklama:** {cve.get('description', 'N/A')[:300]}...")
                     report_parts.append("")
         
-        # Öneriler
+
         report_parts.append("## 7. ÖNERİLER VE ÇÖZÜMLER")
         report_parts.append("")
         
@@ -2976,7 +2976,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
         try:
             report_parts = []
             
-            # Başlık
+
             report_parts.append("# PENETRASYON TESTİ RAPORU")
             report_parts.append("")
             report_parts.append(f"**Hedef Sistem:** {state.target}")
@@ -2986,7 +2986,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
             report_parts.append("---")
             report_parts.append("")
             
-            # Yönetici Özeti
+
             report_parts.append("## 1. YÖNETİCİ ÖZETİ")
             report_parts.append("")
             findings_count = len(state.findings)
@@ -3007,7 +3007,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
             
             report_parts.append("")
             
-            # Metodoloji
+
             report_parts.append("## 2. METODOLOJİ VE KAPSAM")
             report_parts.append("")
             report_parts.append("Bu güvenlik değerlendirmesi, OWASP Testing Guide, PTES ve NIST SP 800-115 gibi endüstri standartlarına uygun, otomatize edilmiş bir metodoloji ile gerçekleştirilmiştir.")
@@ -3016,9 +3016,9 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
             report_parts.append("**Kapsam Dışı:** Sosyal mühendislik, fiziksel güvenlik ve DoS/DDoS saldırıları")
             report_parts.append("")
             
-            # Açık Portlar ve Dizin Bulguları - BASİT VE KISA FORMAT
+
             if scan_results:
-                # Açık portları bul
+
                 all_open_ports = []
                 for tool_name, tool_data in scan_results.items():
                     if isinstance(tool_data, dict) and tool_data.get('success'):
@@ -3053,7 +3053,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
                         report_parts.append(f"\n+ {len(all_open_ports) - 20} port daha...")
                     report_parts.append("")
                 
-                # Dizin bulgularını bul
+
                 all_directories = []
                 for tool_name, tool_data in scan_results.items():
                     if isinstance(tool_data, dict) and tool_data.get('success'):
@@ -3094,7 +3094,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
                         report_parts.append(f"\n+ {len(all_directories) - 20} dizin/dosya daha...")
                     report_parts.append("")
             
-            # Detaylı Bulgular
+
             if state.findings:
                 report_parts.append("## 5. DETAYLI BULGULAR")
                 report_parts.append("")
@@ -3108,7 +3108,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
                     report_parts.append(f"**Teknoloji:** {finding.get('technology', 'N/A')}")
                     report_parts.append("")
             
-            # CVE Analizi
+
             if cve_results:
                 report_parts.append("## 6. CVE ANALİZİ")
                 report_parts.append("")
@@ -3121,7 +3121,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
                         report_parts.append(f"**Açıklama:** {cve.get('description', 'N/A')[:200]}...")
                         report_parts.append("")
             
-            # Öneriler
+
             report_parts.append("## 7. ÖNERİLER VE ÇÖZÜMLER")
             report_parts.append("")
             
@@ -3145,7 +3145,7 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
             report_parts.append("- Incident response planının oluşturulması")
             report_parts.append("")
             
-            # Sonuç
+
             report_parts.append("## 8. SONUÇ")
             report_parts.append("")
             if findings_count == 0:

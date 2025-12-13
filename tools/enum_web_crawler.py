@@ -1,5 +1,5 @@
-# GÖREV: OTONOM KOD ANALİZİ VE DÜZELTME
-# DURUM: NİHAİ UZMAN SÜRÜMÜ v8 - Selenium Tabanlı, Kararlı ve Güvenilir
+
+
 
 """
 enum_web_crawler.py - Profesyonel Seviye (Selenium WebDriver Destekli)
@@ -31,12 +31,12 @@ from dataclasses import dataclass, field
 import concurrent.futures
 import threading
 
-# PentagentTool base class'ını import et
+
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from tools.base_mcp_tool import MCPTool, ToolCategory, PriorityLevel
 
-# Selenium ve WebDriver Manager importları
+
 try:
     from selenium import webdriver
     from selenium.webdriver.chrome.service import Service as ChromeService
@@ -50,7 +50,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # Tool loglarını göster
 
-# --- CrawlContext ve Tool Sınıfı Başlangıcı ---
+
 @dataclass
 class CrawlContext:
     base_url: str; target_domain: str; max_depth: int; max_pages: int
@@ -67,7 +67,7 @@ class EnumWebCrawlerTool(MCPTool):
             description="Selenium WebDriver kullanarak hedef web sitesini derinlemesine tarar ve formları keşfeder.",
             category=ToolCategory.DISCOVERY_ENUMERATION
         )
-    # Helper metodlar
+
     def _add_reasoning(self, ai_reasoning_log: List[Dict], phase: str, thought: str):
         """AI reasoning log'a entry ekle"""
         ai_reasoning_log.append({"phase": phase, "thought": thought})
@@ -82,13 +82,13 @@ class EnumWebCrawlerTool(MCPTool):
     def _extract_links_and_forms(self, page_source: str, current_url: str, context: CrawlContext) -> List[str]:
         soup = BeautifulSoup(page_source, 'html.parser')
         new_links = []
-        # Linkleri çıkar
+
         for tag in soup.find_all('a', href=True):
             href = tag['href']
             if not href or href.startswith(('#', 'mailto:', 'tel:', 'javascript:')): continue
             absolute_url = urlparse(urljoin(current_url, href))._replace(fragment="").geturl().rstrip('/')
             if self._is_same_domain(absolute_url, context.target_domain): new_links.append(absolute_url)
-        # Formları çıkar
+
         for form in soup.find_all('form'):
             action_path = urlparse(urljoin(current_url, form.get('action', ''))).path or '/'
             inputs = sorted([inp.get('name') for inp in form.find_all(['input', 'textarea', 'select']) if inp.get('name')])
@@ -100,11 +100,11 @@ class EnumWebCrawlerTool(MCPTool):
         Bu fonksiyon, Selenium tarama mantığını senkron olarak ve ayrı bir thread'de çalıştırır.
         Render gibi ortamlarda Chrome binary olmadığı için direkt HTTP-based fallback kullanır.
         """
-        # RENDER UYUMLU: Chrome binary olmadığı durumlarda direkt HTTP-based fallback
+
         import os
         import shutil
         
-        # Chrome binary kontrolü
+
         chrome_paths = [
             '/usr/bin/google-chrome',
             '/usr/bin/chromium',
@@ -121,7 +121,7 @@ class EnumWebCrawlerTool(MCPTool):
             logger.info("Direkt HTTP-based crawling kullanılıyor...")
             return self._http_based_crawl(context)
         
-        # Chrome mevcut, Selenium ile devam et
+
         options = webdriver.ChromeOptions()
         options.add_argument("--headless")
         options.add_argument("--no-sandbox")
@@ -144,7 +144,7 @@ class EnumWebCrawlerTool(MCPTool):
         options.add_argument("--log-level=3")
         options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         
-        # Stealth options
+
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
         options.add_experimental_option('useAutomationExtension', False)
         options.add_argument('--disable-blink-features=AutomationControlled')
@@ -154,16 +154,18 @@ class EnumWebCrawlerTool(MCPTool):
             logger.debug("ChromeDriver otomatik olarak ayarlanıyor...")
             try:
                 service = ChromeService(ChromeDriverManager().install())
+                service.service_args = ['--no-sandbox', '--disable-dev-shm-usage']
                 driver = webdriver.Chrome(service=service, options=options)
+                driver.set_window_size(800, 600)
             except Exception as chrome_error:
                 logger.debug(f"Chrome başlatılamadı (normal durum): {chrome_error}")
-                # Fallback: HTTP-based crawling kullan - sessizce
+
                 logger.info("HTTP-based crawling kullanılıyor (Chrome alternatifi)")
                 return self._http_based_crawl(context)
             
             driver.set_page_load_timeout(30) # Sayfa yükleme için zaman aşımı - render optimizasyonu
             
-            # Stealth script çalıştır
+
             driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             driver.execute_script("Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]})")
             driver.execute_script("Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']})")
@@ -171,10 +173,11 @@ class EnumWebCrawlerTool(MCPTool):
 
             queue = collections.deque([(context.base_url, 0)])
             crawled_urls = set()
+            max_memory_pages = min(context.max_pages, 20)
 
             while queue:
-                if len(crawled_urls) >= context.max_pages:
-                    context.ai_reasoning_log.append({"phase": "limit_reached", "thought": f"Tarama limiti olan {context.max_pages} sayfaya ulaşıldı."})
+                if len(crawled_urls) >= max_memory_pages:
+                    context.ai_reasoning_log.append({"phase": "limit_reached", "thought": f"Tarama limiti olan {max_memory_pages} sayfaya ulaşıldı (bellek optimizasyonu)."})
                     break
                 
                 url, depth = queue.popleft()
@@ -184,10 +187,8 @@ class EnumWebCrawlerTool(MCPTool):
                     logger.info(f"Crawling (Depth: {depth}): {url}")
                     driver.get(url)
                     
-                    # Cloudflare challenge için bekle
-                    time.sleep(5)
+                    time.sleep(2)
                     
-                    # Sayfa yüklendi mi kontrol et
                     try:
                         driver.execute_script("return document.readyState")
                     except:
@@ -196,12 +197,15 @@ class EnumWebCrawlerTool(MCPTool):
                     crawled_urls.add(url)
                     path = urlparse(url).path or '/'; context.discovered_paths.add(path)
                     
-                    # Sayfa içeriğini alıp analiz et
-                    page_source = driver.page_source
+                    page_source = driver.page_source[:50000]
                     new_links = self._extract_links_and_forms(page_source, url, context)
                     
                     for link in new_links:
-                        if link not in crawled_urls: queue.append((link, depth + 1))
+                        if link not in crawled_urls and len(queue) < 50:
+                            queue.append((link, depth + 1))
+                    
+                    if len(crawled_urls) % 5 == 0:
+                        driver.execute_script("window.stop();")
                 except WebDriverException as e:
                     logger.warning(f"Sayfa taranamadı {url}: {e.__class__.__name__}")
                 except Exception as e:
@@ -227,10 +231,10 @@ class EnumWebCrawlerTool(MCPTool):
         logger.info("HTTP-based crawling başlatılıyor...")
         self._add_reasoning(context.ai_reasoning_log, "fallback", "Selenium kullanılamadı, HTTP-based crawling kullanılıyor")
         
-        # Session oluştur - DNS çözümleme için optimize edilmiş
+
         session = requests.Session()
         
-        # Retry stratejisi - MİNİMAL (sistem çökmesin)
+
         retry = Retry(
             total=1,  # SADECE 1 deneme - hızlı fail
             connect=1,  # Connect için 1 deneme
@@ -241,7 +245,7 @@ class EnumWebCrawlerTool(MCPTool):
             raise_on_status=False  # HTTP hata kodlarında exception fırlatma
         )
         
-        # HTTPAdapter - minimal konfigürasyon
+
         adapter = HTTPAdapter(
             max_retries=retry,
             pool_connections=10,  # Minimal pool
@@ -258,11 +262,11 @@ class EnumWebCrawlerTool(MCPTool):
         queue = collections.deque([(context.base_url, 0)])
         crawled_urls = set()
         
-        # OPTİMİZE AYARLAR: Dengeli tarama - hızlı ama etkili
+
         max_crawl_pages = min(context.max_pages, 20)  # 20 sayfa - optimal
         max_crawl_depth = min(context.max_depth, 2)   # 2 derinlik - yeterli
         
-        # Progress tracking için
+
         page_count = 0
         
         while queue and len(crawled_urls) < max_crawl_pages:
@@ -272,17 +276,17 @@ class EnumWebCrawlerTool(MCPTool):
                 continue
             
             try:
-                # Progress güncelleme (her sayfa için)
+
                 page_count += 1
                 progress_percent = int((page_count / max_crawl_pages) * 100)
                 logger.info(f"Crawling progress: {progress_percent}% ({page_count}/{max_crawl_pages})")
                 
-                # GERÇEKÇI TIMEOUT: 20 saniye - yavaş siteler için yeterli
+
                 try:
                     response = session.get(current_url, timeout=20, allow_redirects=True)
                 except Exception as timeout_err:
                     logger.warning(f"⏱️ Timeout (20s): {current_url}")
-                    # Retry bir kez daha dene
+
                     try:
                         response = session.get(current_url, timeout=30, allow_redirects=True)
                     except Exception as retry_err:
@@ -292,32 +296,32 @@ class EnumWebCrawlerTool(MCPTool):
                     crawled_urls.add(current_url)
                     context.discovered_paths.add(urlparse(current_url).path or '/')
                     
-                    # Linkleri ve formları çıkar
+
                     new_links = self._extract_links_and_forms(response.text, current_url, context)
                     
-                    # Yeni linkleri kuyruğa ekle
+
                     for link in new_links:
                         if link not in crawled_urls:
                             queue.append((link, depth + 1))
             except requests.exceptions.Timeout:
-                # Timeout - log ve devam
+
                 logger.warning(f"⏱️ Timeout (10s): {current_url}")
-                # Ana sayfa bile timeout oluyorsa önemli bir sorun var
+
                 if current_url == context.base_url:
                     logger.error(f"❌ Ana sayfa erişilemedi: {current_url}")
                 continue
             except requests.exceptions.ConnectionError as conn_err:
-                # Connection error - log ve devam
+
                 logger.warning(f"🔌 Connection error: {current_url} - {str(conn_err)[:50]}")
                 if current_url == context.base_url:
                     logger.error(f"❌ Ana sayfaya bağlantı kurulamadı")
                 continue
             except requests.exceptions.RequestException as req_err:
-                # Request hatası - log ve devam
+
                 logger.warning(f"⚠️ Request error: {current_url} - {str(req_err)[:50]}")
                 continue
             except Exception as e:
-                # Diğer hatalar - log ve devam
+
                 logger.warning(f"❌ Crawl error: {current_url} - {type(e).__name__}")
                 continue
         
@@ -341,10 +345,10 @@ class EnumWebCrawlerTool(MCPTool):
         summary = (f"Tarama {time.time() - context.start_time:.2f} saniyede tamamlandı. "
                    f"{context.crawled_page_count} sayfa analiz edildi, {len(context.discovered_paths)} yol ve {len(unique_forms)} form bulundu.")
         
-        # Dinamik öneriler oluştur
+
         recommendations = self._generate_dynamic_recommendations(context, unique_forms)
         
-        # RAG-friendly format ekle
+
         rag_data = {
             "endpoints_for_analysis": [
                 {
@@ -392,15 +396,15 @@ class EnumWebCrawlerTool(MCPTool):
         """Dinamik web crawler önerileri oluşturur."""
         recommendations = []
         
-        # Form analizi için dinamik öneriler
+
         if unique_forms:
-            # Form türlerini analiz et
+
             login_forms = [f for f in unique_forms if any(keyword in f["action_path"].lower() for keyword in ['login', 'auth', 'signin', 'logon'])]
             admin_forms = [f for f in unique_forms if any(keyword in f["action_path"].lower() for keyword in ['admin', 'panel', 'dashboard', 'control'])]
             contact_forms = [f for f in unique_forms if any(keyword in f["action_path"].lower() for keyword in ['contact', 'feedback', 'support', 'message'])]
             upload_forms = [f for f in unique_forms if any(keyword in f["action_path"].lower() for keyword in ['upload', 'file', 'attach', 'import'])]
             
-            # Login formları için özel öneriler
+
             if login_forms:
                 for form in login_forms[:2]:  # İlk 2 login form
                     recommendations.append({
@@ -416,7 +420,7 @@ class EnumWebCrawlerTool(MCPTool):
                         "expert_context": f"Login form güvenlik testi için kritik analiz. {form['action_path']} için SQL injection ve authentication bypass teknikleri test edilmeli."
                     })
             
-            # Admin formları için özel öneriler
+
             if admin_forms:
                 for form in admin_forms[:2]:  # İlk 2 admin form
                     recommendations.append({
@@ -432,7 +436,7 @@ class EnumWebCrawlerTool(MCPTool):
                         "expert_context": f"Admin form güvenlik testi için kritik analiz. {form['action_path']} için SQL injection ve privilege escalation teknikleri test edilmeli."
                     })
             
-            # Upload formları için özel öneriler
+
             if upload_forms:
                 for form in upload_forms[:2]:  # İlk 2 upload form
                     recommendations.append({
@@ -448,7 +452,7 @@ class EnumWebCrawlerTool(MCPTool):
                         "expert_context": f"File upload güvenlik testi için kritik analiz. {form['action_path']} için file upload zafiyetleri ve LFI teknikleri test edilmeli."
                     })
             
-            # Genel form testleri
+
             recommendations.append({
                 "priority": "high",
                 "tool": "verify_xss",
@@ -461,9 +465,9 @@ class EnumWebCrawlerTool(MCPTool):
                 "expert_context": f"Form XSS testi için kritik analiz. {len(unique_forms)} form için XSS payload'ları ve bypass teknikleri test edilmeli."
             })
         
-        # Endpoint analizi için öneriler
+
         if context.discovered_paths:
-            # Admin endpoint'leri için özel öneriler
+
             admin_endpoints = [path for path in context.discovered_paths if any(keyword in path.lower() for keyword in ['admin', 'panel', 'dashboard', 'control'])]
             if admin_endpoints:
                 recommendations.append({
@@ -478,7 +482,7 @@ class EnumWebCrawlerTool(MCPTool):
                     "expert_context": f"Admin endpoint güvenlik testi için kritik analiz. {len(admin_endpoints)} admin endpoint için teknoloji tespiti ve güvenlik analizi yapılmalı."
                 })
             
-            # API endpoint'leri için özel öneriler
+
             api_endpoints = [path for path in context.discovered_paths if any(keyword in path.lower() for keyword in ['api', 'rest', 'graphql', 'v1', 'v2'])]
             if api_endpoints:
                 recommendations.append({
@@ -516,7 +520,7 @@ class EnumWebCrawlerTool(MCPTool):
             if not start_url.startswith(('http://', 'https://')): 
                 start_url = 'https://' + start_url
             
-            # OPTİMİZE PARAMETRELER - Hızlı ve crash-safe tarama
+
             max_depth = min(params.get("depth", 2), 2)   # Max 2 depth - yeterli kapsam
             max_pages = min(params.get("max_pages", 15), 30)  # Max 30 sayfa - crash önleme
             
@@ -529,11 +533,11 @@ class EnumWebCrawlerTool(MCPTool):
             self._add_reasoning(context.ai_reasoning_log, "initialization", f"Hedef {context.target_domain} için tarama başlatılıyor.")
             
             try:
-                # Selenium'u direkt senkron olarak çalıştır
+
                 context = self._crawl_sync(context)
                 return self._build_final_json(context)
             except KeyboardInterrupt:
-                # Kullanıcı durdurdu
+
                 logger.info("Tarama kullanıcı tarafından durduruldu")
                 return self._create_final_output(
                     success=False,
@@ -542,9 +546,9 @@ class EnumWebCrawlerTool(MCPTool):
                     error="KeyboardInterrupt"
                 )
             except Exception as e:
-                # Herhangi bir hata - graceful fail
+
                 logger.warning(f"Crawl hatası (graceful): {type(e).__name__}")
-                # En azından toplanan verileri döndür
+
                 if context.crawled_page_count > 0 or len(context.discovered_paths) > 0:
                     logger.info(f"Kısmi sonuç döndürülüyor: {context.crawled_page_count} sayfa")
                     return self._build_final_json(context)
@@ -556,7 +560,7 @@ class EnumWebCrawlerTool(MCPTool):
                         error=f"{type(e).__name__}: {str(e)[:100]}"
                     )
         except Exception as outer_e:
-            # En dış catch - sistem ASLA çökmez
+
             logger.error(f"CRITICAL: Outer exception in run_tool: {outer_e}")
             return self._create_final_output(
                 success=False,

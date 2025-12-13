@@ -31,24 +31,24 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 from urllib.parse import urlparse
 
-# PentagentTool base class'ını import et
+
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from tools.base_mcp_tool import MCPTool, ToolCategory, PriorityLevel
 
-# --- Yapılandırma ve Sabitler ---
-# Bu sabitler, kodun daha okunabilir ve yönetilebilir olmasını sağlar.
-# Gerçek bir projede bunlar bir config dosyasından yüklenebilir.
 
-# Registrar'lar risklerine göre kategorize edilmiştir.
+
+
+
+
 SUSPICIOUS_REGISTRARS = {
     "high_risk_abuse": ["enom", "pdr ltd", "publicdomainregistry", "namecheap", "tucows", "gandi", "porkbun"],
     "bulletproof_hosting": ["regru", "naunet", "1api", "nicenicllc", "webnic", "internetbs", "santrex", "vdsina"],
     "privacy_service": ["whoisguard", "privacy protect", "domains by proxy", "private by design", "perfect privacy", "redacted for privacy", "gdpr masked"]
 }
 
-# Domain yaşının risk seviyesini belirleyen eşik değerleri (gün olarak).
+
 AGE_RISK_THRESHOLDS = {
     "critical": 7,
     "high": 30,
@@ -56,7 +56,7 @@ AGE_RISK_THRESHOLDS = {
     "low": 365,
 }
 
-# Bilinen ve güvenilir kabul edilen DNS sağlayıcıları.
+
 KNOWN_GOOD_NS = {
     "cloudflare": ["cloudflare.com"],
     "google": ["googledomains.com", "google.com"],
@@ -147,17 +147,16 @@ class ReconWhoisLookupTool(MCPTool):
         """WHOIS verisini toplar ve derinlemesine analiz eder."""
         try:
             if not WHOIS_AVAILABLE:
-                # RDAP fallback
                 return self._perform_rdap_analysis(domain)
             w = whois.whois(domain)
-            if not w.domain_name:
+            if not w or not w.domain_name:
                 raise ValueError(f"'{domain}' için WHOIS bilgisi bulunamadı. Domain tescil edilmemiş veya korumalı olabilir.")
             
-            # 1. Temel Veriyi Ayrıştır
+
             parsed_data = self._parse_whois_data(w)
             
-            # 2. Gelişmiş Analizleri Gerçekleştir
-            # Registrar İtibarı Analizi
+
+
             registrar_analysis = {"risk_level": "low", "categories": [], "insight": "Registrar bilinen bir risk taşımıyor."}
             reg = (parsed_data.get("registrar") or "").lower()
             if any(r in reg for r in SUSPICIOUS_REGISTRARS["bulletproof_hosting"]):
@@ -165,7 +164,7 @@ class ReconWhoisLookupTool(MCPTool):
             elif any(r in reg for r in SUSPICIOUS_REGISTRARS["high_risk_abuse"]):
                 registrar_analysis = {"risk_level": "medium", "categories": ["high_risk_abuse"], "insight": "Registrar, yüksek kötüye kullanım (abuse) oranlarıyla biliniyor."}
 
-            # Domain Yaşı Riski Analizi
+
             age_days = parsed_data.get("domain_age_days")
             age_analysis = {"risk_level": "minimal", "age_category": "eski", "insight": "Domain yeterince eski, bu genellikle güvenilirlik işaretidir."}
             if age_days is not None:
@@ -176,7 +175,7 @@ class ReconWhoisLookupTool(MCPTool):
                 elif age_days <= AGE_RISK_THRESHOLDS["medium"]:
                     age_analysis = {"risk_level": "medium", "age_category": "nispeten yeni", "insight": "Domain 6 aydan daha yeni, dikkatli olunmalı."}
             
-            # Genel Risk Skoru ve Seviyesi
+
             risk_map = {"minimal": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
             total_risk_score = risk_map.get(registrar_analysis["risk_level"], 0) + risk_map.get(age_analysis["risk_level"], 0)
             
@@ -192,7 +191,7 @@ class ReconWhoisLookupTool(MCPTool):
                 "overall_risk_level": overall_risk
             }
             
-            # Sonuçları birleştir
+
             return {"raw_data": parsed_data, "analysis": analysis_summary}
 
         except Exception as e:
@@ -207,14 +206,14 @@ class ReconWhoisLookupTool(MCPTool):
             raise ValueError(f"RDAP sorgusu başarısız: {r.status_code}")
         data = r.json()
 
-        # RDAP'ten alanlar
+
         nameservers = [ns.get('ldhName', '') for ns in data.get('nameservers', []) if ns.get('ldhName')]
         events = data.get('events', [])
         created = next((e.get('eventDate') for e in events if e.get('eventAction') == 'registration'), None)
         expires = next((e.get('eventDate') for e in events if e.get('eventAction') == 'expiration'), None)
         updated = next((e.get('eventDate') for e in events if e.get('eventAction') == 'last changed'), None)
 
-        # Normalize
+
         parsed_data = {
             "domain": (data.get('ldhName') or domain).lower(),
             "registrar": (data.get('registrar') or {}).get('name') if isinstance(data.get('registrar'), dict) else None,
@@ -230,7 +229,7 @@ class ReconWhoisLookupTool(MCPTool):
             "domain_age_days": None,
         }
 
-        # Risk analizini WHOIS yoluyla yaptığımız mantıkla uyumlu üret
+
         registrar_analysis = {"risk_level": "low", "categories": [], "insight": "Registrar riskli görünmüyor."}
         age_analysis = {"risk_level": "minimal", "age_category": "bilinmiyor", "insight": "Domain yaşı tahmin edilemedi."}
         risk_map = {"minimal": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
@@ -326,12 +325,12 @@ class ReconWhoisLookupTool(MCPTool):
         Aracın ana giriş noktası. Parametreleri alır, analizi yürütür ve
         standart MCP formatında çıktı üretir.
         """
-        # Hem 'domain' hem de 'target' parametresini kabul et
+
         domain = params.get("domain") or params.get("target")
         reasoning_log = []
 
         try:
-            # 1. Başlangıç ve Doğrulama
+
             reasoning_log.append({"phase": "initialization", "thought": f"'{domain}' için WHOIS analizi başlatılıyor."})
             if not domain:
                 raise ValueError("Domain veya target parametresi zorunludur.")
@@ -340,21 +339,21 @@ class ReconWhoisLookupTool(MCPTool):
             if not self._is_valid_domain(clean_domain):
                 raise ValueError(f"Geçersiz domain formatı: {clean_domain}")
             
-            # 2. Analizi Gerçekleştir
+
             analysis_result = await asyncio.to_thread(self._perform_whois_analysis, clean_domain) # whois kütüphanesi senkron olduğu için
             raw_data = analysis_result["raw_data"]
             analysis = analysis_result["analysis"]
             
-            # 3. Kritik Bulguları Kaydet
+
             risk_level = analysis.get("overall_risk_level")
             if risk_level in ["critical", "high"]:
                  reasoning_log.append({"phase": "critical_finding", "thought": f"⚠️ Yüksek riskli domain profili tespit edildi (Seviye: {risk_level}). Öncelikli inceleme gerekiyor."})
 
-            # 4. Önerileri Üret
+
             recommendations = self._generate_mcp_recommendations(raw_data, analysis)
             reasoning_log.append({"phase": "recommendation", "thought": f"{len(recommendations)} adet bir sonraki adım önerisi oluşturuldu."})
 
-            # 5. Standart Çıktıyı Oluştur ve Döndür
+
             reasoning_log.append({"phase": "completion", "thought": "Analiz başarıyla tamamlandı, sonuçlar formatlanıyor."})
             return self._create_final_output(raw_data, analysis, recommendations, reasoning_log)
 
@@ -385,7 +384,7 @@ async def main():
     tool = ReconWhoisLookupTool()
     result = await tool.run_tool({"domain": target_domain})
     
-    # Sonucu güzel bir JSON formatında yazdır
+
     print(json.dumps(result, indent=4, ensure_ascii=False))
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@ from datetime import datetime
 from model_wrapper import UnifiedLLM
 from config import config
 
-# RAG modülünü import et
+
 rag_pent_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Rag-Pent')
 sys.path.insert(0, rag_pent_path)
 
@@ -124,10 +124,10 @@ class RAGService:
             
             logger.info("RAG servis başlatılıyor...")
             
-            # Environment variables'dan config oluştur
+
             qdrant_host = os.getenv('QDRANT_HOST', 'localhost')
             
-            # Port: HuggingFace Space için gereksiz, ignore et
+
             qdrant_port_str = os.getenv('QDRANT_PORT', '6333')
             if '.hf.space' in qdrant_host:
                 qdrant_port = 443  # HuggingFace Space için HTTPS default port
@@ -154,14 +154,14 @@ class RAGService:
                 timeout=30  # Startup için daha kısa timeout
             )
             
-            # Cloud deployment için https kontrolü
+
             is_cloud = search_config.qdrant_api_key is not None or search_config.qdrant_host.startswith('http')
             if is_cloud:
                 logger.info(f"Qdrant Cloud'a bağlanılıyor: {search_config.qdrant_host}")
             else:
                 logger.info(f"Local Qdrant'a bağlanılıyor: {search_config.qdrant_host}:{search_config.qdrant_port}")
             
-            # Retry mekanizması - 2 deneme (total: max 60 saniye)
+
             max_retries = 2
             for attempt in range(max_retries):
                 try:
@@ -189,7 +189,7 @@ class RAGService:
                         self._available = False
                         return  # Exception raise etme, devam et
             
-            # Health check
+
             if self._engine.health_check():
                 self._available = True
                 stats = self._engine.get_stats()
@@ -208,7 +208,7 @@ class RAGService:
     async def _get_or_create_session(self):
         """Shared aiohttp session - memory efficient"""
         if self._session is None or self._session.closed:
-            # Timeout ve connection pooling optimizasyonları
+
             timeout = aiohttp.ClientTimeout(total=30, connect=10)
             connector = aiohttp.TCPConnector(limit=10, limit_per_host=5)
             self._session = aiohttp.ClientSession(timeout=timeout, connector=connector)
@@ -240,7 +240,7 @@ class RAGService:
         if not results or len(results) == 0:
             return results
         
-        # Reranker endpoint kontrolü
+
         reranker_url = os.getenv('RERANKER_API_URL')
         if not reranker_url or reranker_url == 'https://your-space.hf.space/rerank':
             logger.warning("⚠️ RERANKER_API_URL ayarlanmamış, reranker atlanıyor")
@@ -250,10 +250,10 @@ class RAGService:
         try:
             logger.info(f"🔄 Reranker başlatılıyor: {len(results)} sonuç sıralanacak")
             
-            # Query ve documents hazırla - mixedbread-ai/mxbai-rerank-base-v1 için optimize edilmiş format
+
             documents = []
             for r in results:
-                # CVE bilgilerini daha zengin format ile hazırla
+
                 doc_parts = [
                     f"CVE: {r.cve_id}",
                     f"Description: {r.description[:400]}",
@@ -269,31 +269,31 @@ class RAGService:
             
             logger.info(f"📝 {len(documents)} document reranker formatında hazırlandı")
             
-            # RERANKER ENDPOINT - Kendi HuggingFace Space
+
             reranker_url_raw = os.getenv('RERANKER_API_URL', 'https://meryemarpaci-pentagent-mxbai-rerank.hf.space/rerank')
             
-            # URL formatını düzelt: username/spacename -> https://username-spacename.hf.space/rerank
+
             if reranker_url_raw and not reranker_url_raw.startswith('http'):
-                # username/spacename formatını düzelt
+
                 if '/' in reranker_url_raw and not reranker_url_raw.startswith('http'):
                     space_name = reranker_url_raw.replace('/', '-')
                     reranker_url = f"https://{space_name}.hf.space/rerank"
                 else:
                     reranker_url = reranker_url_raw
             elif reranker_url_raw and '/rerank' not in reranker_url_raw:
-                # URL var ama /rerank endpoint'i yok
+
                 reranker_url = reranker_url_raw.rstrip('/') + '/rerank'
             else:
                 reranker_url = reranker_url_raw
             
             logger.info(f"🎯 Reranker endpoint: {reranker_url}")
             
-            # Headers - Token gerekmez (kendi space'imiz)
+
             headers = {
                 "Content-Type": "application/json"
             }
             
-            # Payload - Kendi API formatımız
+
             payload = {
                 "query": query,
                 "documents": documents,
@@ -301,14 +301,14 @@ class RAGService:
             }
             logger.info(f"🎯 Kendi Reranker Space kullanılıyor")
             
-            # Log için document sayısını al
+
             doc_count = len(documents)
             logger.info(f"📤 {doc_count} document reranker'a gönderiliyor")
             logger.info(f"🔗 POST {reranker_url}")
             logger.debug(f"📦 Payload: query='{query[:50]}...', documents={doc_count}, top_k={limit}")
             
-            # SYNC HTTP REQUEST - Event loop sorununu önlemek için
-            # requests kütüphanesi kullanıyoruz (async yerine)
+
+
             import requests
             try:
                 response = requests.post(
@@ -348,7 +348,7 @@ class RAGService:
                     logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
                     return results
                 
-                # Response body size limit - 1MB max (memory protection)
+
                 content_length = response.headers.get('Content-Length')
                 if content_length and int(content_length) > 1_000_000:
                     logger.warning(f"⚠️ Reranker response çok büyük: {content_length} bytes")
@@ -358,7 +358,7 @@ class RAGService:
                 rerank_response = response.json()
                 logger.info(f"✅ Reranker yanıtı alındı: {type(rerank_response)}")
                 
-                # Kendi API formatımız: {"scores": [...], "top_k_indices": [...]}
+
                 if isinstance(rerank_response, dict) and 'scores' in rerank_response:
                     rerank_scores = rerank_response['scores']
                     logger.info(f"📊 {len(rerank_scores)} skor alındı")
@@ -367,26 +367,26 @@ class RAGService:
                     return results
                 
                 if len(rerank_scores) == len(results):
-                    # Sonuçları rerank skoruna göre sırala
+
                     reranked = []
                     for idx, score in enumerate(rerank_scores):
                         cve = results[idx]
                         original_score = cve.score
                         
-                        # Rerank score normalize et (0-1 arası)
+
                         rerank_score = float(score) if isinstance(score, (int, float)) else 0.5
                         
-                        # mixedbread-ai/mxbai-rerank-base-v1 zaten 0-1 arası skor verir
-                        # Ama genelde düşük skorlar veriyor (0.01-0.3 arası), scale up yapıyoruz
-                        # Score'u 10x yapıp clamp ediyoruz
+
+
+
                         boosted_score = min(1.0, rerank_score * 10.0)  # 10x boost, max 1.0
                         normalized_rerank = max(0.0, boosted_score)
                         
-                        # Combined score: %85 rerank (boosted), %15 original
-                        # Boosted reranker score ile daha yüksek skorlar
+
+
                         combined_score = (original_score * 0.15) + (normalized_rerank * 0.85)
                         
-                        # Score'u update et - frontend'de görünsün
+
                         cve.score = combined_score
                         
                         reranked.append({
@@ -397,15 +397,15 @@ class RAGService:
                             "combined_score": combined_score
                         })
                     
-                    # Combined score'a göre sırala (EN YÜKSEK ÖNCE)
+
                     reranked.sort(key=lambda x: x['combined_score'], reverse=True)
                     
-                    # Sadece CVE'leri döndür
+
                     reranked_cves = [item['cve'] for item in reranked]
                     
                     logger.info(f"✅ RERANKING TAMAMLANDI: {len(reranked_cves)} sonuç")
                     
-                    # Top 3'ü logla - normalized score'ları göster
+
                     for i, item in enumerate(reranked[:3], 1):
                         logger.info(f"  🏆 #{i}: {item['cve'].cve_id} | Rerank: {item['rerank_score']:.3f} | Normalized: {item['normalized_rerank']:.3f} | Final: {item['combined_score']:.3f} ({item['combined_score']*100:.1f}%)")
                     
@@ -458,7 +458,7 @@ class RAGService:
         Returns:
             Rerank edilmiş CVEResult listesi
         """
-        # Lazy initialization: engine None ise tekrar başlat
+
         if self._engine is None and not self._available:
             logger.info("🔄 RAG Engine ilk kullanımda başlatılıyor...")
             self._initialize()
@@ -470,18 +470,18 @@ class RAGService:
         try:
             logger.info(f"CVE araması yapılıyor: '{query}' (limit={limit}, severity={severity})")
             
-            # Reranker MUTLAKA aktif
+
             reranker_enabled = True if use_reranker is None else use_reranker
-            # Reranker için 20 sonuç çek, reranker en iyi 5'i döndürecek
+
             fetch_limit = 20 if reranker_enabled else limit
             if reranker_enabled:
                 logger.info(f"🎯 Reranker aktif - {fetch_limit} sonuç çekilecek, reranking sonrası {limit} döndürülecek")
             else:
                 logger.info(f"🎯 Reranker devre dışı - {limit} sonuç döndürülecek")
             
-            # Severity filtresi varsa - Qdrant filter kullan
+
             if severity:
-                # Severity filter için Qdrant match condition kullan
+
                 from qdrant_client.models import Filter, FieldCondition, MatchValue
                 severity_filter = Filter(
                     must=[
@@ -499,14 +499,14 @@ class RAGService:
             else:
                 results = self._engine.search(query, limit=fetch_limit)
             
-            # SearchResult'ları CVEResult'a dönüştür - TÜM DETAYLARLA
+
             cve_results = []
             for r in results:
-                # Metadata'dan tüm bilgileri çıkar
+
                 metadata = r.metadata or {}
                 references = metadata.get('references', [])
                 
-                # DEBUG: References kontrol
+
                 logger.info(f"🔗 CVE {r.cve_id}: {len(references) if references else 0} referans bulundu")
                 if references and len(references) > 0:
                     logger.info(f"   İlk referans: {references[0] if isinstance(references[0], str) else references[0].get('url', 'N/A')}")
@@ -531,12 +531,12 @@ class RAGService:
             
             logger.info(f"✅ {len(cve_results)} CVE bulundu (vektör araması)")
             
-            # Reranker ile optimize et
+
             if reranker_enabled:
                 if len(cve_results) <= 1:
                     logger.info(f"⚠️ Reranker atlanıyor: {len(cve_results)} sonuç var (en az 2 sonuç gerekli)")
                 else:
-                    # Reranker URL kontrolü - erken uyarı
+
                     reranker_url = os.getenv('RERANKER_API_URL')
                     if not reranker_url or reranker_url == 'https://your-space.hf.space/rerank':
                         logger.warning(f"⚠️ RERANKER_API_URL ayarlanmamış veya geçersiz: {reranker_url}")
@@ -547,13 +547,13 @@ class RAGService:
             if reranker_enabled and len(cve_results) > 1:
                 logger.info(f"🔄 Reranker işleme başlıyor...")
                 
-                # Async reranker'ı sync context'te çalıştır - MEMORY EFFICIENT
+
                 try:
                     import concurrent.futures
                     
                     def run_rerank_in_new_loop():
                         """Yeni event loop oluştur ve rerank çalıştır - Thread-safe"""
-                        # Her thread için tamamen yeni event loop oluştur
+
                         new_loop = asyncio.new_event_loop()
                         try:
                             asyncio.set_event_loop(new_loop)
@@ -561,13 +561,13 @@ class RAGService:
                                 self._rerank_results(query, cve_results, limit)
                             )
                         finally:
-                            # Loop'u temizle - Event loop is closed hatasını önle
+
                             try:
-                                # Pending tasks'leri temizle
+
                                 pending = asyncio.all_tasks(new_loop)
                                 for task in pending:
                                     task.cancel()
-                                # Tasks'lerin tamamlanmasını bekle
+
                                 if pending:
                                     new_loop.run_until_complete(
                                         asyncio.gather(*pending, return_exceptions=True)
@@ -578,35 +578,35 @@ class RAGService:
                                 new_loop.close()
                                 asyncio.set_event_loop(None)  # Thread'den loop'u temizle
                     
-                    # Her zaman yeni thread'de çalıştır - Event loop çakışmasını önle
+
                     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                         future = pool.submit(run_rerank_in_new_loop)
                         try:
                             reranked_results = future.result(timeout=60)  # 60s timeout (HuggingFace Space cold start için)
                             
-                            # Limit'e göre kes - memory efficient
+
                             reranked_results = reranked_results[:limit]
                             logger.info(f"✅ Reranking tamamlandı, en iyi {len(reranked_results)} sonuç döndürülüyor")
                             return reranked_results
                             
                         except concurrent.futures.TimeoutError:
-                            # Timeout normal bir durum - WARNING seviyesinde logla
+
                             logger.warning("⏱️ Reranker thread pool TIMEOUT (60s) - orijinal sıralama kullanılıyor (normal durum)")
                             future.cancel()  # Cancel the future
                             return cve_results[:limit]
                         except RuntimeError as e:
                             if "Event loop is closed" in str(e):
-                                # Event loop closed normal bir durum olabilir - WARNING seviyesinde logla
+
                                 logger.warning(f"⚠️ Event loop closed hatası yakalandı: {e}")
                                 logger.info("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan) - normal fallback")
                                 return cve_results[:limit]
                             raise  # Diğer RuntimeError'ları yukarı fırlat
                         except asyncio.TimeoutError:
-                            # Timeout normal bir durum - WARNING seviyesinde logla
+
                             logger.warning(f"⏱️ Reranker asyncio TIMEOUT - orijinal sonuçlar döndürülüyor (normal durum)")
                             return cve_results[:limit]
                         except Exception as e:
-                            # Hatalar için WARNING seviyesi - sistem çökmesini önle
+
                             error_msg = str(e) if str(e) else f"{type(e).__name__} hatası"
                             logger.warning(f"⚠️ RERANKER request hatası: {error_msg}")
                             logger.info("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan) - normal fallback")
@@ -626,7 +626,7 @@ class RAGService:
                     logger.warning("⚠️ Orijinal sıralama kullanılıyor (Reranker olmadan)")
                     return cve_results[:limit]
             else:
-                # Reranker kullanılmıyor, direkt döndür
+
                 return cve_results[:limit]
             
         except Exception as e:
@@ -644,7 +644,7 @@ class RAGService:
         Returns:
             CVEResult veya None
         """
-        # Lazy initialization
+
         if self._engine is None and not self._available:
             logger.info("🔄 RAG Engine ilk kullanımda başlatılıyor...")
             self._initialize()
@@ -694,7 +694,7 @@ class RAGService:
                 'summary': str  # Scan özeti
             }
         """
-        # Lazy initialization
+
         if self._engine is None and not self._available:
             logger.info("🔄 RAG Engine ilk kullanımda başlatılıyor...")
             self._initialize()
@@ -703,12 +703,12 @@ class RAGService:
             return {'results': [], 'query': '', 'summary': ''}
         
         try:
-            # LLM ile optimize query oluştur
+
             query = self._generate_optimized_query_with_llm(scan_results)
             summary = self._summarize_scan_results(scan_results)
             
             if not query:
-                # Fallback: basit query oluştur
+
                 logger.warning("LLM query oluşturamadı, basit query kullanılıyor")
                 query = self._generate_query_from_scan(scan_results)
             
@@ -718,7 +718,7 @@ class RAGService:
             
             logger.info(f"Scan analizi için oluşturulan query: '{query}'")
             
-            # CVE araması yap
+
             results = self.search_cve(query, limit=5)
             
             return {
@@ -741,10 +741,10 @@ class RAGService:
         Scan sonuçlarını analiz edip en iyi CVE arama sorgusunu üretir.
         """
         try:
-            # Unified LLM (Groq default)
+
             model = UnifiedLLM()
             
-            # TÜM TOOL ÇIKTILARINI HAZIRLA - JSON FORMATINDA
+
             all_tool_outputs = self._prepare_all_tool_outputs_for_ai(scan_results)
             
             logger.info(f"🔍 RAG Query için hazırlanan tool outputs: {len(all_tool_outputs) if all_tool_outputs else 0} karakter")
@@ -755,7 +755,7 @@ class RAGService:
                 logger.warning(f"⚠️ Scan results içeriği: {scan_results}")
                 return "web application security vulnerability exploitation"
             
-            # LLM'ye TÜM TOOL ÇIKTILARINI ver - KRİTİK: JSON FORMATINDA
+
             prompt = f"""Sen bir Kıdemli Siber Güvenlik Analistisin. Aşağıdaki penetrasyon testi sonuçlarını detaylı analiz et ve CVE veritabanı için SPESİFİK arama sorgusu oluştur.
 
 🎯 HEDEF: {scan_results.get('target', 'Unknown')}
@@ -777,6 +777,7 @@ class RAGService:
 - Max 150 karakter, ÖZLÜ ama DETAYLI
 - SADECE query string döndür, açıklama YAPMA
 - Teknoloji adını tam olarak yaz (kısaltma kullanma)
+- YIL BİLGİSİ VARSA MUTLAKA QUERY'DE TUT (CVE-2021, 2024, vb.) - YILI KALDIRMA!
 
 💡 SPESİFİK QUERY ÖRNEKLERİ (İYİ):
 - "Apache HTTP Server 2.4.49 path traversal directory listing CVE-2021"
@@ -802,12 +803,12 @@ class RAGService:
 
 Şimdi SPESİFİK CVE query'i oluştur:"""
             
-            # Yanıt al - Event loop sorunu çözümü - MEMORY EFFICIENT
+
             import asyncio
             try:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
-                    # Event loop zaten çalışıyor - thread pool kullan (MAX 1 WORKER)
+
                     import concurrent.futures
                     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                         future = pool.submit(
@@ -821,19 +822,19 @@ class RAGService:
                             future.cancel()
                             return self._generate_query_from_scan(scan_results)
                 else:
-                    # Event loop çalışmıyor - direkt çalıştır
+
                     response = loop.run_until_complete(
                         model.generate_content_async(prompt)
                     )
             except RuntimeError as e:
-                # Event loop hatasını yakala
+
                 logger.warning(f"Event loop hatası: {e}, basit query kullanılıyor")
                 return self._generate_query_from_scan(scan_results)
             except asyncio.TimeoutError:
                 logger.warning("LLM query generation asyncio TIMEOUT")
                 return self._generate_query_from_scan(scan_results)
             
-            # Response string veya object olabilir
+
             if isinstance(response, str):
                 query = response.strip()
             elif hasattr(response, 'text'):
@@ -844,16 +845,16 @@ class RAGService:
                 logger.warning(f"Unexpected response type: {type(response)}")
                 query = str(response).strip()
             
-            # Query'yi temizle
+
             if query and len(query) > 10:
-                # JSON formatından çıkar
+
                 if query.startswith('"') and query.endswith('"'):
                     query = query[1:-1]
                 
                 logger.info(f"✅ LLM query oluşturuldu: '{query}'")
                 return query
             else:
-                # Fallback mekanizması normal bir durum - DEBUG seviyesinde logla
+
                 logger.debug(f"LLM query oluşturulamadı veya kısa döndü, fallback kullanılıyor")
                 fallback_query = self._generate_query_from_scan(scan_results)
                 if fallback_query:
@@ -871,11 +872,11 @@ class RAGService:
         try:
             import json
             
-            # Tool çıktılarını topla
+
             tool_outputs = []
             target = scan_results.get("target", "target")
             
-            # Scan results'tan tool çıktılarını çıkar
+
             for key, value in scan_results.items():
                 if key.startswith("tool_") and isinstance(value, dict):
                     tool_name = key[5:]  # "tool_" prefix'ini kaldır
@@ -889,7 +890,7 @@ class RAGService:
                     }
                     tool_outputs.append(tool_output)
             
-            # Context summary'den de tool bilgilerini ekle
+
             if "context_summary" in scan_results:
                 context = scan_results["context_summary"]
                 for key, value in context.items():
@@ -905,7 +906,7 @@ class RAGService:
                         }
                         tool_outputs.append(tool_output)
             
-            # Execution summary'den tool bilgilerini ekle
+
             if "execution_summary" in scan_results:
                 exec_summary = scan_results["execution_summary"]
                 tool_outputs.append({
@@ -914,14 +915,14 @@ class RAGService:
                     "successful_tools": exec_summary.get("successful_tools", [])
                 })
             
-            # Bulguları da ekle
+
             if "findings" in scan_results and scan_results["findings"]:
                 tool_outputs.append({
                     "findings": scan_results["findings"],
                     "findings_count": len(scan_results["findings"])
                 })
             
-            # JSON formatında döndür
+
             if tool_outputs:
                 logger.info(f"📊 {len(tool_outputs)} tool çıktısı AI'ya hazırlandı")
                 return json.dumps(tool_outputs, indent=2, ensure_ascii=False)
@@ -940,17 +941,17 @@ class RAGService:
         try:
             import json
             
-            # Eğer scan_results'da zaten findings array'i varsa onu kullan
+
             if "findings" in scan_results and scan_results["findings"]:
                 findings = scan_results["findings"]
                 logger.info(f"📊 Mevcut {len(findings)} bulgu kullanılıyor")
                 
-                # Bulguları zenginleştir - context_summary ve execution_summary ekle
+
                 enriched_findings = []
                 for finding in findings:
                     enriched_finding = finding.copy()
                     
-                    # Context summary'den ek bilgi ekle
+
                     if "context_summary" in scan_results:
                         context = scan_results["context_summary"]
                         if "technologies" in context:
@@ -960,7 +961,7 @@ class RAGService:
                         if "parameters" in context:
                             enriched_finding["discovered_parameters"] = context["parameters"]
                     
-                    # Execution summary'den ek bilgi ekle
+
                     if "execution_summary" in scan_results:
                         exec_summary = scan_results["execution_summary"]
                         enriched_finding["tools_executed"] = exec_summary.get("tools_executed", [])
@@ -970,20 +971,20 @@ class RAGService:
                 
                 return json.dumps(enriched_findings, indent=2, ensure_ascii=False)
             
-            # Tool sonuçlarından bulguları çıkar - GELİŞTİRİLMİŞ
+
             findings = []
             target = scan_results.get("target", "target")
             
-            # Tool sonuçlarında bulguları ara
+
             for tool_name, tool_result in scan_results.items():
                 if not isinstance(tool_result, dict):
                     continue
                 
-                # Tool_ prefix'li sonuçları da işle
+
                 if tool_name.startswith("tool_"):
                     tool_name = tool_name[5:]  # "tool_" prefix'ini kaldır
                 
-                # Web crawler bulguları - DETAYLI ANALİZ
+
                 if "web_crawler" in tool_name.lower():
                     forms = tool_result.get("forms", [])
                     endpoints = tool_result.get("endpoints", [])
@@ -991,7 +992,7 @@ class RAGService:
                     pages = tool_result.get("pages", [])
                     technologies = tool_result.get("technologies", [])
                     
-                    # Teknoloji tespiti varsa ayrı bulgu ekle
+
                     if technologies:
                         tech_str = ", ".join(technologies[:5])  # İlk 5 teknoloji
                         findings.append({
@@ -1004,7 +1005,7 @@ class RAGService:
                             "evidence": f"Technologies: {tech_str}"
                         })
                     
-                    # Form ve parametre bulguları
+
                     if forms or parameters:
                         form_count = len(forms)
                         param_count = len(parameters)
@@ -1020,7 +1021,7 @@ class RAGService:
                             "evidence": f"Forms: {form_count}, Parameters: {param_list}"
                         })
                     
-                    # Endpoint bulguları
+
                     if endpoints:
                         endpoint_list = ", ".join(endpoints[:10])  # İlk 10 endpoint
                         findings.append({
@@ -1033,7 +1034,7 @@ class RAGService:
                             "evidence": f"Endpoints: {endpoint_list}"
                         })
                 
-                # Admin panel bulguları
+
                 elif "exposed_panels" in tool_name.lower() or "infra" in tool_name.lower():
                     panels = tool_result.get("discovered_panels", [])
                     if panels:
@@ -1047,7 +1048,7 @@ class RAGService:
                             "evidence": f"Panels: {panels[:5]}"
                         })
                 
-                # Teknoloji tespiti bulguları
+
                 elif "technologies" in tool_name.lower():
                     technologies = tool_result if isinstance(tool_result, list) else tool_result.get("technologies", [])
                     if technologies:
@@ -1062,7 +1063,7 @@ class RAGService:
                             "evidence": f"Technologies: {tech_str}"
                         })
                 
-                # Missing headers
+
                 elif "header" in tool_name.lower():
                     missing_headers = tool_result.get("missing_security_headers", [])
                     if missing_headers:
@@ -1076,7 +1077,7 @@ class RAGService:
                             "evidence": f"Missing headers: {missing_headers}"
                         })
                 
-                # Port scanner bulguları
+
                 elif "port" in tool_name.lower():
                     open_ports = tool_result.get("open_ports", [])
                     services = tool_result.get("services", [])
@@ -1091,7 +1092,7 @@ class RAGService:
                             "evidence": f"Open ports: {open_ports[:10]}"
                         })
                 
-                # Vulnerability test bulguları
+
                 elif any(vuln_type in tool_name.lower() for vuln_type in ["xss", "sqli", "lfi", "verify"]):
                     vulnerabilities = tool_result.get("vulnerabilities", [])
                     findings_data = tool_result.get("findings", [])
@@ -1107,9 +1108,9 @@ class RAGService:
                             "evidence": f"Vulnerabilities: {vuln_count} found"
                         })
                 
-                # GENEL TOOL ÇIKTI - TÜM TOOL'LAR İÇİN
+
                 else:
-                    # Diğer tool'lar için genel bulgu oluştur
+
                     if tool_result and isinstance(tool_result, dict) and len(tool_result) > 0:
                         data_keys = list(tool_result.keys())
                         findings.append({
@@ -1122,7 +1123,7 @@ class RAGService:
                             "evidence": f"Data keys: {data_keys[:5]}"
                         })
             
-            # Bulguları JSON'a çevir
+
             if findings:
                 logger.info(f"📊 {len(findings)} bulgu JSON'a çevrildi")
                 return json.dumps(findings, indent=2, ensure_ascii=False)
@@ -1142,12 +1143,12 @@ class RAGService:
         security_findings = []
         target = scan_results.get("target", "target")
         
-        # 1. Tool sonuçlarında SPESİFİK bulguları ara
+
         for tool_name, tool_result in scan_results.items():
             if not isinstance(tool_result, dict):
                 continue
             
-            # a) Web crawler - Form ve endpoint bulguları
+
             if "web_crawler" in tool_name.lower():
                 forms = tool_result.get("forms", [])
                 endpoints = tool_result.get("endpoints", [])
@@ -1164,7 +1165,7 @@ class RAGService:
                     if sensitive_params:
                         security_findings.append(f"{target} parameter injection vulnerability")
             
-            # b) Admin panel discovery
+
             elif "exposed_panels" in tool_name.lower() or "infra" in tool_name.lower():
                 panels = tool_result.get("discovered_panels", [])
                 if panels:
@@ -1178,13 +1179,13 @@ class RAGService:
                         elif "admin" in panel.lower():
                             security_findings.append(f"{target} admin panel exposed authentication bypass")
             
-            # c) API endpoint discovery
+
             elif "api" in tool_name.lower():
                 api_endpoints = tool_result.get("api_endpoints", [])
                 if api_endpoints:
                     security_findings.append(f"{target} API endpoint security vulnerability")
             
-            # d) Directory bruteforce - Sensitive directories
+
             elif "directory" in tool_name.lower():
                 directories = tool_result.get("directories", [])
                 sensitive_dirs = []
@@ -1194,7 +1195,7 @@ class RAGService:
                 if sensitive_dirs:
                     security_findings.append(f"{target} sensitive directory exposure vulnerability")
             
-            # e) Missing security headers
+
             elif "header" in tool_name.lower():
                 missing_headers = tool_result.get("missing_security_headers", [])
                 if missing_headers:
@@ -1205,7 +1206,7 @@ class RAGService:
                     if "Content-Security-Policy" in missing_headers:
                         security_findings.append(f"{target} CSP injection vulnerability")
             
-            # f) Technology detection - Versiyon bilgisi varsa CVE için önemli
+
             elif "tech" in tool_name.lower():
                 technologies = tool_result.get("technologies", []) or tool_result.get("detected_technologies", [])
                 if technologies and isinstance(technologies, list):
@@ -1216,7 +1217,7 @@ class RAGService:
                             if tech_name and version and version != "N/A":
                                 security_findings.append(f"{target} {tech_name} {version} vulnerability")
             
-            # g) Vulnerability scanners
+
             elif any(vuln_tool in tool_name.lower() for vuln_tool in ["verify_xss", "verify_sqli", "verify_lfi"]):
                 vulnerabilities = tool_result.get("vulnerabilities", [])
                 if vulnerabilities:
@@ -1229,22 +1230,22 @@ class RAGService:
                         elif "lfi" in vuln_type:
                             security_findings.append(f"{target} local file inclusion vulnerability")
         
-        # 2. Context'ten spesifik bulguları çıkar
+
         context = scan_results.get("context_summary", {})
         if isinstance(context, dict):
-            # Forms bulundu mu?
+
             forms = context.get("forms", [])
             if forms:
                 security_findings.append(f"{target} web application form vulnerability")
             
-            # Parameters bulundu mu?
+
             parameters = context.get("parameters", [])
             if parameters:
                 security_findings.append(f"{target} parameter manipulation vulnerability")
         
-        # Sonuç - spesifik vulnerability queries
+
         if security_findings:
-            # En spesifik 3 bulguyu al ve birleştir
+
             return " ".join(security_findings[:3])
         else:
             return f"{target} web application security vulnerability"
@@ -1256,54 +1257,54 @@ class RAGService:
         """
         summary_parts = []
         
-        # Target
+
         target = scan_results.get("target", "")
         if target:
             summary_parts.append(f"🎯 HEDEF: {target}\n")
         
-        # Context summary'den bilgileri al
+
         context = scan_results.get("context_summary", {})
         if context:
             summary_parts.append("📊 TARAMA CONTEXT:")
             
-            # Teknolojiler
+
             if context.get("technologies"):
                 techs = context["technologies"]
                 summary_parts.append(f"  • Tespit Edilen Teknolojiler ({len(techs)}): {', '.join(techs[:10])}")
             
-            # Açık portlar
+
             if context.get("open_ports"):
                 ports = context["open_ports"]
                 summary_parts.append(f"  • Açık Portlar ({len(ports)}): {', '.join(map(str, ports[:20]))}")
             
-            # Servisler
+
             if context.get("services"):
                 services = context["services"]
                 summary_parts.append(f"  • Aktif Servisler ({len(services)}): {', '.join(services[:10])}")
             
-            # Subdomain'ler
+
             if context.get("subdomains"):
                 subs = context["subdomains"]
                 summary_parts.append(f"  • Subdomain'ler ({len(subs)}): {', '.join(subs[:10])}")
             
-            # Formlar
+
             if context.get("forms"):
                 forms = context["forms"]
                 summary_parts.append(f"  • Keşfedilen Formlar: {len(forms)} adet")
             
-            # Parametreler
+
             if context.get("parameters"):
                 params = context["parameters"]
                 summary_parts.append(f"  • URL Parametreleri ({len(params)}): {', '.join(params[:15])}")
             
-            # Endpoint'ler
+
             if context.get("endpoints"):
                 eps = context["endpoints"]
                 summary_parts.append(f"  • API Endpoint'ler ({len(eps)}): {', '.join(eps[:10])}")
             
             summary_parts.append("")  # Boş satır
         
-        # Her tool sonucunu DETAYLI analiz et
+
         summary_parts.append("🔍 TOOL SONUÇLARI:")
         for tool_name, tool_result in scan_results.items():
             if tool_name in ["target", "context_summary", "execution_summary"] or not isinstance(tool_result, dict):
@@ -1311,7 +1312,7 @@ class RAGService:
                 
             tool_summary = []
             
-            # Web Crawler
+
             if "web_crawler" in tool_name or "enum_web_crawler" in tool_name:
                 if tool_result.get("forms"):
                     tool_summary.append(f"{len(tool_result['forms'])} form")
@@ -1322,50 +1323,50 @@ class RAGService:
                 if tool_result.get("pages"):
                     tool_summary.append(f"{len(tool_result['pages'])} sayfa")
             
-            # Port Scanner
+
             elif "port" in tool_name:
                 if tool_result.get("open_ports"):
                     ports = tool_result["open_ports"]
                     tool_summary.append(f"{len(ports)} açık port: {', '.join(map(str, ports[:10]))}")
             
-            # Tech Detector
+
             elif "tech" in tool_name:
                 if tool_result.get("technologies"):
                     techs = tool_result["technologies"]
                     tool_summary.append(f"{len(techs)} teknoloji: {', '.join(techs[:8])}")
             
-            # SSL Scanner
+
             elif "ssl" in tool_name:
                 if tool_result.get("vulnerabilities"):
                     tool_summary.append(f"{len(tool_result['vulnerabilities'])} SSL zafiyeti")
                 if tool_result.get("certificate_info"):
                     tool_summary.append("SSL sertifika analizi")
             
-            # Subdomain Enum
+
             elif "subdomain" in tool_name:
                 if tool_result.get("subdomains"):
                     subs = tool_result["subdomains"]
                     tool_summary.append(f"{len(subs)} subdomain: {', '.join(subs[:8])}")
             
-            # Directory Bruteforce
+
             elif "directory" in tool_name or "bruteforce" in tool_name:
                 if tool_result.get("directories"):
                     dirs = tool_result["directories"]
                     tool_summary.append(f"{len(dirs)} dizin: {', '.join(dirs[:8])}")
             
-            # Admin Panel Detector
+
             elif "panel" in tool_name or "admin" in tool_name:
                 if tool_result.get("discovered_panels"):
                     panels = tool_result["discovered_panels"]
                     tool_summary.append(f"{len(panels)} panel: {', '.join(panels[:5])}")
             
-            # Vulnerability Scanners
+
             elif any(v in tool_name for v in ["xss", "sqli", "lfi", "verify"]):
                 if tool_result.get("vulnerabilities"):
                     vulns = tool_result["vulnerabilities"]
                     tool_summary.append(f"{len(vulns)} zafiyet tespit edildi")
             
-            # Genel tool sonucu
+
             else:
                 if tool_result.get("vulnerabilities"):
                     tool_summary.append(f"{len(tool_result['vulnerabilities'])} zafiyet")
@@ -1381,7 +1382,7 @@ class RAGService:
         
         summary_parts.append("")  # Boş satır
         
-        # Execution summary'den genel bilgiler
+
         exec_summary = scan_results.get("execution_summary", {})
         if exec_summary:
             summary_parts.append("📈 TARAMA İSTATİSTİKLERİ:")
@@ -1412,22 +1413,22 @@ class RAGService:
         query_parts = []
         target = scan_results.get("target", "")
         
-        # Tool çıktılarından bilgi çıkar
+
         for key, value in scan_results.items():
             if not isinstance(value, dict):
                 continue
                 
-            # Tool data içinden bilgi çıkar
+
             tool_data = value.get("data", {}) if isinstance(value.get("data"), dict) else {}
             
-            # Teknoloji tespiti
+
             technologies = tool_data.get("technologies", [])
             if technologies and isinstance(technologies, list):
                 tech_list = [str(t) for t in technologies[:3] if t]
                 if tech_list:
                     query_parts.extend(tech_list)
             
-            # Vulnerability türlerini topla
+
             vulnerabilities = tool_data.get("vulnerabilities", [])
             if vulnerabilities and isinstance(vulnerabilities, list):
                 vuln_types = [v.get("type", "") or v.get("title", "") for v in vulnerabilities[:3] if isinstance(v, dict)]
@@ -1435,16 +1436,16 @@ class RAGService:
                 if vuln_types:
                     query_parts.extend(vuln_types)
             
-            # Findings'lerden bilgi çıkar
+
             findings = tool_data.get("findings", {})
             if isinstance(findings, dict):
-                # Critical ve high severity findings
+
                 critical = findings.get("critical", [])
                 high = findings.get("high", [])
                 if critical or high:
                     query_parts.append("security vulnerability")
             
-            # Servis bilgileri
+
             services = tool_data.get("services", [])
             if services and isinstance(services, list):
                 service_names = [s.get("name", "") if isinstance(s, dict) else str(s) for s in services[:2]]
@@ -1452,7 +1453,7 @@ class RAGService:
                 if service_names:
                     query_parts.extend(service_names)
         
-        # Direct scan_results keys'lerden bilgi çıkar
+
         vulnerabilities = scan_results.get("vulnerabilities", [])
         if vulnerabilities and isinstance(vulnerabilities, list):
             vuln_types = [v.get("type", "") for v in vulnerabilities[:3] if isinstance(v, dict) and v.get("type")]
@@ -1465,9 +1466,9 @@ class RAGService:
             if tech_list:
                 query_parts.extend(tech_list)
         
-        # Query'yi oluştur - tekrarları kaldır ve optimize et
+
         if query_parts:
-            # Tekrarları kaldır, sırayı koru
+
             seen = set()
             unique_parts = []
             for part in query_parts:
@@ -1482,7 +1483,7 @@ class RAGService:
                     query = f"{query} {target}"
                 return query
         
-        # Son fallback: target varsa kullan
+
         if target:
             return f"web application security vulnerability {target}"
         
@@ -1502,7 +1503,7 @@ class RAGService:
                 logger.warning("RAG servisi kullanılamıyor - scan results kaydedilemiyor")
                 return False
             
-            # Tarama sonuçlarını RAG formatına çevir
+
             scan_data = {
                 "target": target,
                 "scan_date": datetime.now().isoformat(),
@@ -1518,16 +1519,16 @@ class RAGService:
                 }
             }
             
-            # Firebase'e kaydet (opsiyonel - hata durumunda devam et)
+
             try:
-                # Firebase import'unu güvenli şekilde yap
+
                 try:
                     import firebase_admin
                     from firebase_admin import credentials, firestore
                     
-                    # Firebase app zaten initialize edilmiş mi kontrol et
+
                     if not firebase_admin._apps:
-                        # Default credentials kullan (service account key)
+
                         cred = credentials.ApplicationDefault()
                         firebase_admin.initialize_app(cred)
                     
@@ -1542,7 +1543,7 @@ class RAGService:
             except Exception as e:
                 logger.warning(f"⚠️ Firebase bağlantı hatası: {e}")
             
-            # RAG engine'e de kaydet (opsiyonel)
+
             try:
                 if hasattr(self._engine, 'store_document'):
                     self._engine.store_document(scan_data)
@@ -1583,14 +1584,14 @@ class RAGService:
         """
         import time
         
-        # Cache kontrolü - 1 saat (3600 saniye)
+
         current_time = time.time()
         if self._token_validation_cache is not None and self._token_validation_time is not None:
             if current_time - self._token_validation_time < 3600:
-                # Cache hala geçerli
+
                 return self._token_validation_cache
         
-        # Token kontrolü yap ve cache'le
+
         is_valid = self._has_valid_hf_token()
         self._token_validation_cache = is_valid
         self._token_validation_time = current_time
@@ -1605,7 +1606,7 @@ class RAGService:
                 logger.error("❌ HUGGINGFACE_TOKEN environment variable yok!")
                 return False
             
-            # Token'ın geçerli olup olmadığını kontrol et - DAHA KISA TIMEOUT
+
             import requests
             headers = {"Authorization": f"Bearer {hf_token}"}
             response = requests.get("https://huggingface.co/api/whoami", headers=headers, timeout=5)
@@ -1615,7 +1616,7 @@ class RAGService:
                 user_name = user_data.get("name", "unknown")
                 logger.info(f"✅ HuggingFace token geçerli - Kullanıcı: {user_name}")
                 
-                # Inference API yetkisi kontrolü - daha esnek
+
                 permissions = user_data.get("permissions", [])
                 if isinstance(permissions, list):
                     if "inference" in permissions or "read" in permissions:
@@ -1639,7 +1640,7 @@ class RAGService:
                 else:
                     logger.warning(f"⚠️ Beklenmeyen status: {response.status_code}")
                 
-                # Token geçersiz olsa bile deneme yapalım
+
                 logger.info("🔄 Token kontrol hatası olmasına rağmen inference API'yi deneyeceğiz")
                 return True
                 
@@ -1676,7 +1677,7 @@ class RAGService:
             }
 
 
-# Global instance
+
 _rag_service_instance = None
 
 
@@ -1693,7 +1694,7 @@ def get_rag_service() -> RAGService:
     return _rag_service_instance
 
 
-# Production ready - test kodu yok
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     print("RAG Service Module - Production Ready")
