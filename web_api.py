@@ -2348,21 +2348,23 @@ Detaylı rapor oluşturulurken teknik bir sorun oluştu. Tarama verileri kaydedi
         structured_report = report_gen.get_structured_report_data_with_cves(state, cve_findings)
         
 
-        critical_findings = [f for f in state.findings if f.get('severity') == 'critical']
-        high_findings = [f for f in state.findings if f.get('severity') == 'high']
-        medium_findings = [f for f in state.findings if f.get('severity') == 'medium']
-        low_findings = [f for f in state.findings if f.get('severity') == 'low']
+        critical_findings = [f for f in cleaned_findings if f.get('severity', '').lower() == 'critical']
+        high_findings = [f for f in cleaned_findings if f.get('severity', '').lower() == 'high']
+        medium_findings = [f for f in cleaned_findings if f.get('severity', '').lower() == 'medium']
+        low_findings = [f for f in cleaned_findings if f.get('severity', '').lower() == 'low']
+        info_findings = [f for f in cleaned_findings if f.get('severity', '').lower() == 'info']
         
         executive_summary = {
             "risk_skoru": risk_score,
-            "genel_degerlendirme": f"{target} sistemine yönelik penetrasyon testi tamamlanmıştır. Toplam {len(state.findings)} güvenlik bulgusu tespit edilmiştir.",
-            "kritik_bulgular": critical_findings[:3],  # İlk 3 kritik bulgu
-            "toplam_bulgu": len(state.findings),
+            "genel_degerlendirme": f"{target} sistemine yönelik penetrasyon testi tamamlanmıştır. Toplam {len(cleaned_findings)} güvenlik bulgusu tespit edilmiştir.",
+            "kritik_bulgular": critical_findings[:3],
+            "toplam_bulgu": len(cleaned_findings),
             "bulgu_dagilimi": {
                 "kritik": len(critical_findings),
                 "yuksek": len(high_findings),
                 "orta": len(medium_findings),
-                "dusuk": len(low_findings)
+                "dusuk": len(low_findings),
+                "info": len(info_findings)
             }
         }
         
@@ -2390,16 +2392,16 @@ Detaylı rapor oluşturulurken teknik bir sorun oluştu. Tarama verileri kaydedi
         if structured_report:
             structured_report["all_tool_outputs"] = all_tool_outputs
             structured_report["execution_summary"] = enriched_data["execution_summary"]
-            structured_report["findings"] = state.findings  # Bulguları ekle
-            structured_report["cve_results"] = enriched_cve_references  # Zenginleştirilmiş CVE'leri ekle
-            structured_report["cve_references"] = enriched_cve_references  # CVE referanslarını da ekle
-            structured_report["executive_summary"] = executive_summary  # Executive summary ekle
-            structured_report["risk_score"] = risk_score  # Risk skoru ekle - KRİTİK!
-            structured_report["vulnerabilities"] = vulnerabilities  # Vulnerabilities ekle - KRİTİK!
+            structured_report["findings"] = cleaned_findings
+            structured_report["cve_results"] = enriched_cve_references
+            structured_report["cve_references"] = enriched_cve_references
+            structured_report["executive_summary"] = executive_summary
+            structured_report["risk_score"] = risk_score
+            structured_report["vulnerabilities"] = vulnerabilities
             
 
             detailed_findings = []
-            for i, finding in enumerate(state.findings, 1):
+            for i, finding in enumerate(cleaned_findings, 1):
                 detailed_findings.append({
                     "id": i,
                     "baslik": finding.get("title", "Bulgu"),

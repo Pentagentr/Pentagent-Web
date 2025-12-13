@@ -50,27 +50,61 @@ class ReportGenerator:
 
     def _calculate_risk_score(self, findings: List[Dict[str, Any]]) -> int:
         """
-        TOOL ÇIKTILARINA DAYALI DİNAMİK RİSK SKORU HESAPLAMA
-        Her tool çıktısı için belirli skorlar, severity'ye göre weighted scoring
+        BULGU SAYISINA VE SEVERITY'YE DAYALI DİNAMİK RİSK SKORU HESAPLAMA
+        Bulgu sayısı arttıkça skor artar, severity'ye göre weighted scoring
         """
         if not findings:
-            return 0
+            return 5
         
         total_score = 0
         
-
         severity_weights = {
-            'critical': 15,  # Her kritik bulgu +15
-            'high': 10,      # Her yüksek bulgu +10
-            'medium': 5,     # Her orta bulgu +5
-            'low': 2,        # Her düşük bulgu +2
-            'info': 1        # Her info bulgu +1
+            'critical': 25,
+            'high': 15,
+            'medium': 8,
+            'low': 3,
+            'info': 1
+        }
+        
+        severity_counts = {
+            'critical': 0,
+            'high': 0,
+            'medium': 0,
+            'low': 0,
+            'info': 0
         }
         
         for finding in findings:
-            severity = finding.get('severity', 'info').lower()
-            weight = severity_weights.get(severity, 1)
-            total_score += weight
+            severity = finding.get('severity', 'info').lower().strip()
+            if severity == 'informational':
+                severity = 'info'
+            if severity in severity_counts:
+                severity_counts[severity] += 1
+        
+        for severity, count in severity_counts.items():
+            if count > 0:
+                weight = severity_weights.get(severity, 1)
+                total_score += weight * count
+                
+                if severity == 'critical' and count >= 3:
+                    total_score += 20
+                elif severity == 'high' and count >= 5:
+                    total_score += 15
+                elif severity == 'medium' and count >= 10:
+                    total_score += 10
+        
+        total_findings = len(findings)
+        
+        if total_findings >= 50:
+            total_score += 30
+        elif total_findings >= 30:
+            total_score += 20
+        elif total_findings >= 20:
+            total_score += 15
+        elif total_findings >= 10:
+            total_score += 10
+        elif total_findings >= 5:
+            total_score += 5
         
 
 
