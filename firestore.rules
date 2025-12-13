@@ -61,6 +61,25 @@ service cloud.firestore {
                     && resource.data.userId == request.auth.uid;
     }
     
+    // Tarama geçmişi koleksiyonu (scan_history)
+    match /scan_history/{scanId} {
+      // Kullanıcı kendi tarama geçmişini görebilir
+      allow read: if request.auth != null 
+                  && resource.data.userId == request.auth.uid;
+      
+      // Yeni tarama kaydı oluşturma
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid;
+      
+      // Tarama kaydı güncelleme (kendi kaydı ise)
+      allow update: if request.auth != null 
+                    && resource.data.userId == request.auth.uid;
+      
+      // Tarama kaydı silme (kendi kaydı ise)
+      allow delete: if request.auth != null 
+                    && resource.data.userId == request.auth.uid;
+    }
+    
     // Raporlar koleksiyonu (gelecekte eklenebilir)
     match /reports/{reportId} {
       // Kullanıcı kendi raporlarını görebilir
