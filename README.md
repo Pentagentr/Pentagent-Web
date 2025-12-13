@@ -58,7 +58,7 @@
 - **OWASP Compliant**: Classification according to OWASP Top 10 categories
 - **Professional Design**: Enterprise-grade reporting
 
-### 🛠️ Security Tools (30+)
+### 🛠️ Security Tools (25)
 **Discovery & Scanning:**
 - Port Scanner (SYN/Connect/UDP)
 - Subdomain Enumeration (passive + bruteforce)
