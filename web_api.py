@@ -824,42 +824,60 @@ def _filter_cve_results(results: List[Any], query_info: Dict[str, Any]) -> List[
         
         # 4️⃣ NEGATIVE KEYWORD DROP RULES
         if negative_keywords:
+            should_drop = False
             for neg_keyword in negative_keywords:
                 neg_lower = neg_keyword.lower()
                 # Description veya product'ta negative keyword varsa drop
                 if neg_lower in description_lower or neg_lower in result_product_lower:
                     logger.debug(f"⏭️  CVE {result_cve_id} negative keyword içeriyor: '{neg_keyword}'")
-                    continue
+                    should_drop = True
+                    break
+            
+            if should_drop:
+                continue
         
         # 5️⃣ YEAR LOGIC (published_date'e bak, CVE ID'ye değil)
         if year:
-            result_year = None
+            published_year = None
+            cve_id_year = None
+            
+            # ÖNCELİK: published_date'e bak
             if published_date:
                 try:
                     # Yıl formatı: "2021-12-10" veya "2021"
-                    result_year = int(str(published_date)[:4])
+                    published_year = int(str(published_date)[:4])
                 except:
                     pass
             
-            # CVE ID'den de yıl çıkar (fallback)
-            if result_year is None:
-                try:
-                    # CVE-2021-44228 formatından yıl çıkar
-                    if 'CVE-' in result_cve_id:
-                        cve_year_str = result_cve_id.split('-')[1]
-                        result_year = int(cve_year_str)
-                except:
-                    pass
+            # CVE ID'den yıl çıkar (fallback ve karşılaştırma için)
+            try:
+                if 'CVE-' in result_cve_id:
+                    cve_id_year = int(result_cve_id.split('-')[1])
+            except:
+                pass
             
-            if result_year is not None:
-                # Yıl eşleşmeli (published_year == query_year VEYA cve_id_year == query_year)
-                if result_year != year:
-                    logger.debug(f"⏭️  CVE {result_cve_id} yıl uyuşmuyor: {result_year} != {year}")
-                    continue
+            # Yıl kontrolü: published_year == query_year VEYA (cve_id_year < query_year AND published_year == query_year)
+            year_match = False
+            
+            if published_year is not None:
+                # Published yılı varsa öncelik ver
+                if published_year == year:
+                    year_match = True
+                elif cve_id_year and cve_id_year < year and published_year == year:
+                    # Eski CVE, yeni yılda publish edilmiş - kabul et
+                    year_match = True
+            elif cve_id_year is not None:
+                # Published yılı yoksa CVE ID yılına bak
+                if cve_id_year == year:
+                    year_match = True
+            
+            if not year_match:
+                logger.debug(f"⏭️  CVE {result_cve_id} yıl uyuşmuyor: published={published_year}, cve_id={cve_id_year}, query={year}")
+                continue
         
         filtered.append(result)
     
-    logger.info(f"🔍 KATI Filtreleme: {len(results)} → {len(filtered)} sonuç (yıl={year}, product={product}, vendor={vendor}, domain={domain}, exact={exact_match})")
+    logger.info(f"🔍 KATI Filtreleme: {len(results)} → {len(filtered)} sonuç (yıl={year}, product={product}, vendor={vendor}, domain={domain}, exact={exact_match}, negative={len(negative_keywords)})")
     return filtered
 
 
