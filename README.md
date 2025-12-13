@@ -112,8 +112,7 @@ FastAPI Backend (Render.com)
     │
     ├─ Report Generator
     │   ├─ Dynamic Risk Score Calculator
-    │   ├─ LLM-Enhanced MD Reports
-    │   └─ Multi-Format Export (PDF/TXT/JSON/MD)
+    │   └─ LLM-Enhanced MD Reports
     │
     └─ RAG Service
         ↓ REST API
@@ -327,7 +326,7 @@ firebase deploy --only hosting
 # Web interface
 1. Go to http://localhost:5173
 2. Login or register
-3. Enter target and request in chat page: "I want you to scan example.com"
+3. Enter target and request in chat page: "I want to scan example.com"
 4. AI automatically selects appropriate tools and starts the scan
 ```
 
@@ -397,13 +396,13 @@ report = response.json()
 
 ### Backend
 - **Framework:** FastAPI (async Python)
-- **AI Model:** GPT OSS 120B (Groq API) + Gemini fallback
+- **AI Model:** GPT OSS 120B (Groq API)
 - **Vector Store:** Qdrant ([HuggingFace Space](https://huggingface.co/spaces/meryemarpaci/pentagent-qdrant))
 - **Embeddings:** BGE-M3 (BAAI/bge-m3, 1024-dim)
-- **Reranker:** mixedbread-ai/mxbai-rerank-base-v1 (10x score boost)
+- **Reranker:** mixedbread-ai/mxbai-rerank-base-v1
 - **WebSocket:** Native FastAPI support with error handling
 - **PDF Generation:** ReportLab
-- **LLM Reports:** Gemini/Groq for AI-enhanced markdown reports
+- **LLM Reports:** GPT OSS 120B for AI-enhanced markdown reports
 
 ### Frontend
 - **Framework:** React 18
@@ -544,9 +543,9 @@ This project is licensed under Apache License 2.0. See [LICENSE](LICENSE) file f
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
-- **GPT OSS 120B** - AI reasoning model (via Groq API)
+- **GPT OSS 120B** - AI reasoning model 
 - **Qdrant** - Vector database engine ([HuggingFace Space deployment](https://huggingface.co/spaces/meryemarpaci/pentagent-qdrant))
 - **Docker** - Vector db storage
 - **BAAI** - BGE-M3 embeddings
@@ -559,6 +558,6 @@ This project is licensed under Apache License 2.0. See [LICENSE](LICENSE) file f
 
 ---
 
-Made with ❤️ by Pentagent
+Made by Pentagent
 
 </div>
