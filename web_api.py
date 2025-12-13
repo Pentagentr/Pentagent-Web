@@ -537,21 +537,35 @@ async def websocket_endpoint(websocket: WebSocket):
 
 # ==================== RAG QUERY OPTIMIZATION ====================
 
-async def optimize_rag_query(user_query: str) -> str:
+async def optimize_rag_query(user_query: str) -> Dict[str, Any]:
     """
-    🤖 AI ile RAG sorgusu optimize et
+    🤖 AI ile RAG sorgusu optimize et ve query bilgilerini çıkar
     
-    Kullanıcının doğal dil sorgusu → CVE aramasına optimize edilmiş kısa sorgu
+    Kullanıcının doğal dil sorgusu → CVE aramasına optimize edilmiş kısa sorgu + filtre bilgileri
     
-    Örnek:
-        "SQL injection nasıl test edilir?" → "SQL injection CVE testing methods"
-        "Apache için kritik güvenlik zafiyetleri" → "Apache critical security vulnerabilities"
+    Returns:
+        {
+            'query': str,  # Optimize edilmiş sorgu
+            'year': Optional[int],  # Yıl bilgisi (varsa)
+            'product': Optional[str],  # Ürün adı (varsa)
+            'vendor': Optional[str],  # Vendor adı (varsa)
+            'exact_product_match': bool  # Kesin ürün eşleşmesi gerekiyor mu?
+        }
     """
     global llm_model
     
+    # Default response
+    default_response = {
+        'query': user_query,
+        'year': None,
+        'product': None,
+        'vendor': None,
+        'exact_product_match': False
+    }
+    
     if not llm_model:
         logger.warning("LLM model yok, query optimize edilmeden kullanılacak")
-        return user_query
+        return default_response
     
     try:
         optimization_prompt = f"""Sen bir CVE veritabanı arama uzmanısın. Kullanıcının doğal dil sorgusu veriliyor.
@@ -559,52 +573,102 @@ async def optimize_rag_query(user_query: str) -> str:
 KULLANICI SORGUSU: "{user_query}"
 
 GÖREV:
-Kullanıcının sorgusunu CVE araması için OPTIMIZE ET. 
+1. Kullanıcının sorgusunu CVE araması için OPTIMIZE ET
+2. Sorgudan YIL, ÜRÜN ADI ve VENDOR bilgilerini çıkar
+3. Kesin eşleşme gerekip gerekmediğini belirle
 
 KURALLAR:
-1. KISA ve NET olmalı (max 5-7 kelime)
-2. CVE veritabanında kullanılan teknik terimleri kullan
-3. Gereksiz kelimeleri kaldır ("nasıl", "neden", "ne", vb.)
-4. İngilizce terimleri tercih et (CVE'ler İngilizce)
-5. Sadece anahtar kelimeleri tut
+1. KISA ve NET sorgu (max 5-7 kelime)
+2. YIL varsa çıkar (örn: "2021", "2024")
+3. ÜRÜN ADI varsa çıkar (örn: "Log4j", "WordPress", "Apache")
+4. VENDOR varsa çıkar (örn: "Apache", "Microsoft")
+5. Kesin eşleşme: Eğer spesifik ürün adı varsa (örn: "Apache Log4j"), sadece o ürüne ait CVE'ler isteniyor demektir
+6. Gereksiz kelimeleri kaldır ("nasıl", "neden", "ne", vb.)
+7. İngilizce terimleri tercih et
 
 ÖRNEKLER:
-"SQL injection nasıl test edilir?" → "SQL injection testing methods"
-"Apache için kritik güvenlik zafiyetleri" → "Apache critical vulnerabilities"
-"WordPress eklentilerinde XSS" → "WordPress plugin XSS vulnerabilities"
-"Kubernetes container escape" → "Kubernetes container escape CVE"
-"Remote code execution Laravel" → "Laravel remote code execution"
+"Apache Log4j 2021" → query: "Apache Log4j", product: "Log4j", vendor: "Apache", year: 2021, exact_product_match: true
+"WordPress XSS 2024" → query: "WordPress XSS", product: "WordPress", year: 2024, exact_product_match: true
+"SQL injection" → query: "SQL injection", exact_product_match: false
+"Apache vulnerabilities" → query: "Apache vulnerabilities", vendor: "Apache", exact_product_match: false
 
-SADECE OPTİMİZE EDİLMİŞ SORGUYU DÖNDÜR (açıklama yapma):"""
+JSON formatında döndür:
+{{
+    "query": "optimize edilmiş sorgu",
+    "year": yıl sayısı veya null,
+    "product": "ürün adı" veya null,
+    "vendor": "vendor adı" veya null,
+    "exact_product_match": true/false
+}}"""
 
         response = await llm_model.generate_content_async(optimization_prompt)
         
         # Response string veya object olabilir
+        response_text = ""
         if isinstance(response, str):
-            optimized = response.strip()
+            response_text = response.strip()
         elif hasattr(response, 'text'):
-            optimized = response.text.strip()
+            response_text = response.text.strip()
         elif hasattr(response, 'get'):
-            optimized = response.get('text', user_query).strip()
+            response_text = response.get('text', user_query).strip()
         else:
-            logger.warning(f"Unexpected response type: {type(response)}")
-            optimized = str(response).strip()
+            response_text = str(response).strip()
         
-        # Tırnak işaretlerini temizle
-        optimized = optimized.strip('"\'` ')
+        # JSON parse et
+        import json
+        import re
         
-        # Çok uzunsa kes (max 100 karakter)
-        if len(optimized) > 100:
-            optimized = optimized[:100]
+        # JSON bloğunu bul
+        json_match = re.search(r'\{[^}]+\}', response_text, re.DOTALL)
+        if json_match:
+            try:
+                parsed = json.loads(json_match.group(0))
+                optimized_query = parsed.get('query', user_query).strip('"\'` ')
+                year = parsed.get('year')
+                if year:
+                    try:
+                        year = int(year)
+                    except:
+                        year = None
+                product = parsed.get('product')
+                if product:
+                    product = product.strip('"\'` ')
+                vendor = parsed.get('vendor')
+                if vendor:
+                    vendor = vendor.strip('"\'` ')
+                exact_match = parsed.get('exact_product_match', False)
+                
+                # Çok uzunsa kes (max 100 karakter)
+                if len(optimized_query) > 100:
+                    optimized_query = optimized_query[:100]
+                
+                result = {
+                    'query': optimized_query,
+                    'year': year,
+                    'product': product,
+                    'vendor': vendor,
+                    'exact_product_match': exact_match
+                }
+                
+                logger.info(f"🤖 Query optimized: '{user_query}' → '{optimized_query}'")
+                logger.info(f"   📅 Year: {year}, 📦 Product: {product}, 🏢 Vendor: {vendor}, 🎯 Exact match: {exact_match}")
+                return result
+            except json.JSONDecodeError:
+                logger.warning("JSON parse edilemedi, basit query kullanılıyor")
         
-        logger.info(f"🤖 Query optimized: '{user_query}' → '{optimized}'")
-        return optimized
+        # Fallback: Basit query
+        optimized_query = response_text.strip('"\'` ')
+        if len(optimized_query) > 100:
+            optimized_query = optimized_query[:100]
+        
+        default_response['query'] = optimized_query
+        logger.info(f"🤖 Query optimized (fallback): '{user_query}' → '{optimized_query}'")
+        return default_response
         
     except Exception as e:
         logger.error(f"LLM query oluşturma hatası: {e}")
         logger.warning("LLM query oluşturamadı, basit query kullanılıyor")
-        # Hata durumunda orijinal query'yi kullan
-        return user_query
+        return default_response
 
 
 # ==================== RAG ENDPOINTS ====================

@@ -443,7 +443,8 @@ class RAGService:
         query: str,
         limit: int = 5,
         severity: Optional[str] = None,
-        use_reranker: Optional[bool] = None
+        use_reranker: Optional[bool] = None,
+        query_info: Optional[Dict[str, Any]] = None
     ) -> List[CVEResult]:
         """
         CVE araması yap ve reranker ile optimize et.
