@@ -561,8 +561,10 @@ async def optimize_rag_query(user_query: str) -> Dict[str, Any]:
         'product': None,
         'vendor': None,
         'domain': None,
+        'language': None,  # python, java, php, javascript
         'negative_keywords': [],
-        'exact_product_match': False
+        'exact_product_match': False,
+        'is_pickle_query': False  # Pickle-specific query flag
     }
     
     if not llm_model:
@@ -582,16 +584,24 @@ GÖREV:
 KURALLAR:
 1. KISA ve NET sorgu (max 5-7 kelime)
 2. YIL varsa MUTLAKA çıkar (örn: "2021", "2024") - CVE ID'den veya published date'ten
-3. ÜRÜN ADI varsa çıkar (örn: "Log4j", "WordPress", "Kubernetes")
+3. ÜRÜN ADI varsa çıkar (örn: "Log4j", "WordPress", "Kubernetes", "Django")
 4. VENDOR varsa çıkar (örn: "Apache", "Microsoft", "TP-Link")
 5. DOMAIN belirle: container/kubernetes → "container", os/kernel → "os", cloud → "cloud", iot/router → "iot"
-6. NEGATIVE KEYWORDS: Benzer ama farklı ürünleri belirle
+6. LANGUAGE/ECOSYSTEM belirle:
+   - Django/Flask/FastAPI → "python"
+   - Spring/Dubbo → "java"
+   - ThinkPHP/Laravel → "php"
+   - React/Vue/Angular → "javascript"
+7. PICKLE QUERY tespiti:
+   - Eğer query'de "pickle" geçiyorsa → is_pickle_query: true
+   - Bu durumda sadece Python pickle CVE'leri kabul edilir
+8. NEGATIVE KEYWORDS: Benzer ama farklı ürünleri belirle
    - Log4j → ["logback", "slf4j", "java.util.logging"]
    - Kubernetes → ["windows kernel", "linux kernel"]
    - Core → [".NET Core", "ASP.NET Core"] (eğer query'de "core" başka bir şeyse)
-7. Kesin eşleşme: Eğer spesifik ürün adı varsa (örn: "Apache Log4j"), sadece o ürüne ait CVE'ler isteniyor demektir
-8. Gereksiz kelimeleri kaldır ("nasıl", "neden", "ne", vb.)
-9. İngilizce terimleri tercih et
+9. Kesin eşleşme: Eğer spesifik ürün adı varsa (örn: "Apache Log4j"), sadece o ürüne ait CVE'ler isteniyor demektir
+10. Gereksiz kelimeleri kaldır ("nasıl", "neden", "ne", vb.)
+11. İngilizce terimleri tercih et
 
 ÖRNEKLER:
 "Apache Log4j 2021" → query: "Apache Log4j", product: "Log4j", vendor: "Apache", year: 2021, exact_product_match: true, negative_keywords: ["logback", "slf4j"]
@@ -607,7 +617,9 @@ JSON formatında döndür:
     "product": "ürün adı" veya null,
     "vendor": "vendor adı" veya null,
     "domain": "container|os|cloud|iot" veya null,
+    "language": "python|java|php|javascript" veya null,
     "negative_keywords": ["kelime1", "kelime2"] veya [],
+    "is_pickle_query": true/false,
     "exact_product_match": true/false
 }}"""
 
@@ -649,6 +661,9 @@ JSON formatında döndür:
                 domain = parsed.get('domain')
                 if domain:
                     domain = domain.strip('"\'` ')
+                language = parsed.get('language')
+                if language:
+                    language = language.strip('"\'` ')
                 negative_keywords = parsed.get('negative_keywords', [])
                 if isinstance(negative_keywords, str):
                     # String ise listeye çevir
@@ -657,6 +672,7 @@ JSON formatında döndür:
                     negative_keywords = [str(kw).strip('"\'` ') for kw in negative_keywords if kw]
                 else:
                     negative_keywords = []
+                is_pickle_query = parsed.get('is_pickle_query', False)
                 exact_match = parsed.get('exact_product_match', False)
                 
                 # Çok uzunsa kes (max 100 karakter)
@@ -669,12 +685,14 @@ JSON formatında döndür:
                     'product': product,
                     'vendor': vendor,
                     'domain': domain,
+                    'language': language,
                     'negative_keywords': negative_keywords,
+                    'is_pickle_query': is_pickle_query,
                     'exact_product_match': exact_match
                 }
                 
                 logger.info(f"🤖 Query optimized: '{user_query}' → '{optimized_query}'")
-                logger.info(f"   📅 Year: {year}, 📦 Product: {product}, 🏢 Vendor: {vendor}, 🌐 Domain: {domain}, 🚫 Negative: {negative_keywords}, 🎯 Exact match: {exact_match}")
+                logger.info(f"   📅 Year: {year}, 📦 Product: {product}, 🏢 Vendor: {vendor}, 🌐 Domain: {domain}, 💻 Language: {language}, 🥒 Pickle: {is_pickle_query}, 🚫 Negative: {negative_keywords}, 🎯 Exact match: {exact_match}")
                 return result
             except json.JSONDecodeError:
                 logger.warning("JSON parse edilemedi, basit query kullanılıyor")
@@ -690,7 +708,9 @@ JSON formatında döndür:
         fallback_product = None
         fallback_vendor = None
         fallback_domain = None
+        fallback_language = None
         fallback_negative = []
+        fallback_is_pickle = False
         
         # Yıl çıkar (4 haneli sayı)
         year_match = re.search(r'\b(19|20)\d{2}\b', user_query)
@@ -712,6 +732,21 @@ JSON formatında döndür:
         elif any(kw in query_lower for kw in ['cloud', 'aws', 'azure', 'gcp']):
             fallback_domain = 'cloud'
         
+        # Language/Ecosystem çıkar
+        if any(kw in query_lower for kw in ['django', 'flask', 'fastapi', 'python']):
+            fallback_language = 'python'
+        elif any(kw in query_lower for kw in ['spring', 'dubbo', 'java']):
+            fallback_language = 'java'
+        elif any(kw in query_lower for kw in ['thinkphp', 'laravel', 'php']):
+            fallback_language = 'php'
+        elif any(kw in query_lower for kw in ['react', 'vue', 'angular', 'javascript', 'node']):
+            fallback_language = 'javascript'
+        
+        # Pickle query tespiti
+        if 'pickle' in query_lower:
+            fallback_is_pickle = True
+            fallback_language = 'python'  # Pickle Python-specific
+        
         # Negative keywords (Log4j için)
         if 'log4j' in query_lower:
             fallback_negative = ['logback', 'slf4j', 'java.util.logging']
@@ -719,9 +754,11 @@ JSON formatında döndür:
         default_response['query'] = optimized_query
         default_response['year'] = fallback_year
         default_response['domain'] = fallback_domain
+        default_response['language'] = fallback_language
+        default_response['is_pickle_query'] = fallback_is_pickle
         default_response['negative_keywords'] = fallback_negative
         logger.info(f"🤖 Query optimized (fallback): '{user_query}' → '{optimized_query}'")
-        logger.info(f"   📅 Year: {fallback_year}, 🌐 Domain: {fallback_domain}, 🚫 Negative: {fallback_negative}")
+        logger.info(f"   📅 Year: {fallback_year}, 🌐 Domain: {fallback_domain}, 💻 Language: {fallback_language}, 🥒 Pickle: {fallback_is_pickle}, 🚫 Negative: {fallback_negative}")
         return default_response
         
     except Exception as e:
@@ -736,10 +773,13 @@ def _filter_cve_results(results: List[Any], query_info: Dict[str, Any]) -> List[
     
     Filtreleme kuralları:
     1. Vendor ZORUNLU: Query'de vendor varsa, sonuçlardaki vendor TAM EŞLEŞMELİ
-    2. Product ZORUNLU: Product varsa, retrieved.product VEYA description'da primary product keyword olmalı
-    3. Domain Ayrımı: Container/Kubernetes sorgularında OS kernel CVE'leri drop
-    4. Negative Keywords: Log4j sorgusunda logback, slf4j gibi benzer ürünleri drop
-    5. Year Logic: published_date'e bak (CVE ID'ye değil)
+    2. Product HARD FILTER: CVE.description VEYA CPE içinde sorgudaki ürün geçmiyorsa → DROP
+    3. Language/Ecosystem FILTER: Django → Python only, Spring → Java only, ThinkPHP → PHP only
+    4. Pickle FILTER: Pickle sorgusu varsa sadece Python pickle CVE'leri (pickle, __reduce__, joblib, cloudpickle, marshal)
+    5. Domain Ayrımı: Container/Kubernetes sorgularında OS kernel CVE'leri drop
+    6. Negative Keywords: Log4j sorgusunda logback, slf4j gibi benzer ürünleri drop
+    7. Year FILTER: CVE.year != query.year → DROP (published_date öncelikli)
+    8. Generic CVE Boost: Domain uyumu yoksa relevance = 0 (false positive önleme)
     """
     if not results or not query_info:
         return results
@@ -749,6 +789,8 @@ def _filter_cve_results(results: List[Any], query_info: Dict[str, Any]) -> List[
     vendor = query_info.get('vendor')
     exact_match = query_info.get('exact_product_match', False)
     domain = query_info.get('domain')  # container, os, cloud, iot
+    language = query_info.get('language')  # python, java, php, javascript
+    is_pickle_query = query_info.get('is_pickle_query', False)
     negative_keywords = query_info.get('negative_keywords', [])  # Drop edilecek kelimeler
     
     filtered = []
@@ -779,7 +821,8 @@ def _filter_cve_results(results: List[Any], query_info: Dict[str, Any]) -> List[
                 logger.debug(f"⏭️  CVE {result_cve_id} vendor uyuşmuyor: query='{vendor}' != result='{result_vendor}'")
                 continue
         
-        # 2️⃣ PRODUCT/TECHNOLOGY ZORUNLU FİLTRE
+        # 2️⃣ PRODUCT HARD FILTER (EN KRİTİK)
+        # CVE.description VEYA CPE içinde sorgudaki ürün geçmiyorsa → DROP
         if product:
             product_lower = product.lower()
             
@@ -791,18 +834,87 @@ def _filter_cve_results(results: List[Any], query_info: Dict[str, Any]) -> List[
             
             product_in_description = product_lower in description_lower
             
+            # CPE bilgisi metadata'da olabilir (cvss_vector veya metadata'dan çıkarılabilir)
+            # Şimdilik description ve product field'larına bakıyoruz
+            
+            # HARD FILTER: Product description VEYA product field'da OLMALI
+            if not (product_in_product_field or product_in_description):
+                logger.debug(f"⏭️  CVE {result_cve_id} PRODUCT HARD FILTER: query='{product}' not in product='{result_product}' or description → DROP")
+                continue
+            
             # Kesin eşleşme gerekiyorsa sadece product field'da olmalı
             if exact_match:
                 if not product_in_product_field:
                     logger.debug(f"⏭️  CVE {result_cve_id} product kesin eşleşmiyor: query='{product}' not in product='{result_product}'")
                     continue
-            else:
-                # Kesin eşleşme gerekmiyorsa product field VEYA description'da olmalı
-                if not (product_in_product_field or product_in_description):
-                    logger.debug(f"⏭️  CVE {result_cve_id} product eşleşmiyor: query='{product}' not in product='{result_product}' or description")
-                    continue
         
-        # 3️⃣ DOMAIN AYIRIMI
+        # 3️⃣ LANGUAGE/ECOSYSTEM FILTER
+        # Cross-language CVE = false positive
+        if language:
+            language_lower = language.lower()
+            
+            # Python ecosystem keywords
+            python_keywords = ['python', 'django', 'flask', 'fastapi', 'pickle', '__reduce__', 'joblib', 'cloudpickle', 'marshal', 'pypi']
+            # Java ecosystem keywords
+            java_keywords = ['java', 'spring', 'dubbo', 'maven', 'gradle', 'jvm', 'jre', 'jdk']
+            # PHP ecosystem keywords
+            php_keywords = ['php', 'thinkphp', 'laravel', 'symfony', 'composer', 'pear']
+            # JavaScript ecosystem keywords
+            js_keywords = ['javascript', 'node', 'react', 'vue', 'angular', 'npm', 'yarn', 'typescript']
+            
+            # Description ve product'ta language-specific keyword var mı?
+            has_language_keyword = False
+            
+            if language_lower == 'python':
+                has_language_keyword = any(kw in description_lower or kw in result_product_lower for kw in python_keywords)
+                # Eğer Java/PHP/JS keyword'ü varsa drop
+                if any(kw in description_lower or kw in result_product_lower for kw in java_keywords + php_keywords + js_keywords):
+                    if not has_language_keyword:
+                        logger.debug(f"⏭️  CVE {result_cve_id} LANGUAGE FILTER: Python query but Java/PHP/JS keyword found")
+                        continue
+            elif language_lower == 'java':
+                has_language_keyword = any(kw in description_lower or kw in result_product_lower for kw in java_keywords)
+                # Eğer Python/PHP/JS keyword'ü varsa drop
+                if any(kw in description_lower or kw in result_product_lower for kw in python_keywords + php_keywords + js_keywords):
+                    if not has_language_keyword:
+                        logger.debug(f"⏭️  CVE {result_cve_id} LANGUAGE FILTER: Java query but Python/PHP/JS keyword found")
+                        continue
+            elif language_lower == 'php':
+                has_language_keyword = any(kw in description_lower or kw in result_product_lower for kw in php_keywords)
+                # Eğer Python/Java/JS keyword'ü varsa drop
+                if any(kw in description_lower or kw in result_product_lower for kw in python_keywords + java_keywords + js_keywords):
+                    if not has_language_keyword:
+                        logger.debug(f"⏭️  CVE {result_cve_id} LANGUAGE FILTER: PHP query but Python/Java/JS keyword found")
+                        continue
+            elif language_lower == 'javascript':
+                has_language_keyword = any(kw in description_lower or kw in result_product_lower for kw in js_keywords)
+                # Eğer Python/Java/PHP keyword'ü varsa drop
+                if any(kw in description_lower or kw in result_product_lower for kw in python_keywords + java_keywords + php_keywords):
+                    if not has_language_keyword:
+                        logger.debug(f"⏭️  CVE {result_cve_id} LANGUAGE FILTER: JavaScript query but Python/Java/PHP keyword found")
+                        continue
+            
+            # Language keyword yoksa ve language belirtilmişse drop
+            if not has_language_keyword:
+                logger.debug(f"⏭️  CVE {result_cve_id} LANGUAGE FILTER: {language} query but no {language} keyword found")
+                continue
+        
+        # 3️⃣ PICKLE-SPECIFIC FILTER
+        # "pickle" ≠ "deserialization" - Pickle Python-specific
+        if is_pickle_query:
+            pickle_keywords = ['pickle', '__reduce__', 'joblib', 'cloudpickle', 'marshal']
+            has_pickle_keyword = any(kw in description_lower or kw in result_product_lower for kw in pickle_keywords)
+            
+            if not has_pickle_keyword:
+                logger.debug(f"⏭️  CVE {result_cve_id} PICKLE FILTER: Pickle query but no pickle keyword found")
+                continue
+            
+            # Java deserialization veya PHP unserialize varsa drop
+            if 'java deserialization' in description_lower or 'php unserialize' in description_lower:
+                logger.debug(f"⏭️  CVE {result_cve_id} PICKLE FILTER: Pickle query but Java/PHP deserialization found")
+                continue
+        
+        # 4️⃣ DOMAIN AYIRIMI
         if domain:
             # Container/Kubernetes sorgularında OS kernel CVE'leri drop
             if domain in ['container', 'kubernetes', 'docker']:
@@ -822,7 +934,7 @@ def _filter_cve_results(results: List[Any], query_info: Dict[str, Any]) -> List[
                     logger.debug(f"⏭️  CVE {result_cve_id} domain uyuşmuyor: Container CVE dropped (domain={domain})")
                     continue
         
-        # 4️⃣ NEGATIVE KEYWORD DROP RULES
+        # 5️⃣ NEGATIVE KEYWORD DROP RULES
         if negative_keywords:
             should_drop = False
             for neg_keyword in negative_keywords:
@@ -836,7 +948,8 @@ def _filter_cve_results(results: List[Any], query_info: Dict[str, Any]) -> List[
             if should_drop:
                 continue
         
-        # 5️⃣ YEAR LOGIC (published_date'e bak, CVE ID'ye değil)
+        # 6️⃣ YEAR FILTER (GERÇEKTEN UYGULANSIN)
+        # CVE.year != query.year → DROP
         if year:
             published_year = None
             cve_id_year = None
@@ -849,35 +962,55 @@ def _filter_cve_results(results: List[Any], query_info: Dict[str, Any]) -> List[
                 except:
                     pass
             
-            # CVE ID'den yıl çıkar (fallback ve karşılaştırma için)
+            # CVE ID'den yıl çıkar
             try:
                 if 'CVE-' in result_cve_id:
                     cve_id_year = int(result_cve_id.split('-')[1])
             except:
                 pass
             
-            # Yıl kontrolü: published_year == query_year VEYA (cve_id_year < query_year AND published_year == query_year)
+            # KATI YIL FİLTRESİ: published_year == query_year VEYA cve_id_year == query_year
             year_match = False
             
             if published_year is not None:
-                # Published yılı varsa öncelik ver
+                # Published yılı varsa öncelik ver - TAM EŞLEŞME GEREKLİ
                 if published_year == year:
                     year_match = True
-                elif cve_id_year and cve_id_year < year and published_year == year:
-                    # Eski CVE, yeni yılda publish edilmiş - kabul et
-                    year_match = True
             elif cve_id_year is not None:
-                # Published yılı yoksa CVE ID yılına bak
+                # Published yılı yoksa CVE ID yılına bak - TAM EŞLEŞME GEREKLİ
                 if cve_id_year == year:
                     year_match = True
             
+            # Yıl eşleşmiyorsa KESİNLİKLE DROP
             if not year_match:
-                logger.debug(f"⏭️  CVE {result_cve_id} yıl uyuşmuyor: published={published_year}, cve_id={cve_id_year}, query={year}")
+                logger.debug(f"⏭️  CVE {result_cve_id} YEAR FILTER: published={published_year}, cve_id={cve_id_year}, query={year} → DROP")
                 continue
+        
+        # 7️⃣ GENERIC CVE BOOST KAPATILMASI
+        # Domain uyumu yoksa relevance = 0 (false positive önleme)
+        # Generic CVE'ler ("critical", "network", "deserialization") domain uyumu olmadan boost edilmemeli
+        if domain:
+            domain_keywords = {
+                'container': ['kubernetes', 'container', 'docker', 'pod', 'namespace'],
+                'os': ['kernel', 'driver', 'operating system', 'os'],
+                'cloud': ['cloud', 'aws', 'azure', 'gcp', 'managed service'],
+                'iot': ['router', 'firmware', 'iot', 'embedded']
+            }
+            
+            generic_keywords = ['critical', 'network', 'deserialization']
+            has_generic_keyword = any(kw in description_lower for kw in generic_keywords)
+            
+            if domain in domain_keywords:
+                has_domain_keyword = any(kw in description_lower for kw in domain_keywords[domain])
+                
+                # Generic keyword varsa ama domain keyword yoksa → DROP (false positive)
+                if has_generic_keyword and not has_domain_keyword:
+                    logger.debug(f"⏭️  CVE {result_cve_id} GENERIC CVE BOOST: Generic keyword found but no domain={domain} keyword → DROP")
+                    continue
         
         filtered.append(result)
     
-    logger.info(f"🔍 KATI Filtreleme: {len(results)} → {len(filtered)} sonuç (yıl={year}, product={product}, vendor={vendor}, domain={domain}, exact={exact_match}, negative={len(negative_keywords)})")
+    logger.info(f"🔍 KATI Filtreleme: {len(results)} → {len(filtered)} sonuç (yıl={year}, product={product}, vendor={vendor}, domain={domain}, language={language}, pickle={is_pickle_query}, exact={exact_match}, negative={len(negative_keywords)})")
     return filtered
 
 
