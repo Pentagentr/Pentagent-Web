@@ -1998,7 +1998,7 @@ Detaylı rapor oluşturulurken teknik bir sorun oluştu. Tarama verileri kaydedi
         logger.debug("Scan_results'tan tool bulguları çıkarılıyor...")
         # Scan results'tan tool data'larını tekrar kontrol et
         if isinstance(scan_results, dict):
-                for key, value in scan_results.items():
+            for key, value in scan_results.items():
                     # Dict ve success kontrolü
                     if isinstance(value, dict):
                         # Success varsa data'dan çıkar
@@ -2273,11 +2273,11 @@ Detaylı rapor oluşturulurken teknik bir sorun oluştu. Tarama verileri kaydedi
                             state.findings.append(finding)
                             findings_added += 1
                             logger.info(f"🔍 Genel bulgu eklendi: {key}")
-            
-            # Bulgu yoksa bulgu yok - yapay bulgu üretme!
-            if findings_added == 0:
-                logger.debug("Scan results'tan hiç bulgu çıkarılamadı - Bu normal bir durum")
-                logger.info(f"✅ Detaylı analiz sonrası toplam bulgu: {len(state.findings)}")
+        
+        # Bulgu yoksa bulgu yok - yapay bulgu üretme!
+        if findings_added == 0:
+            logger.debug("Scan results'tan hiç bulgu çıkarılamadı - Bu normal bir durum")
+            logger.info(f"✅ Detaylı analiz sonrası toplam bulgu: {len(state.findings)}")
         
         # all_findings'i güncelle - SADECE TOOL BULGULARI (CVE referansları risk skorunu çok artırmasın)
         all_findings = state.findings.copy() if hasattr(state, 'findings') and isinstance(state.findings, list) else []
