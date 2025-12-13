@@ -3052,10 +3052,10 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
             
             # Detaylı Bulgular
             if state.findings:
-            report_parts.append("## 5. DETAYLI BULGULAR")
-            report_parts.append("")
-            
-            for i, finding in enumerate(state.findings, 1):
+                report_parts.append("## 5. DETAYLI BULGULAR")
+                report_parts.append("")
+                
+                for i, finding in enumerate(state.findings, 1):
                     report_parts.append(f"### {i}. {finding.get('title', 'Bilinmeyen Bulgu')}")
                     report_parts.append(f"**Severity:** {finding.get('severity', 'Unknown').upper()}")
                     report_parts.append(f"**Açıklama:** {finding.get('description', 'Açıklama yok')}")
