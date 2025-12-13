@@ -277,8 +277,17 @@ class EnumWebCrawlerTool(MCPTool):
                 progress_percent = int((page_count / max_crawl_pages) * 100)
                 logger.info(f"Crawling progress: {progress_percent}% ({page_count}/{max_crawl_pages})")
                 
-                # GERÇEKÇI TIMEOUT: 10 saniye - stabil bağlantı
-                response = session.get(current_url, timeout=10, allow_redirects=True)
+                # GERÇEKÇI TIMEOUT: 20 saniye - yavaş siteler için yeterli
+                try:
+                    response = session.get(current_url, timeout=20, allow_redirects=True)
+                except Exception as timeout_err:
+                    logger.warning(f"⏱️ Timeout (20s): {current_url}")
+                    # Retry bir kez daha dene
+                    try:
+                        response = session.get(current_url, timeout=30, allow_redirects=True)
+                    except Exception as retry_err:
+                        logger.error(f"❌ Ana sayfa erişilemedi: {current_url}")
+                        continue
                 if response.status_code == 200:
                     crawled_urls.add(current_url)
                     context.discovered_paths.add(urlparse(current_url).path or '/')

@@ -893,6 +893,49 @@ async def generate_security_report(request: Dict[str, Any]):
                         findings = tool_data.get('findings', [])
                         results = tool_data.get('results', [])
                         
+                        # Directory bruteforce findings dict formatını kontrol et
+                        if key == 'enum_directory_bruteforce' and isinstance(tool_data.get('findings'), dict):
+                            findings_dict = tool_data.get('findings', {})
+                            critical_findings = findings_dict.get('critical', [])
+                            high_findings = findings_dict.get('high', [])
+                            info_findings = findings_dict.get('informational', [])
+                            
+                            # Tüm findings'leri birleştir
+                            all_dir_findings = critical_findings + high_findings + info_findings
+                            for dir_finding in all_dir_findings:
+                                if isinstance(dir_finding, dict):
+                                    path = dir_finding.get('path', '')
+                                    url = dir_finding.get('url', '')
+                                    status = dir_finding.get('status_code', 200)
+                                    
+                                    # Severity belirle
+                                    if dir_finding in critical_findings:
+                                        severity = 'critical'
+                                        cvss = '9.0'
+                                    elif dir_finding in high_findings:
+                                        severity = 'high'
+                                        cvss = '7.5'
+                                    else:
+                                        severity = 'info'
+                                        cvss = 'N/A'
+                                    
+                                    finding = {
+                                        'title': f'Dizin/Dosya Bulundu: {path}',
+                                        'severity': severity,
+                                        'description': f'Dizin veya dosya erişilebilir: {path} (Status: {status})',
+                                        'cvss_score': cvss,
+                                        'cve_id': None,
+                                        'evidence': f'URL: {url}, Status: {status}, Size: {dir_finding.get("content_length", "N/A")}',
+                                        'recommendation_summary': 'Hassas dizin ve dosyalara erişimi kısıtlayın' if severity in ['critical', 'high'] else 'Dizin listelerini kontrol edin',
+                                        'business_impact': 'Hassas bilgilere yetkisiz erişim riski' if severity in ['critical', 'high'] else 'Sistem yapısı hakkında bilgi sızıntısı',
+                                        'exploitability': 'High' if severity in ['critical', 'high'] else 'Low',
+                                        'target': url or target,
+                                        'technology': 'Web Server'
+                                    }
+                                    state.findings.append(finding)
+                                    findings_added += 1
+                                    logger.info(f"✅ Directory bruteforce bulgusu eklendi: {path} - Severity: {severity}")
+                        
                         # Port tarama sonuçlarını da kontrol et
                         open_ports = tool_data.get('open_ports', [])
                         if open_ports and isinstance(open_ports, list) and len(open_ports) > 0:
@@ -919,6 +962,38 @@ async def generate_security_report(request: Dict[str, Any]):
                             state.findings.append(finding)
                             findings_added += 1
                             logger.info(f"✅ Port tarama bulgusu eklendi: {port_count} açık port")
+                        
+                        # Subdomain sonuçlarını kontrol et
+                        subdomains = tool_data.get('subdomains', [])
+                        if subdomains and isinstance(subdomains, list) and len(subdomains) > 0:
+                            # Subdomain'ler dict veya string olabilir
+                            subdomain_list = []
+                            for sub in subdomains:
+                                if isinstance(sub, dict):
+                                    subdomain_list.append(sub.get('subdomain', sub.get('url', str(sub))))
+                                elif isinstance(sub, str):
+                                    subdomain_list.append(sub)
+                            
+                            if subdomain_list:
+                                subdomain_count = len(subdomain_list)
+                                subdomain_str = ', '.join(subdomain_list[:10])
+                                
+                                finding = {
+                                    'title': f'Subdomain Keşfi: {subdomain_count} subdomain bulundu',
+                                    'severity': 'medium',
+                                    'description': f'{subdomain_count} subdomain tespit edildi, saldırı yüzeyi genişledi. Subdomainler: {subdomain_str}',
+                                    'cvss_score': '5.0',
+                                    'cve_id': None,
+                                    'evidence': f'Subdomains: {subdomain_str}',
+                                    'recommendation_summary': 'Tüm subdomainlerin güvenliğini kontrol edin',
+                                    'business_impact': 'Genişletilmiş saldırı yüzeyi',
+                                    'exploitability': 'Medium',
+                                    'target': target,
+                                    'technology': 'DNS'
+                                }
+                                state.findings.append(finding)
+                                findings_added += 1
+                                logger.info(f"✅ Subdomain bulgusu eklendi: {subdomain_count} subdomain")
                         
                         # Tüm gerçek bulguları işle
                         all_real_findings = vulnerabilities + findings + results

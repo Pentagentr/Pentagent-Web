@@ -45,11 +45,11 @@ from tools.base_mcp_tool import MCPTool, ToolCategory, PriorityLevel
 # --- Konfigürasyonlar ve Sabitler ---
 # Uzmanın hızlıca adapte olması için teknolojiye özel küçük ama etkili wordlist'ler
 TECH_WORDLISTS = {
-    "general": ["admin", "login", "panel", "api", "dashboard", "test", "dev", "backup", "config", "uploads", "assets", "static", "images", "js", "css", "data", "files", "temp", "tmp", "cache", "logs", "user", "users", "account", "accounts", "private", "public", "media", "download", "downloads", "doc", "docs", "app", "apps", "portal", "checkout", "payment", "search", "include", "includes", "lib", "libs", "vendor", "node_modules", "scripts", "cgi-bin"],
-    "critical_files": [".git/HEAD", ".git/config", ".env", ".env.local", ".env.production", "web.config", "docker-compose.yml", "package.json", ".htaccess", "robots.txt", "sitemap.xml", "README.md", "CHANGELOG.md", ".gitignore", "composer.json", "Dockerfile"],
-    "wordpress": ["wp-admin", "wp-content", "wp-includes", "wp-config.php", "xmlrpc.php", "wp-cron.php", "wp-login.php", "wp-json"],
-    "php": ["phpinfo.php", "test.php", "info.php", "php.php", "index.php", "admin.php", "login.php", "config.php", "database.php", "db.php", "connect.php"],
-    "backup_ext": [".bak", ".old", ".zip", ".tar.gz", ".sql", ".bkp", "~", ".swp", ".tmp", ".backup", ".save", ".orig"]
+    "general": ["admin", "login", "panel", "api", "dashboard", "test", "dev", "backup", "config", "uploads", "assets", "static", "data", "files", "temp", "cache", "logs", "user", "account", "private", "public", "media", "download", "app", "portal", "payment", "search", "include", "lib", "vendor", "scripts"],
+    "critical_files": [".git/HEAD", ".git/config", ".env", ".env.local", "web.config", ".htaccess", "robots.txt", "sitemap.xml", "README.md", ".gitignore"],
+    "wordpress": ["wp-admin", "wp-content", "wp-config.php", "xmlrpc.php", "wp-login.php"],
+    "php": ["phpinfo.php", "info.php", "admin.php", "config.php", "database.php"],
+    "backup_ext": [".bak", ".old", ".zip", ".sql", ".backup"]
 }
 USER_AGENTS = ["Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36 Pentagent/1.0"]
 
@@ -61,6 +61,7 @@ class Baseline:
     """Sunucunun 'bulunamadı' durumundaki davranışını temsil eder."""
     status: int
     content_hash: str
+    content_length: int = 0
     redirect_location: Optional[str] = None
 
 @dataclass
@@ -95,6 +96,7 @@ class EnumDirectoryBruteforcerTool(MCPTool):
                 baseline = Baseline(
                     status=r.status,
                     content_hash=hashlib.sha256(content).hexdigest(),
+                    content_length=len(content),
                     redirect_location=r.headers.get('Location')
                 )
                 logger.info(f"Baseline tespiti: Status={baseline.status}, Hash={baseline.content_hash[:10]}..., Redirect={baseline.redirect_location}")
@@ -104,24 +106,35 @@ class EnumDirectoryBruteforcerTool(MCPTool):
             return None
 
     def _build_wordlist(self, wordlist_type: str) -> Set[str]:
-        """Verilen tipe göre akıllı bir wordlist oluşturur."""
-        words = set(TECH_WORDLISTS.get("general", []))
-        words.update(TECH_WORDLISTS.get("critical_files", []))
+        """Verilen tipe göre akıllı bir wordlist oluşturur - OPTİMİZE: ~80 kelime."""
+        # Sadece en önemli kelimeleri seç - 80 civarı hedef
+        words = set(TECH_WORDLISTS.get("general", [])[:25])  # İlk 25 genel kelime
+        words.update(TECH_WORDLISTS.get("critical_files", []))  # Tüm kritik dosyalar
         if wordlist_type in TECH_WORDLISTS:
             words.update(TECH_WORDLISTS[wordlist_type])
         
-        # Dizin ve dosya varyasyonları oluştur
+        # OPTİMİZE: Sadece dizin olarak test et (çift varyasyon yok)
         final_list = set()
         for word in words:
-            final_list.add(f"/{word}") # Dosya/Dizin olarak
-            if '.' not in word: # Eğer bir dosya uzantısı değilse, dizin olarak da test et
+            # Dosya uzantısı varsa sadece dosya olarak, yoksa dizin olarak
+            if '.' in word or word.startswith('.'):
+                final_list.add(f"/{word}")  # Dosya olarak
+            else:
+                final_list.add(f"/{word}/")  # Dizin olarak (sadece bir varyasyon)
+        
+        # Backup uzantılarını sadece kritik dosyalara ekle
+        critical_files = ['index.php', 'config.php', 'wp-config.php']
+        for file in critical_files:
+            for ext in TECH_WORDLISTS['backup_ext'][:3]:  # Sadece ilk 3 backup uzantısı
+                final_list.add(f"/{file}{ext}")
+        
+        # Toplam ~80 kelimeye ulaşmak için birkaç ek kelime
+        if len(final_list) < 70:
+            extra_words = ["phpinfo", "test", "debug", "install", "setup", "update", "upgrade", "old", "new", "v1", "v2"]
+            for word in extra_words:
                 final_list.add(f"/{word}/")
         
-        # Backup uzantılarını popüler dosyalara ekle
-        common_files = ['index.php', 'config.php', 'index.html', 'main.js']
-        for file in common_files:
-            for ext in TECH_WORDLISTS['backup_ext']:
-                final_list.add(f"/{file}{ext}")
+        logger.info(f"📋 Wordlist oluşturuldu: {len(final_list)} kelime")
         return final_list
 
     async def _check_path(self, session: aiohttp.ClientSession, path: str, context: BruteforceContext):
@@ -129,7 +142,7 @@ class EnumDirectoryBruteforcerTool(MCPTool):
         full_url = urljoin(context.base_url, path)
         try:
             context.checked_paths_count += 1
-            async with session.get(full_url, timeout=10, allow_redirects=False) as r:
+            async with session.get(full_url, timeout=15, allow_redirects=False) as r:
                 # 1. WAF/Bloklama tespiti
                 if r.status in [403, 429, 503]:
                     if not context.waf_detected:
@@ -137,22 +150,43 @@ class EnumDirectoryBruteforcerTool(MCPTool):
                         context.ai_reasoning_log.append({"phase": "waf_detection", "thought": f"⚠️ WAF/Koruma tespiti yapıldı (Status: {r.status}). Tarama yavaşlatılabilir veya engellenebilir."})
                     return
 
-                # 2. Baseline ile karşılaştırma (en önemli kısım)
-                if context.baseline:
-                    if r.status == context.baseline.status:
-                        # Eğer yönlendirme varsa ve hedef aynıysa, bu bir wildcard yönlendirmedir.
-                        if context.baseline.redirect_location and r.headers.get('Location') == context.baseline.redirect_location:
-                            return
-                        # Eğer içerik hash'i aynıysa, bu özel bir 404 sayfasıdır.
-                        content = await r.read()
-                        if hashlib.sha256(content).hexdigest() == context.baseline.content_hash:
-                            return
+                # 2. Baseline ile karşılaştırma - OPTİMİZE: Sadece gerçek 404'leri filtrele
+                content = await r.read()
+                content_length = len(content)
+                content_hash = hashlib.sha256(content).hexdigest()
                 
-                # 3. Gerçek bulgu
-                content = await r.read() # İçeriği tekrar okumamak için
-                finding = {"url": full_url, "path": path, "status_code": r.status, "content_length": len(content)}
+                # Status 200, 301, 302, 403, 500 vb. hepsi bulgu - direkt ekle
+                if r.status != 404:
+                    finding = {"url": full_url, "path": path, "status_code": r.status, "content_length": content_length}
+                    context.found_paths.append(finding)
+                    logger.info(f"✅ Bulundu: [{finding['status_code']}] {finding['url']} (Boyut: {finding['content_length']})")
+                    return
+                
+                # Sadece status 404 ise baseline kontrolü yap
+                if r.status == 404 and context.baseline:
+                    # Hash tam eşitse skip et (özel 404 sayfası)
+                    if content_hash == context.baseline.content_hash:
+                        return
+                    # İçerik uzunluğu çok farklıysa (2x'den fazla veya yarısından az) gerçek bulgu olabilir
+                    baseline_length = context.baseline.content_length
+                    if baseline_length > 0:
+                        if content_length > baseline_length * 2 or content_length < baseline_length / 2:
+                            # Gerçek bulgu - farklı içerik
+                            finding = {"url": full_url, "path": path, "status_code": r.status, "content_length": content_length}
+                            context.found_paths.append(finding)
+                            logger.info(f"✅ Bulundu (404 ama farklı içerik): [{finding['status_code']}] {finding['url']} (Boyut: {finding['content_length']})")
+                            return
+                    # Yönlendirme kontrolü
+                    if context.baseline.redirect_location and r.headers.get('Location') == context.baseline.redirect_location:
+                        return
+                    # Hash benzerliği kontrolü - ilk 20 karakter aynıysa skip
+                    if content_hash[:20] == context.baseline.content_hash[:20]:
+                        return
+                
+                # 404 ama baseline'dan farklı - bilgilendirici bulgu olarak ekle
+                finding = {"url": full_url, "path": path, "status_code": r.status, "content_length": content_length}
                 context.found_paths.append(finding)
-                logger.info(f"Bulundu: [{finding['status_code']}] {finding['url']} (Boyut: {finding['content_length']})")
+                logger.info(f"✅ Bulundu (404 ama farklı): [{finding['status_code']}] {finding['url']} (Boyut: {finding['content_length']})")
 
         except (aiohttp.ClientError, asyncio.TimeoutError):
             pass # Bağlantı hatalarını sessizce geç
