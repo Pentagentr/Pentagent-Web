@@ -2025,6 +2025,22 @@ Detaylı rapor oluşturulurken teknik bir sorun oluştu. Tarama verileri kaydedi
         if limited_tool_outputs and len(limited_tool_outputs) > 0:
             response_data["all_tool_outputs"] = limited_tool_outputs
         
+        # Scan history'ye kaydet (opsiyonel - hata durumunda devam et)
+        try:
+            user_id = request.get("user_id") or request.get("userId")
+            if user_id:
+                # Frontend'e scan_history kaydı için bilgi gönder
+                # Frontend kendi scanHistoryService'i ile kaydedecek
+                response_data["scan_history_data"] = {
+                    "target": target,
+                    "findingsCount": len(cleaned_findings),
+                    "riskLevel": "HIGH" if risk_score >= 70 else "MEDIUM" if risk_score >= 40 else "LOW",
+                    "riskScore": risk_score,
+                    "vulnerabilities": vulnerabilities
+                }
+        except Exception as scan_history_err:
+            logger.debug(f"Scan history kayıt hazırlığı hatası (normal olabilir): {scan_history_err}")
+        
         logger.info(f"✅ Response ready: {len(str(response_data))} bytes")
         return response_data
         

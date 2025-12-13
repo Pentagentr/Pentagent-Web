@@ -5,6 +5,7 @@ import AppNavbar from '../components/layout/AppNavbar';
 import { ReportViewer } from '../components/reports';
 import { pentagentAPI } from '../services/pentagentAPI';
 import { reportService } from '../services/reportService';
+import { scanHistoryService } from '../services/scanHistoryService';
 import { useAuth } from '../contexts/AuthContext';
 
 const Reports = () => {
@@ -102,6 +103,26 @@ const Reports = () => {
       });
 
       console.log('💾 Firestore savedReport:', savedReport); // DEBUG
+
+      // Scan history'ye kaydet
+      try {
+        if (reportData.scan_history_data) {
+          await scanHistoryService.saveScan(currentUser.uid, {
+            target: pendingReport.target,
+            scanResults: pendingReport.scanResults,
+            cveResults: pendingReport.cveResults,
+            summary: pendingReport.scanSummary || '',
+            toolsUsed: Object.keys(pendingReport.scanResults || {}),
+            findingsCount: reportData.scan_history_data.findingsCount,
+            riskLevel: reportData.scan_history_data.riskLevel,
+            riskScore: reportData.scan_history_data.riskScore
+          });
+          console.log('✅ Scan history kaydedildi');
+        }
+      } catch (scanHistoryErr) {
+        console.error('Scan history kayıt hatası:', scanHistoryErr);
+        // Hata durumunda devam et
+      }
 
       // localStorage'ı temizle
       localStorage.removeItem('pendingReport');
