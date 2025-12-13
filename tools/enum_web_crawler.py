@@ -518,42 +518,42 @@ class EnumWebCrawlerTool(MCPTool):
                 max_pages=max_pages
             )
             self._add_reasoning(context.ai_reasoning_log, "initialization", f"Hedef {context.target_domain} için tarama başlatılıyor.")
-             
-             try:
-                 # Selenium'u direkt senkron olarak çalıştır
-                 context = self._crawl_sync(context)
-                 return self._build_final_json(context)
-             except KeyboardInterrupt:
-                 # Kullanıcı durdurdu
-                 logger.info("Tarama kullanıcı tarafından durduruldu")
-                 return self._create_final_output(
-                     success=False,
-                     ai_summary="Tarama kullanıcı tarafından durduruldu.",
-                     ai_reasoning=context.ai_reasoning_log,
-                     error="KeyboardInterrupt"
-                 )
-             except Exception as e:
-                 # Herhangi bir hata - graceful fail
-                 logger.warning(f"Crawl hatası (graceful): {type(e).__name__}")
-                 # En azından toplanan verileri döndür
-                 if context.crawled_page_count > 0 or len(context.discovered_paths) > 0:
-                     logger.info(f"Kısmi sonuç döndürülüyor: {context.crawled_page_count} sayfa")
-                     return self._build_final_json(context)
-                 else:
-                     return self._create_final_output(
-                         success=False,
-                         ai_summary="Web tarayıcı sırasında bir hata oluştu.",
-                         ai_reasoning=context.ai_reasoning_log,
-                         error=f"{type(e).__name__}: {str(e)[:100]}"
-                     )
-         except Exception as outer_e:
-             # En dış catch - sistem ASLA çökmez
-             logger.error(f"CRITICAL: Outer exception in run_tool: {outer_e}")
-             return self._create_final_output(
-                 success=False,
-                 ai_summary="Kritik hata oluştu ama sistem korundu.",
-                 error=f"Critical: {type(outer_e).__name__}"
-             )
+            
+            try:
+                # Selenium'u direkt senkron olarak çalıştır
+                context = self._crawl_sync(context)
+                return self._build_final_json(context)
+            except KeyboardInterrupt:
+                # Kullanıcı durdurdu
+                logger.info("Tarama kullanıcı tarafından durduruldu")
+                return self._create_final_output(
+                    success=False,
+                    ai_summary="Tarama kullanıcı tarafından durduruldu.",
+                    ai_reasoning=context.ai_reasoning_log,
+                    error="KeyboardInterrupt"
+                )
+            except Exception as e:
+                # Herhangi bir hata - graceful fail
+                logger.warning(f"Crawl hatası (graceful): {type(e).__name__}")
+                # En azından toplanan verileri döndür
+                if context.crawled_page_count > 0 or len(context.discovered_paths) > 0:
+                    logger.info(f"Kısmi sonuç döndürülüyor: {context.crawled_page_count} sayfa")
+                    return self._build_final_json(context)
+                else:
+                    return self._create_final_output(
+                        success=False,
+                        ai_summary="Web tarayıcı sırasında bir hata oluştu.",
+                        ai_reasoning=context.ai_reasoning_log,
+                        error=f"{type(e).__name__}: {str(e)[:100]}"
+                    )
+        except Exception as outer_e:
+            # En dış catch - sistem ASLA çökmez
+            logger.error(f"CRITICAL: Outer exception in run_tool: {outer_e}")
+            return self._create_final_output(
+                success=False,
+                ai_summary="Kritik hata oluştu ama sistem korundu.",
+                error=f"Critical: {type(outer_e).__name__}"
+            )
 
 async def main():
     parser = argparse.ArgumentParser(description="Pentagent Web Crawler (v8 - Selenium Tabanlı).")
