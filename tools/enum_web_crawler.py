@@ -273,8 +273,8 @@ class EnumWebCrawlerTool(MCPTool):
                  progress_percent = int((page_count / max_crawl_pages) * 100)
                  logger.info(f"Crawling progress: {progress_percent}% ({page_count}/{max_crawl_pages})")
                  
-                 # MİNİMAL TIMEOUT: 3 saniye - çok hızlı fail
-                 response = session.get(current_url, timeout=3, allow_redirects=True)
+                # MİNİMAL TIMEOUT: 3 saniye - çok hızlı fail
+                response = session.get(current_url, timeout=3, allow_redirects=True)
                 if response.status_code == 200:
                     crawled_urls.add(current_url)
                     context.discovered_paths.add(urlparse(current_url).path or '/')
@@ -286,7 +286,7 @@ class EnumWebCrawlerTool(MCPTool):
                     for link in new_links:
                         if link not in crawled_urls:
                             queue.append((link, depth + 1))
-             except requests.exceptions.Timeout:
+            except requests.exceptions.Timeout:
                 # Timeout - sessizce atla
                 logger.debug(f"Timeout (5s): {current_url}")
                 continue
@@ -477,7 +477,7 @@ class EnumWebCrawlerTool(MCPTool):
         
         return recommendations
 
-     def run_tool(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def run_tool(self, params: Dict[str, Any]) -> Dict[str, Any]:
          """
          CRASH KORUNMALI - Tüm hatalar yakalanır, sistem ASLA çökmez
          """
