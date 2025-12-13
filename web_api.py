@@ -673,12 +673,14 @@ JSON formatında döndür:
 
 def _filter_cve_results(results: List[Any], query_info: Dict[str, Any]) -> List[Any]:
     """
-    CVE sonuçlarını query bilgilerine göre filtrele
+    CVE sonuçlarını query bilgilerine göre KATI kurallarla filtrele
     
     Filtreleme kuralları:
-    - Yıl varsa sadece o yılın CVE'leri
-    - Ürün adı varsa sadece o ürüne ait CVE'ler (vendor/product alanlarında)
-    - Kesin eşleşme gerekiyorsa sadece tam eşleşen CVE'ler
+    1. Vendor ZORUNLU: Query'de vendor varsa, sonuçlardaki vendor TAM EŞLEŞMELİ
+    2. Product ZORUNLU: Product varsa, retrieved.product VEYA description'da primary product keyword olmalı
+    3. Domain Ayrımı: Container/Kubernetes sorgularında OS kernel CVE'leri drop
+    4. Negative Keywords: Log4j sorgusunda logback, slf4j gibi benzer ürünleri drop
+    5. Year Logic: published_date'e bak (CVE ID'ye değil)
     """
     if not results or not query_info:
         return results
@@ -687,81 +689,118 @@ def _filter_cve_results(results: List[Any], query_info: Dict[str, Any]) -> List[
     product = query_info.get('product')
     vendor = query_info.get('vendor')
     exact_match = query_info.get('exact_product_match', False)
+    domain = query_info.get('domain')  # container, os, cloud, iot
+    negative_keywords = query_info.get('negative_keywords', [])  # Drop edilecek kelimeler
     
     filtered = []
     
     for result in results:
-        # Yıl kontrolü
+        result_cve_id = result.cve_id or result.get('cve_id', '')
+        result_product = result.product or result.get('product', '')
+        result_vendor = result.vendor or result.get('vendor', '')
+        description = result.description or result.get('description', '')
+        published_date = result.published_date or result.get('published_date')
+        
+        # Normalize et (case-insensitive)
+        result_product_lower = result_product.lower() if result_product else ''
+        result_vendor_lower = result_vendor.lower() if result_vendor else ''
+        description_lower = description.lower() if description else ''
+        
+        # 1️⃣ VENDOR ZORUNLU FİLTRE
+        if vendor:
+            vendor_lower = vendor.lower()
+            # Vendor TAM EŞLEŞMELİ olmalı
+            vendor_match = (
+                vendor_lower == result_vendor_lower or
+                vendor_lower in result_vendor_lower or
+                result_vendor_lower in vendor_lower
+            )
+            
+            if not vendor_match:
+                logger.debug(f"⏭️  CVE {result_cve_id} vendor uyuşmuyor: query='{vendor}' != result='{result_vendor}'")
+                continue
+        
+        # 2️⃣ PRODUCT/TECHNOLOGY ZORUNLU FİLTRE
+        if product:
+            product_lower = product.lower()
+            
+            # Product retrieved.product VEYA description'da olmalı
+            product_in_product_field = (
+                product_lower in result_product_lower or
+                result_product_lower in product_lower
+            )
+            
+            product_in_description = product_lower in description_lower
+            
+            # Kesin eşleşme gerekiyorsa sadece product field'da olmalı
+            if exact_match:
+                if not product_in_product_field:
+                    logger.debug(f"⏭️  CVE {result_cve_id} product kesin eşleşmiyor: query='{product}' not in product='{result_product}'")
+                    continue
+            else:
+                # Kesin eşleşme gerekmiyorsa product field VEYA description'da olmalı
+                if not (product_in_product_field or product_in_description):
+                    logger.debug(f"⏭️  CVE {result_cve_id} product eşleşmiyor: query='{product}' not in product='{result_product}' or description")
+                    continue
+        
+        # 3️⃣ DOMAIN AYIRIMI
+        if domain:
+            # Container/Kubernetes sorgularında OS kernel CVE'leri drop
+            if domain in ['container', 'kubernetes', 'docker']:
+                # OS kernel keywords
+                kernel_keywords = ['kernel', 'linux kernel', 'windows kernel', 'driver', 'privilege escalation os']
+                if any(kw in description_lower for kw in kernel_keywords):
+                    # Ama Kubernetes/container keyword'ü yoksa drop
+                    container_keywords = ['kubernetes', 'container', 'docker', 'pod', 'namespace']
+                    if not any(ck in description_lower for ck in container_keywords):
+                        logger.debug(f"⏭️  CVE {result_cve_id} domain uyuşmuyor: OS kernel CVE dropped (domain={domain})")
+                        continue
+            
+            # OS sorgularında container CVE'leri drop
+            elif domain == 'os':
+                container_keywords = ['kubernetes', 'container', 'docker', 'pod']
+                if any(ck in description_lower for ck in container_keywords):
+                    logger.debug(f"⏭️  CVE {result_cve_id} domain uyuşmuyor: Container CVE dropped (domain={domain})")
+                    continue
+        
+        # 4️⃣ NEGATIVE KEYWORD DROP RULES
+        if negative_keywords:
+            for neg_keyword in negative_keywords:
+                neg_lower = neg_keyword.lower()
+                # Description veya product'ta negative keyword varsa drop
+                if neg_lower in description_lower or neg_lower in result_product_lower:
+                    logger.debug(f"⏭️  CVE {result_cve_id} negative keyword içeriyor: '{neg_keyword}'")
+                    continue
+        
+        # 5️⃣ YEAR LOGIC (published_date'e bak, CVE ID'ye değil)
         if year:
-            published_date = result.published_date or result.get('published_date')
+            result_year = None
             if published_date:
                 try:
                     # Yıl formatı: "2021-12-10" veya "2021"
                     result_year = int(str(published_date)[:4])
-                    if result_year != year:
-                        logger.debug(f"⏭️  CVE {result.cve_id} yıl uyuşmuyor: {result_year} != {year}")
-                        continue
                 except:
                     pass
-        
-        # Ürün kontrolü
-        if product:
-            result_product = result.product or result.get('product', '')
-            result_vendor = result.vendor or result.get('vendor', '')
-            description = result.description or result.get('description', '')
             
-            # Ürün adını normalize et (case-insensitive)
-            product_lower = product.lower()
-            result_product_lower = result_product.lower() if result_product else ''
-            result_vendor_lower = result_vendor.lower() if result_vendor else ''
-            description_lower = description.lower() if description else ''
+            # CVE ID'den de yıl çıkar (fallback)
+            if result_year is None:
+                try:
+                    # CVE-2021-44228 formatından yıl çıkar
+                    if 'CVE-' in result_cve_id:
+                        cve_year_str = result_cve_id.split('-')[1]
+                        result_year = int(cve_year_str)
+                except:
+                    pass
             
-            # Kesin eşleşme gerekiyorsa
-            if exact_match:
-                # Sadece vendor/product alanlarında eşleşme kabul et
-                # Açıklamada geçen ama ürüne ait olmayan CVE'leri dahil etme
-                product_match = (
-                    product_lower in result_product_lower or
-                    result_product_lower in product_lower
-                )
-                
-                # Vendor kontrolü (eğer vendor belirtilmişse)
-                vendor_match = True
-                if vendor:
-                    vendor_lower = vendor.lower()
-                    vendor_match = (
-                        vendor_lower in result_vendor_lower or
-                        result_vendor_lower in vendor_lower
-                    )
-                
-                if not (product_match and vendor_match):
-                    logger.debug(f"⏭️  CVE {result.cve_id} ürün/vendor uyuşmuyor: product={result_product}, vendor={result_vendor}")
+            if result_year is not None:
+                # Yıl eşleşmeli (published_year == query_year VEYA cve_id_year == query_year)
+                if result_year != year:
+                    logger.debug(f"⏭️  CVE {result_cve_id} yıl uyuşmuyor: {result_year} != {year}")
                     continue
-            else:
-                # Kesin eşleşme gerekmiyorsa, açıklamada da geçebilir ama öncelik vendor/product'ta
-                product_match = (
-                    product_lower in result_product_lower or
-                    result_product_lower in product_lower or
-                    (not exact_match and product_lower in description_lower)
-                )
-                
-                if not product_match:
-                    logger.debug(f"⏭️  CVE {result.cve_id} ürün eşleşmiyor: product={result_product}")
-                    continue
-        
-        # Vendor kontrolü (sadece vendor varsa ve product yoksa)
-        if vendor and not product:
-            result_vendor = result.vendor or result.get('vendor', '')
-            vendor_lower = vendor.lower()
-            result_vendor_lower = result_vendor.lower() if result_vendor else ''
-            
-            if vendor_lower not in result_vendor_lower and result_vendor_lower not in vendor_lower:
-                logger.debug(f"⏭️  CVE {result.cve_id} vendor uyuşmuyor: {result_vendor}")
-                continue
         
         filtered.append(result)
     
-    logger.info(f"🔍 Filtreleme: {len(results)} → {len(filtered)} sonuç (yıl={year}, product={product}, vendor={vendor}, exact={exact_match})")
+    logger.info(f"🔍 KATI Filtreleme: {len(results)} → {len(filtered)} sonuç (yıl={year}, product={product}, vendor={vendor}, domain={domain}, exact={exact_match})")
     return filtered
 
 
