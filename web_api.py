@@ -1993,11 +1993,11 @@ Detaylı rapor oluşturulurken teknik bir sorun oluştu. Tarama verileri kaydedi
         cve_findings = enriched_cve_findings
         logger.info(f"✅ {len(enriched_cve_findings)} CVE zenginleştirildi")
         
-        # Eğer hiç bulgu yoksa - scan_results'tan detaylı analiz yap
-        if findings_added == 0:
-            logger.debug("İlk aşamada bulgu bulunamadı, scan_results detaylı analiz ediliyor")
-            # Scan results'tan tool data'larını tekrar kontrol et
-            if isinstance(scan_results, dict):
+        # HER ZAMAN scan_results'tan tool bulgularını çıkar ve ekle
+        # (findings_added == 0 kontrolünü kaldırdık - her zaman tool bulgularını ekle)
+        logger.debug("Scan_results'tan tool bulguları çıkarılıyor...")
+        # Scan results'tan tool data'larını tekrar kontrol et
+        if isinstance(scan_results, dict):
                 for key, value in scan_results.items():
                     # Dict ve success kontrolü
                     if isinstance(value, dict):
@@ -2339,26 +2339,7 @@ Detaylı rapor oluşturulurken teknik bir sorun oluştu. Tarama verileri kaydedi
         logger.info(f"📊 Vulnerabilities objesi: {vulnerabilities}")
         logger.info(f"📊 Toplam zafiyet: {sum(vulnerabilities.values())}")
         
-        # Risk skoru 0 ise ve bulgular varsa, minimum skor ver
-        if risk_score == 0 and len(cleaned_findings) > 0:
-            severity_counts = {
-                'critical': vulnerabilities['critical'],
-                'high': vulnerabilities['high'],
-                'medium': vulnerabilities['medium'],
-                'low': vulnerabilities['low']
-            }
-            if severity_counts['critical'] > 0:
-                risk_score = 85
-            elif severity_counts['high'] > 0:
-                risk_score = 65
-            elif severity_counts['medium'] > 0:
-                risk_score = 45
-            elif severity_counts['low'] > 0:
-                risk_score = 25
-            else:
-                risk_score = 15
-        elif risk_score == 0 and len(all_findings) == 0:
-            risk_score = 5
+        # Risk skoru artık _calculate_risk_score içinde hesaplanıyor, fallback mantığı kaldırıldı
         
         
         # Yapılandırılmış rapor verisini al (tool bulguları + CVE tablosu + detaylı çıktılar)

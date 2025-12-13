@@ -188,9 +188,33 @@ class ReportGenerator:
         # Skorı 0-100 arası normalize et
         normalized_score = min(int(total_score), 100)
         
-        # Minimum skor: Eğer herhangi bir bulgu varsa en az 15 puan ver
-        if len(findings) > 0 and normalized_score < 15:
-            normalized_score = 15
+        # Minimum skor mantığını kaldırdık - gerçek skor kullanılacak
+        # Ancak eğer hiç bulgu yoksa ve skor 0 ise, minimum 5 puan ver
+        if len(findings) == 0:
+            normalized_score = 5
+        # Eğer bulgular varsa ama skor çok düşükse (sadece info bulguları varsa), minimum skor ver
+        elif normalized_score == 0 and len(findings) > 0:
+            # Sadece info bulguları varsa minimum skor
+            info_only = all(f.get('severity', 'info').lower() == 'info' for f in findings)
+            if info_only:
+                normalized_score = 10
+            else:
+                # Diğer severity'ler varsa ama skor 0 ise, severity'ye göre minimum skor ver
+                has_critical = any(f.get('severity', '').lower() == 'critical' for f in findings)
+                has_high = any(f.get('severity', '').lower() == 'high' for f in findings)
+                has_medium = any(f.get('severity', '').lower() == 'medium' for f in findings)
+                has_low = any(f.get('severity', '').lower() == 'low' for f in findings)
+                
+                if has_critical:
+                    normalized_score = 85
+                elif has_high:
+                    normalized_score = 65
+                elif has_medium:
+                    normalized_score = 45
+                elif has_low:
+                    normalized_score = 25
+                else:
+                    normalized_score = 15
         
         return normalized_score
 
@@ -2121,20 +2145,23 @@ Bu rapor, güvenlik ekibinin öncelikli aksiyon planı oluşturması için hazı
                 target=enriched_data.get("target", "Unknown"),
                 user_task=enriched_data.get("user_task", "Güvenlik raporu oluştur")
             )
-            state.findings = enriched_data.get("findings", [])
+            # Findings'i al - tool bulguları dahil olmalı
+            findings = enriched_data.get("findings", [])
+            state.findings = findings if isinstance(findings, list) else []
             state.discovered_information = enriched_data.get("discovered_information", {})
             
             # Tool çıktılarını ekle
             tool_outputs = enriched_data.get("all_tool_outputs", {})
             cve_results = enriched_data.get("cve_results", [])
+            scan_results = enriched_data.get("scan_results", {})
             
-            # LLM ile gelişmiş rapor oluştur
+            # LLM ile gelişmiş rapor oluştur - TÜM BULGULAR İLE
             llm_report = self.generate_llm_enhanced_report(
-                findings=state.findings,
+                findings=state.findings,  # Tool bulguları dahil
                 target=state.target,
                 cve_results=cve_results,
                 tool_outputs=tool_outputs,
-                scan_results=enriched_data  # scan_results parametresi eklendi
+                scan_results=scan_results if scan_results else enriched_data  # scan_results parametresi eklendi
             )
             
             return llm_report
@@ -2880,18 +2907,32 @@ Raporu Türkçe olarak yaz ve profesyonel penetrasyon testi standartlarına uygu
                     report_parts.append(f"\n+ {len(all_directories) - 20} dizin/dosya daha...")
                 report_parts.append("")
         
-        # Detaylı Bulgular
+        # Detaylı Bulgular - TOOL BULGULARI DAHİL
         if findings:
             report_parts.append("## 4. DETAYLI BULGULAR")
             report_parts.append("")
             
-            for i, finding in enumerate(findings, 1):
+            # Bulguları severity'ye göre sırala
+            sorted_findings = sorted(
+                findings,
+                key=lambda x: {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}.get(x.get("severity", "info").lower(), 0),
+                reverse=True
+            )
+            
+            for i, finding in enumerate(sorted_findings, 1):
                 report_parts.append(f"### {i}. {finding.get('title', 'Bilinmeyen Bulgu')}")
                 report_parts.append(f"**Severity:** {finding.get('severity', 'Unknown').upper()}")
-                report_parts.append(f"**CVSS:** {finding.get('cvss_score', 'N/A')}")
+                cvss = finding.get('cvss_score', 'N/A')
+                if cvss and cvss != 'N/A':
+                    report_parts.append(f"**CVSS:** {cvss}")
                 report_parts.append(f"**Açıklama:** {finding.get('description', 'Açıklama yok')}")
-                report_parts.append(f"**Kanıt:**")
-                report_parts.append(f"```\n{finding.get('evidence', 'Kanıt yok')}\n```")
+                evidence = finding.get('evidence', 'Kanıt yok')
+                if evidence and evidence != 'Kanıt yok':
+                    report_parts.append(f"**Kanıt:**")
+                    report_parts.append(f"```\n{evidence[:500]}\n```")
+                recommendation = finding.get('recommendation_summary') or finding.get('recommendation')
+                if recommendation:
+                    report_parts.append(f"**Öneri:** {recommendation}")
                 report_parts.append("")
         
         # Tool Çıktıları
