@@ -1012,7 +1012,7 @@ async def generate_security_report(request: Dict[str, Any]):
         
         # EĞER HİÇ BULGU YOKSA - Bu normal, yapay bulgu üretme!
         if findings_added == 0:
-            logger.info(f"ℹ️ Hiç bulgu bulunamadı - Bu normal bir durum. Tarama tamamlandı ama zafiyet tespit edilmedi.")
+            logger.debug(f"Hiç bulgu bulunamadı - Bu normal bir durum.")
             # Bulgu yoksa bulgu yok - yapay bulgu üretme!
         
         logger.info(f"✅ TOPLAM BULGU: {len(state.findings)}")
@@ -1418,7 +1418,7 @@ Detaylı rapor oluşturulurken teknik bir sorun oluştu. Tarama verileri kaydedi
         
         # Eğer hiç bulgu yoksa - Bu normal, yapay bulgu üretme!
         if len(state.findings) == 0:
-            logger.info("ℹ️ Hiç bulgu bulunamadı - Bu normal bir durum. Tarama tamamlandı ama zafiyet tespit edilmedi.")
+            logger.debug("Hiç bulgu bulunamadı - Bu normal bir durum.")
             # Bulgu yoksa bulgu yok - yapay bulgu üretme!
                     
                     # Dict ve success kontrolü
@@ -1685,24 +1685,7 @@ Detaylı rapor oluşturulurken teknik bir sorun oluştu. Tarama verileri kaydedi
                         state.findings.append(finding)
                         logger.info(f"🔍 Genel bulgu eklendi: {key}")
             
-            # Hala bulgu yoksa, en az bir bulgu oluştur
-            if len(state.findings) == 0:
-                logger.warning("⚠️ Hala bulgu yok, minimum bulgu oluşturuluyor")
-                finding = {
-                    'title': 'Tarama Tamamlandı',
-                    'severity': 'info',
-                    'description': f'{target} için güvenlik taraması tamamlandı',
-                    'cvss_score': 'N/A',
-                    'cve_id': None,
-                    'evidence': 'Tarama sonuçları analiz edildi',
-                    'recommendation_summary': 'Düzenli güvenlik taramaları yapın',
-                    'business_impact': 'Güvenlik taraması tamamlandı',
-                    'exploitability': 'Low',
-                    'target': target,
-                    'technology': 'Security Assessment'
-                }
-                state.findings.append(finding)
-                logger.info("🔍 Minimum bulgu eklendi")
+            # Bulgu yoksa bulgu yok - yapay bulgu üretme!
         
         # all_findings'i güncelle - SADECE TOOL BULGULARI (CVE referansları risk skorunu çok artırmasın)
         all_findings = state.findings.copy() if hasattr(state, 'findings') and isinstance(state.findings, list) else []
