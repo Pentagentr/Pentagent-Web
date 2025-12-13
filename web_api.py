@@ -562,6 +562,7 @@ async def optimize_rag_query(user_query: str) -> Dict[str, Any]:
         'vendor': None,
         'domain': None,
         'language': None,  # python, java, php, javascript
+        'protocol_type': None,  # protocol, product, os_mechanism
         'negative_keywords': [],
         'exact_product_match': False,
         'is_pickle_query': False  # Pickle-specific query flag
@@ -612,15 +613,22 @@ KURALLAR:
 
 JSON formatında döndür:
 {{
-    "query": "optimize edilmiş sorgu",
+    "query": "optimize edilmiş sorgu (genel kelimeler çıkarılmış)",
     "year": yıl sayısı veya null,
-    "product": "ürün adı" veya null,
+    "product": "ürün/protokol adı" veya null,
     "vendor": "vendor adı" veya null,
-    "domain": "container|os|cloud|iot" veya null,
+    "domain": "web|container|os|cloud|iot" veya null,
     "language": "python|java|php|javascript" veya null,
-    "negative_keywords": ["kelime1", "kelime2"] veya [],
+    "protocol_type": "protocol|product|os_mechanism" veya null,
+    "negative_keywords": ["Windows", "Kernel", "OLE"] veya [],
     "is_pickle_query": true/false,
     "exact_product_match": true/false
+}}
+
+ÖNEMLİ:
+- "authentication", "authorization", "security" gibi genel kelimeleri query'den ÇIKAR
+- Sorguda geçmeyen vendor/product/domain keyword'lerini negative_keywords'a ekle
+- OAuth2 gibi protokoller için domain="web" ve negative_keywords=["Windows", "Kernel", "OLE"] olmalı
 }}"""
 
         response = await llm_model.generate_content_async(optimization_prompt)
@@ -664,6 +672,9 @@ JSON formatında döndür:
                 language = parsed.get('language')
                 if language:
                     language = language.strip('"\'` ')
+                protocol_type = parsed.get('protocol_type')
+                if protocol_type:
+                    protocol_type = protocol_type.strip('"\'` ')
                 negative_keywords = parsed.get('negative_keywords', [])
                 if isinstance(negative_keywords, str):
                     # String ise listeye çevir
@@ -674,6 +685,13 @@ JSON formatında döndür:
                     negative_keywords = []
                 is_pickle_query = parsed.get('is_pickle_query', False)
                 exact_match = parsed.get('exact_product_match', False)
+                
+                # Query'den genel kelimeleri çıkar (authentication, authorization, security)
+                general_words = ['authentication', 'authorization', 'security', 'vulnerability', 'exploit']
+                query_words = optimized_query.lower().split()
+                optimized_query = ' '.join([w for w in query_words if w not in general_words])
+                if not optimized_query.strip():
+                    optimized_query = user_query  # Eğer hepsi çıkarıldıysa orijinali kullan
                 
                 # Çok uzunsa kes (max 100 karakter)
                 if len(optimized_query) > 100:
@@ -686,13 +704,14 @@ JSON formatında döndür:
                     'vendor': vendor,
                     'domain': domain,
                     'language': language,
+                    'protocol_type': protocol_type,
                     'negative_keywords': negative_keywords,
                     'is_pickle_query': is_pickle_query,
                     'exact_product_match': exact_match
                 }
                 
                 logger.info(f"🤖 Query optimized: '{user_query}' → '{optimized_query}'")
-                logger.info(f"   📅 Year: {year}, 📦 Product: {product}, 🏢 Vendor: {vendor}, 🌐 Domain: {domain}, 💻 Language: {language}, 🥒 Pickle: {is_pickle_query}, 🚫 Negative: {negative_keywords}, 🎯 Exact match: {exact_match}")
+                logger.info(f"   📅 Year: {year}, 📦 Product: {product}, 🏢 Vendor: {vendor}, 🌐 Domain: {domain}, 💻 Language: {language}, 🔐 Protocol: {protocol_type}, 🥒 Pickle: {is_pickle_query}, 🚫 Negative: {negative_keywords}, 🎯 Exact match: {exact_match}")
                 return result
             except json.JSONDecodeError:
                 logger.warning("JSON parse edilemedi, basit query kullanılıyor")
@@ -709,8 +728,16 @@ JSON formatında döndür:
         fallback_vendor = None
         fallback_domain = None
         fallback_language = None
+        fallback_protocol_type = None
         fallback_negative = []
         fallback_is_pickle = False
+        
+        # Query'den genel kelimeleri çıkar
+        general_words = ['authentication', 'authorization', 'security', 'vulnerability', 'exploit']
+        query_words = optimized_query.lower().split()
+        optimized_query_clean = ' '.join([w for w in query_words if w not in general_words])
+        if optimized_query_clean.strip():
+            optimized_query = optimized_query_clean
         
         # Yıl çıkar (4 haneli sayı)
         year_match = re.search(r'\b(19|20)\d{2}\b', user_query)
@@ -720,12 +747,30 @@ JSON formatında döndür:
             except:
                 pass
         
-        # Domain çıkar
         query_lower = user_query.lower()
+        
+        # Protocol/Product/OS Mechanism ayrımı
+        protocol_keywords = ['oauth2', 'oauth', 'saml', 'ldap', 'kerberos', 'jwt', 'openid']
+        os_mechanism_keywords = ['windows authentication', 'linux pam', 'pam', 'ntlm']
+        
+        if any(kw in query_lower for kw in protocol_keywords):
+            fallback_protocol_type = 'protocol'
+            fallback_domain = 'web'
+            # OAuth2/SAML gibi protokoller için Windows/Kernel negative
+            fallback_negative = ['windows', 'kernel', 'ole', 'windows runtime', 'os']
+        elif any(kw in query_lower for kw in os_mechanism_keywords):
+            fallback_protocol_type = 'os_mechanism'
+            fallback_domain = 'os'
+        else:
+            # Ürün olarak kabul et
+            fallback_protocol_type = 'product'
+        
+        # Domain çıkar
         if any(kw in query_lower for kw in ['kubernetes', 'container', 'docker', 'pod']):
             fallback_domain = 'container'
-            fallback_negative = ['windows kernel', 'linux kernel']
-        elif any(kw in query_lower for kw in ['kernel', 'driver', 'os ', 'operating system']):
+            if not fallback_negative:
+                fallback_negative = ['windows kernel', 'linux kernel']
+        elif any(kw in query_lower for kw in ['kernel', 'driver', 'os ', 'operating system']) and fallback_domain != 'web':
             fallback_domain = 'os'
         elif any(kw in query_lower for kw in ['router', 'firmware', 'iot']):
             fallback_domain = 'iot'
@@ -735,12 +780,20 @@ JSON formatında döndür:
         # Language/Ecosystem çıkar
         if any(kw in query_lower for kw in ['django', 'flask', 'fastapi', 'python']):
             fallback_language = 'python'
+            if not fallback_negative:
+                fallback_negative = ['windows', 'java', 'php']
         elif any(kw in query_lower for kw in ['spring', 'dubbo', 'java']):
             fallback_language = 'java'
+            if not fallback_negative:
+                fallback_negative = ['windows', 'python', 'php']
         elif any(kw in query_lower for kw in ['thinkphp', 'laravel', 'php']):
             fallback_language = 'php'
+            if not fallback_negative:
+                fallback_negative = ['windows', 'python', 'java']
         elif any(kw in query_lower for kw in ['react', 'vue', 'angular', 'javascript', 'node']):
             fallback_language = 'javascript'
+            if not fallback_negative:
+                fallback_negative = ['windows', 'python', 'java', 'php']
         
         # Pickle query tespiti
         if 'pickle' in query_lower:
@@ -751,14 +804,20 @@ JSON formatında döndür:
         if 'log4j' in query_lower:
             fallback_negative = ['logback', 'slf4j', 'java.util.logging']
         
+        # Eğer domain web ise ve Windows geçmiyorsa Windows negative
+        if fallback_domain == 'web' and 'windows' not in query_lower:
+            if 'windows' not in fallback_negative:
+                fallback_negative.append('windows')
+        
         default_response['query'] = optimized_query
         default_response['year'] = fallback_year
         default_response['domain'] = fallback_domain
         default_response['language'] = fallback_language
+        default_response['protocol_type'] = fallback_protocol_type
         default_response['is_pickle_query'] = fallback_is_pickle
         default_response['negative_keywords'] = fallback_negative
         logger.info(f"🤖 Query optimized (fallback): '{user_query}' → '{optimized_query}'")
-        logger.info(f"   📅 Year: {fallback_year}, 🌐 Domain: {fallback_domain}, 💻 Language: {fallback_language}, 🥒 Pickle: {fallback_is_pickle}, 🚫 Negative: {fallback_negative}")
+        logger.info(f"   📅 Year: {fallback_year}, 🌐 Domain: {fallback_domain}, 💻 Language: {fallback_language}, 🔐 Protocol: {fallback_protocol_type}, 🥒 Pickle: {fallback_is_pickle}, 🚫 Negative: {fallback_negative}")
         return default_response
         
     except Exception as e:
@@ -934,21 +993,46 @@ def _filter_cve_results(results: List[Any], query_info: Dict[str, Any]) -> List[
                     logger.debug(f"⏭️  CVE {result_cve_id} domain uyuşmuyor: Container CVE dropped (domain={domain})")
                     continue
         
-        # 5️⃣ NEGATIVE KEYWORD DROP RULES
+        # 5️⃣ NEGATIVE KEYWORD DROP RULES (KRİTİK)
+        # Sorguda geçmeyen vendor/product/domain keyword'leri varsa → DROP
         if negative_keywords:
             should_drop = False
             for neg_keyword in negative_keywords:
                 neg_lower = neg_keyword.lower()
-                # Description veya product'ta negative keyword varsa drop
-                if neg_lower in description_lower or neg_lower in result_product_lower:
-                    logger.debug(f"⏭️  CVE {result_cve_id} negative keyword içeriyor: '{neg_keyword}'")
+                # Description, product, vendor veya CVE ID'de negative keyword varsa drop
+                if (neg_lower in description_lower or 
+                    neg_lower in result_product_lower or 
+                    neg_lower in result_vendor_lower or
+                    neg_lower in result_cve_id.lower()):
+                    logger.debug(f"⏭️  CVE {result_cve_id} NEGATIVE FILTER: Negative keyword '{neg_keyword}' found → DROP")
                     should_drop = True
                     break
             
             if should_drop:
                 continue
         
-        # 6️⃣ YEAR FILTER (GERÇEKTEN UYGULANSIN)
+        # 6️⃣ PROTOCOL/PRODUCT/OS MECHANISM AYRIMI
+        # OAuth2 ≠ Windows Authentication
+        if protocol_type:
+            if protocol_type == 'protocol':
+                # Protocol sorgusu (OAuth2, SAML, LDAP) - OS mechanism keyword'leri drop
+                os_mechanism_keywords = ['windows authentication', 'ntlm', 'pam', 'linux pam', 'os authentication']
+                if any(kw in description_lower or kw in result_product_lower for kw in os_mechanism_keywords):
+                    logger.debug(f"⏭️  CVE {result_cve_id} PROTOCOL FILTER: Protocol query but OS mechanism keyword found → DROP")
+                    continue
+            
+            elif protocol_type == 'os_mechanism':
+                # OS mechanism sorgusu - Protocol keyword'leri drop (eğer OS keyword yoksa)
+                protocol_keywords = ['oauth2', 'oauth', 'saml', 'ldap', 'jwt', 'openid']
+                os_keywords = ['windows authentication', 'ntlm', 'pam', 'linux pam', 'os authentication']
+                has_protocol_keyword = any(kw in description_lower or kw in result_product_lower for kw in protocol_keywords)
+                has_os_keyword = any(kw in description_lower or kw in result_product_lower for kw in os_keywords)
+                
+                if has_protocol_keyword and not has_os_keyword:
+                    logger.debug(f"⏭️  CVE {result_cve_id} OS MECHANISM FILTER: OS mechanism query but protocol keyword found (no OS keyword) → DROP")
+                    continue
+        
+        # 7️⃣ YEAR FILTER (GERÇEKTEN UYGULANSIN)
         # CVE.year != query.year → DROP
         if year:
             published_year = None
@@ -986,7 +1070,7 @@ def _filter_cve_results(results: List[Any], query_info: Dict[str, Any]) -> List[
                 logger.debug(f"⏭️  CVE {result_cve_id} YEAR FILTER: published={published_year}, cve_id={cve_id_year}, query={year} → DROP")
                 continue
         
-        # 7️⃣ GENERIC CVE BOOST KAPATILMASI
+        # 8️⃣ GENERIC CVE BOOST KAPATILMASI
         # Domain uyumu yoksa relevance = 0 (false positive önleme)
         # Generic CVE'ler ("critical", "network", "deserialization") domain uyumu olmadan boost edilmemeli
         if domain:
@@ -1010,7 +1094,7 @@ def _filter_cve_results(results: List[Any], query_info: Dict[str, Any]) -> List[
         
         filtered.append(result)
     
-    logger.info(f"🔍 KATI Filtreleme: {len(results)} → {len(filtered)} sonuç (yıl={year}, product={product}, vendor={vendor}, domain={domain}, language={language}, pickle={is_pickle_query}, exact={exact_match}, negative={len(negative_keywords)})")
+    logger.info(f"🔍 KATI Filtreleme: {len(results)} → {len(filtered)} sonuç (yıl={year}, product={product}, vendor={vendor}, domain={domain}, language={language}, protocol={protocol_type}, pickle={is_pickle_query}, exact={exact_match}, negative={len(negative_keywords)})")
     return filtered
 
 
