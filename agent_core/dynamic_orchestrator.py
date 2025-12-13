@@ -840,7 +840,7 @@ Hangi hedefi taramak istersin?"""
 🔄 SON TOOL'LAR: {recent_tools_str}
 
 💡 ÇÖZÜM SEÇENEKLERİ:
-1. Farklı tool seç (örn: tech_detector → directory_bruteforce)
+1. Farklı tool seç (örn: enum_tech_detector → directory_bruteforce)
 2. {current_step}>={self.min_steps} ve yeterli bilgi → "stop"
 
 JSON ÇIKTI (Reasoning MUTLAKA TÜRKÇE):
@@ -1196,8 +1196,8 @@ HEDEF: {self.current_target}
 ADIM: {current_step}/{self.min_steps}
 
 ALTERNATIF:
-- port_scanner → tech_detector
-- tech_detector → directory_bruteforce
+- port_scanner → enum_tech_detector
+- enum_tech_detector → directory_bruteforce
 - web_crawler → directory_bruteforce
 - {current_step}>={self.min_steps} ise "stop"
 
