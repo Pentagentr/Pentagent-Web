@@ -45,11 +45,11 @@ from tools.base_mcp_tool import MCPTool, ToolCategory, PriorityLevel
 # --- Konfigürasyonlar ve Sabitler ---
 # Uzmanın hızlıca adapte olması için teknolojiye özel küçük ama etkili wordlist'ler
 TECH_WORDLISTS = {
-    "general": ["admin", "login", "panel", "api", "dashboard", "test", "dev", "backup", "config", "uploads", "assets", "static", "images", "js", "css"],
-    "critical_files": [".git/HEAD", ".env", ".env.local", "web.config", "docker-compose.yml", "package.json"],
-    "wordpress": ["wp-admin", "wp-content", "wp-config.php", "xmlrpc.php", "wp-cron.php"],
-    "php": ["phpinfo.php", "test.php"],
-    "backup_ext": [".bak", ".old", ".zip", ".tar.gz", ".sql", ".bkp", "~"]
+    "general": ["admin", "login", "panel", "api", "dashboard", "test", "dev", "backup", "config", "uploads", "assets", "static", "images", "js", "css", "data", "files", "temp", "tmp", "cache", "logs", "user", "users", "account", "accounts", "private", "public", "media", "download", "downloads", "doc", "docs", "app", "apps", "portal", "checkout", "payment", "search", "include", "includes", "lib", "libs", "vendor", "node_modules", "scripts", "cgi-bin"],
+    "critical_files": [".git/HEAD", ".git/config", ".env", ".env.local", ".env.production", "web.config", "docker-compose.yml", "package.json", ".htaccess", "robots.txt", "sitemap.xml", "README.md", "CHANGELOG.md", ".gitignore", "composer.json", "Dockerfile"],
+    "wordpress": ["wp-admin", "wp-content", "wp-includes", "wp-config.php", "xmlrpc.php", "wp-cron.php", "wp-login.php", "wp-json"],
+    "php": ["phpinfo.php", "test.php", "info.php", "php.php", "index.php", "admin.php", "login.php", "config.php", "database.php", "db.php", "connect.php"],
+    "backup_ext": [".bak", ".old", ".zip", ".tar.gz", ".sql", ".bkp", "~", ".swp", ".tmp", ".backup", ".save", ".orig"]
 }
 USER_AGENTS = ["Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36 Pentagent/1.0"]
 

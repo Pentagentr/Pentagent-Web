@@ -161,7 +161,7 @@ class EnumWebCrawlerTool(MCPTool):
                 logger.info("HTTP-based crawling kullanılıyor (Chrome alternatifi)")
                 return self._http_based_crawl(context)
             
-            driver.set_page_load_timeout(60) # Sayfa yükleme için zaman aşımı
+            driver.set_page_load_timeout(30) # Sayfa yükleme için zaman aşımı - render optimizasyonu
             
             # Stealth script çalıştır
             driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
@@ -259,8 +259,8 @@ class EnumWebCrawlerTool(MCPTool):
         crawled_urls = set()
         
         # OPTİMİZE AYARLAR: Dengeli tarama - hızlı ama etkili
-        max_crawl_pages = min(context.max_pages, 25)  # 25 sayfa - daha kapsamlı
-        max_crawl_depth = min(context.max_depth, 2)   # 2 derinlik - ana sayfa + 1 seviye
+        max_crawl_pages = min(context.max_pages, 20)  # 20 sayfa - optimal
+        max_crawl_depth = min(context.max_depth, 2)   # 2 derinlik - yeterli
         
         # Progress tracking için
         page_count = 0
@@ -507,9 +507,9 @@ class EnumWebCrawlerTool(MCPTool):
             if not start_url.startswith(('http://', 'https://')): 
                 start_url = 'https://' + start_url
             
-            # OPTİMİZE PARAMETRELER - Dengeli ve etkili tarama
-            max_depth = min(params.get("depth", 2), 3)   # Max 3 depth - kapsamlı tarama
-            max_pages = min(params.get("max_pages", 25), 50)  # Max 50 sayfa - geniş kapsam
+            # OPTİMİZE PARAMETRELER - Hızlı ve crash-safe tarama
+            max_depth = min(params.get("depth", 2), 2)   # Max 2 depth - yeterli kapsam
+            max_pages = min(params.get("max_pages", 15), 30)  # Max 30 sayfa - crash önleme
             
             context = CrawlContext(
                 base_url=start_url.rstrip('/'), 

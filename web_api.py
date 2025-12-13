@@ -893,6 +893,33 @@ async def generate_security_report(request: Dict[str, Any]):
                         findings = tool_data.get('findings', [])
                         results = tool_data.get('results', [])
                         
+                        # Port tarama sonuçlarını da kontrol et
+                        open_ports = tool_data.get('open_ports', [])
+                        if open_ports and isinstance(open_ports, list) and len(open_ports) > 0:
+                            port_count = len(open_ports)
+                            critical_ports = [p for p in open_ports if isinstance(p, dict) and str(p.get('port', '')).strip() in ['22', '3389', '5900', '23', '21']]
+                            severity = 'high' if critical_ports else 'medium'
+                            cvss = '7.5' if critical_ports else '5.0'
+                            
+                            port_details = ', '.join([f"{p.get('port', 'N/A')}/{p.get('service', 'unknown')}" for p in open_ports[:10] if isinstance(p, dict)])
+                            
+                            finding = {
+                                'title': f'Açık Portlar: {port_count} port tespit edildi',
+                                'severity': severity,
+                                'description': f'Sistemde {port_count} açık port bulundu. Kritik portlar: {len(critical_ports)} adet. Portlar: {port_details}',
+                                'cvss_score': cvss,
+                                'cve_id': None,
+                                'evidence': f'Open ports: {port_details}',
+                                'recommendation_summary': 'Gereksiz portları kapatın ve güvenlik duvarı kurallarını gözden geçirin',
+                                'business_impact': 'Açık portlar saldırı yüzeyini artırır',
+                                'exploitability': 'High' if critical_ports else 'Medium',
+                                'target': target,
+                                'technology': 'Network Services'
+                            }
+                            state.findings.append(finding)
+                            findings_added += 1
+                            logger.info(f"✅ Port tarama bulgusu eklendi: {port_count} açık port")
+                        
                         # Tüm gerçek bulguları işle
                         all_real_findings = vulnerabilities + findings + results
                         for item in all_real_findings:
