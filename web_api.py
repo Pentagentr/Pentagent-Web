@@ -1511,23 +1511,49 @@ async def generate_security_report(request: Dict[str, Any]):
         import os
         os.makedirs("reports", exist_ok=True)
         
-        # AI ile geliştirilmiş rapor oluştur - hata yönetimi ile
+        # AI ile geliştirilmiş rapor oluştur - TIMEOUT KORUMASLI
+        import asyncio
+        ai_report_content = None
         try:
-            ai_report_content = await report_gen.generate_ai_enhanced_report(state, scan_results, cve_results)
+            # 45 saniye timeout - Render için optimize edilmiş
+            ai_report_content = await asyncio.wait_for(
+                report_gen.generate_ai_enhanced_report(state, scan_results, cve_results),
+                timeout=45.0
+            )
+            logger.info("✅ AI enhanced report başarıyla oluşturuldu")
+        except asyncio.TimeoutError:
+            logger.warning("⏱️ AI report timeout (45s) - Fallback kullanılıyor")
+            ai_report_content = None
         except Exception as ai_err:
-            logger.warning(f"AI enhanced report oluşturma hatası: {ai_err}")
-            # Fallback: Basit rapor oluştur
+            logger.warning(f"⚠️ AI enhanced report hatası: {type(ai_err).__name__}: {str(ai_err)[:100]}")
+            ai_report_content = None
+        
+        # Fallback: Basit, hızlı rapor oluştur
+        if not ai_report_content:
+            logger.info("📄 Basit rapor formatı kullanılıyor (hızlı)")
             try:
                 enriched_data = {
                     "target": target,
-                    "findings": state.findings if hasattr(state, 'findings') and isinstance(state.findings, list) else [],
-                    "cve_results": cve_results if isinstance(cve_results, list) else [],
+                    "findings": state.findings[:50] if hasattr(state, 'findings') and isinstance(state.findings, list) else [],  # İlk 50 finding
+                    "cve_results": cve_results[:10] if isinstance(cve_results, list) else [],  # İlk 10 CVE
                     "scan_results": scan_results if isinstance(scan_results, dict) else {}
                 }
                 ai_report_content = report_gen.generate_comprehensive_report_sync(enriched_data)
+                logger.info("✅ Basit rapor başarıyla oluşturuldu")
             except Exception as fallback_err:
-                logger.warning(f"Fallback rapor oluşturma hatası: {fallback_err}")
-                ai_report_content = f"# Güvenlik Raporu\n\nHedef: {target}\n\nRapor oluşturulurken bir hata oluştu. Lütfen tekrar deneyin."
+                logger.error(f"❌ Basit rapor hatası: {fallback_err}")
+                # Son fallback - minimal rapor
+                ai_report_content = f"""# Güvenlik Raporu
+
+## Hedef
+{target}
+
+## Özet
+Tarama tamamlandı. {len(state.findings) if hasattr(state, 'findings') else 0} bulgu tespit edildi.
+
+## Durum
+Detaylı rapor oluşturulurken teknik bir sorun oluştu. Tarama verileri kaydedildi.
+"""
         
         # TÜM TOOL ÇIKTILARINI ÖNCE TOPLA - TEKRARLANMASIN
         all_tool_outputs = {}
@@ -2181,28 +2207,104 @@ async def generate_security_report(request: Dict[str, Any]):
         # Datetime import'u burada yap
         from datetime import datetime as dt
         
-        return {
+        # Response data'sını optimize et - SADECE ANLAMLI DATA GÖNDER
+        # Tool outputs'u filtrele: Sadece bulgu içerenleri gönder
+        limited_tool_outputs = {}
+        if all_tool_outputs:
+            import json
+            tool_count = 0
+            for tool_name, tool_output in all_tool_outputs.items():
+                if tool_count >= 10:  # Maksimum 10 tool
+                    break
+                
+                # Tool output'ta anlamlı data var mı kontrol et
+                has_meaningful_data = False
+                if isinstance(tool_output, dict):
+                    # Bulgu, zafiyet, port, subdomain gibi anlamlı datalar var mı?
+                    meaningful_keys = ['vulnerabilities', 'findings', 'results', 'ports', 'subdomains', 
+                                      'technologies', 'endpoints', 'forms', 'discovered_paths']
+                    for key in meaningful_keys:
+                        if key in tool_output and tool_output[key]:
+                            # Liste ise ve boş değilse, dict ise ve boş değilse
+                            if (isinstance(tool_output[key], list) and len(tool_output[key]) > 0) or \
+                               (isinstance(tool_output[key], dict) and len(tool_output[key]) > 0):
+                                has_meaningful_data = True
+                                break
+                
+                # Anlamlı data yoksa skip et
+                if not has_meaningful_data:
+                    logger.debug(f"⏭️ {tool_name} skipped (no meaningful data)")
+                    continue
+                
+                # Anlamlı data varsa ekle (serialize edilebilir hale getir)
+                try:
+                    serialized = json.dumps(tool_output)
+                    if len(serialized) > 3000:  # 3KB limit
+                        # Sadece önemli alanları al
+                        filtered_output = {}
+                        for key in meaningful_keys:
+                            if key in tool_output:
+                                filtered_output[key] = tool_output[key][:20] if isinstance(tool_output[key], list) else tool_output[key]
+                        limited_tool_outputs[tool_name] = filtered_output
+                    else:
+                        limited_tool_outputs[tool_name] = tool_output
+                    tool_count += 1
+                except:
+                    logger.warning(f"⚠️ {tool_name} serialize edilemedi, skipped")
+        
+        # Structured data'yı optimize et - Sadece dolu alanlar
+        if structured_report:
+            # Boş alanları temizle
+            structured_report = {k: v for k, v in structured_report.items() if v}
+            
+            # Findings'i sınırla (max 50)
+            if "detailed_findings" in structured_report and len(structured_report["detailed_findings"]) > 50:
+                structured_report["detailed_findings"] = structured_report["detailed_findings"][:50]
+                structured_report["findings_truncated"] = True
+            
+            # CVE'leri sınırla (max 20)
+            if "cve_results" in structured_report and len(structured_report["cve_results"]) > 20:
+                structured_report["cve_results"] = structured_report["cve_results"][:20]
+                structured_report["cve_truncated"] = True
+        
+        findings_count = len(state.findings) if hasattr(state, 'findings') else 0
+        tools_count = len(limited_tool_outputs)
+        logger.info(f"📊 Response optimized: {findings_count} findings, {tools_count} tools with data, {len(cve_results)} CVEs")
+        
+        # Final response - sadece dolu alanlar
+        response_data = {
             "success": True,
             "report_id": report_id,
             "target": target,
             "risk_score": risk_score,
             "vulnerabilities": vulnerabilities,
-            "pages": len(report_content.split('\n')) // 50,  # Tahmini sayfa sayısı
+            "pages": len(report_content.split('\n')) // 50 if report_content else 1,
             "createdAt": dt.now().isoformat(),
             "download_url": f"/api/reports/{report_id}/download",
-            "report_content": report_content[:5000],  # İlk 5000 karakter
             "formats_available": ["txt", "pdf", "json", "md"],
             "files": {
                 "txt": f"{report_path}.txt",
                 "pdf": f"{report_path}.pdf",
                 "json": f"{report_path}.json",
                 "md": f"{report_path}.md"
-            },
-            # Tüm rapor bölümleri
-            "structured_data": structured_report,
-            # Tool çıktılarını ekle
-            "all_tool_outputs": all_tool_outputs
+            }
         }
+        
+        # Report content sadece varsa ekle (ilk 3000 karakter)
+        if report_content and len(report_content.strip()) > 0:
+            response_data["report_content"] = report_content[:3000]
+        
+        # Structured data sadece bulgu varsa ekle
+        if structured_report and any(key in structured_report and structured_report[key] 
+                                     for key in ['detailed_findings', 'vulnerabilities', 'cve_results']):
+            response_data["structured_data"] = structured_report
+        
+        # Tool outputs sadece anlamlı data varsa ekle
+        if limited_tool_outputs and len(limited_tool_outputs) > 0:
+            response_data["all_tool_outputs"] = limited_tool_outputs
+        
+        logger.info(f"✅ Response ready: {len(str(response_data))} bytes")
+        return response_data
         
     except HTTPException:
         raise
