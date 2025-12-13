@@ -67,7 +67,11 @@ class EnumWebCrawlerTool(MCPTool):
             description="Selenium WebDriver kullanarak hedef web sitesini derinlemesine tarar ve formları keşfeder.",
             category=ToolCategory.DISCOVERY_ENUMERATION
         )
-    # Bu metodlar artık statik veya sınıf metodu olabilir, çünkü durum dışarıdan yönetiliyor.
+    # Helper metodlar
+    def _add_reasoning(self, ai_reasoning_log: List[Dict], phase: str, thought: str):
+        """AI reasoning log'a entry ekle"""
+        ai_reasoning_log.append({"phase": phase, "thought": thought})
+    
     def _is_same_domain(self, url: str, target_domain: str) -> bool: return urlparse(url).netloc == target_domain
     def _deduplicate_forms(self, forms: List[Dict]) -> List[Dict]:
         unique_forms: List[Dict] = []; seen: Set[Tuple[str, str, Tuple[str, ...]]] = set()
@@ -254,9 +258,9 @@ class EnumWebCrawlerTool(MCPTool):
         queue = collections.deque([(context.base_url, 0)])
         crawled_urls = set()
         
-        # MİNİMAL AYARLAR: Max 10 sayfa, depth 1 - ÇÖKME YOK
-        max_crawl_pages = min(context.max_pages, 10)  # Sadece 10 sayfa
-        max_crawl_depth = min(context.max_depth, 1)   # Sadece 1 derinlik
+        # OPTİMİZE AYARLAR: Dengeli tarama - hızlı ama etkili
+        max_crawl_pages = min(context.max_pages, 25)  # 25 sayfa - daha kapsamlı
+        max_crawl_depth = min(context.max_depth, 2)   # 2 derinlik - ana sayfa + 1 seviye
         
         # Progress tracking için
         page_count = 0
@@ -273,8 +277,8 @@ class EnumWebCrawlerTool(MCPTool):
                 progress_percent = int((page_count / max_crawl_pages) * 100)
                 logger.info(f"Crawling progress: {progress_percent}% ({page_count}/{max_crawl_pages})")
                 
-                # MİNİMAL TIMEOUT: 3 saniye - çok hızlı fail
-                response = session.get(current_url, timeout=3, allow_redirects=True)
+                # GERÇEKÇI TIMEOUT: 10 saniye - stabil bağlantı
+                response = session.get(current_url, timeout=10, allow_redirects=True)
                 if response.status_code == 200:
                     crawled_urls.add(current_url)
                     context.discovered_paths.add(urlparse(current_url).path or '/')
@@ -287,20 +291,25 @@ class EnumWebCrawlerTool(MCPTool):
                         if link not in crawled_urls:
                             queue.append((link, depth + 1))
             except requests.exceptions.Timeout:
-                # Timeout - sessizce atla
-                logger.debug(f"Timeout (5s): {current_url}")
+                # Timeout - log ve devam
+                logger.warning(f"⏱️ Timeout (10s): {current_url}")
+                # Ana sayfa bile timeout oluyorsa önemli bir sorun var
+                if current_url == context.base_url:
+                    logger.error(f"❌ Ana sayfa erişilemedi: {current_url}")
                 continue
-            except requests.exceptions.ConnectionError:
-                # Connection error - sessizce atla
-                logger.debug(f"Connection error: {current_url}")
+            except requests.exceptions.ConnectionError as conn_err:
+                # Connection error - log ve devam
+                logger.warning(f"🔌 Connection error: {current_url} - {str(conn_err)[:50]}")
+                if current_url == context.base_url:
+                    logger.error(f"❌ Ana sayfaya bağlantı kurulamadı")
                 continue
-            except requests.exceptions.RequestException:
-                # Request hatası - sessizce atla
-                logger.debug(f"Request error: {current_url}")
+            except requests.exceptions.RequestException as req_err:
+                # Request hatası - log ve devam
+                logger.warning(f"⚠️ Request error: {current_url} - {str(req_err)[:50]}")
                 continue
             except Exception as e:
-                # Diğer hatalar - sessizce atla, sistem çökmesin
-                logger.debug(f"Crawl hatası: {current_url}")
+                # Diğer hatalar - log ve devam
+                logger.warning(f"❌ Crawl error: {current_url} - {type(e).__name__}")
                 continue
         
         context.crawled_page_count = len(crawled_urls)
@@ -498,9 +507,9 @@ class EnumWebCrawlerTool(MCPTool):
              if not start_url.startswith(('http://', 'https://')): 
                  start_url = 'https://' + start_url
              
-             # MİNİMAL PARAMETRELER - ÇÖKME YOK, HIZLI VE STABİL
-             max_depth = min(params.get("depth", 1), 1)   # Max 1 depth - sadece ana sayfa
-             max_pages = min(params.get("max_pages", 10), 10)  # Max 10 sayfa - çok hızlı
+            # OPTİMİZE PARAMETRELER - Dengeli ve etkili tarama
+            max_depth = min(params.get("depth", 2), 3)   # Max 3 depth - kapsamlı tarama
+            max_pages = min(params.get("max_pages", 25), 50)  # Max 50 sayfa - geniş kapsam
              
              context = CrawlContext(
                  base_url=start_url.rstrip('/'), 
