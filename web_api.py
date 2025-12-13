@@ -970,43 +970,11 @@ async def generate_security_report(request: Dict[str, Any]):
                             # Bu bilgi toplama, bulgu değil - skip et
                             logger.debug(f"RAG data bulundu ama bulgu değil, skip ediliyor: {key}")
                             pass
-                                    'description': f'Açık port tespit edildi: {port} - {service}',
-                                    'cvss_score': cvss,
-                                    'cve_id': None,
-                                    'evidence': f'Port: {port}, Service: {service}',
-                                    'recommendation_summary': 'Gereksiz portları kapatın',
-                                    'business_impact': 'Açık portlar saldırı yüzeyini artırır',
-                                    'exploitability': 'Medium',
-                                    'target': target,
-                                    'technology': 'Network'
-                                }
-                                state.findings.append(finding)
-                                findings_added += 1
                         
                         # Diğer tool'lar - SADECE GERÇEK BULGULAR (vulnerabilities/findings/results zaten yukarıda işlendi)
                         # Bilgi toplama sonuçları bulgu değildir - skip et
                         else:
                             logger.debug(f"Tool {key} - vulnerabilities/findings/results yok, skip ediliyor")
-                        
-                        # GENEL TOOL SONUCU - Eğer yukarıdaki tool'lardan hiçbiri değilse
-                        else:
-                            # Tool'un genel sonucundan finding oluştur
-                            if tool_data:
-                                finding = {
-                                    'title': f'{key.replace("_", " ").title()} Testi',
-                                    'severity': 'info',
-                                    'description': f'{key} testi tamamlandı',
-                                    'cvss_score': 'N/A',
-                                    'cve_id': None,
-                                    'evidence': f'Tool data: {str(tool_data)[:200]}',
-                                    'recommendation_summary': f'{key} test sonuçları incelenmeli',
-                                    'business_impact': 'Test sonuçları güvenlik değerlendirmesi için önemli',
-                                    'exploitability': 'Information Gathering',
-                                    'target': target,
-                                    'technology': 'Security Testing'
-                                }
-                                state.findings.append(finding)
-                                findings_added += 1
         
         logger.info(f"Tarama sonuçlarından {findings_added} bulgu eklendi")
         
@@ -1416,11 +1384,12 @@ Detaylı rapor oluşturulurken teknik bir sorun oluştu. Tarama verileri kaydedi
         cve_findings = enriched_cve_findings
         logger.info(f"✅ {len(enriched_cve_findings)} CVE zenginleştirildi")
         
-        # Eğer hiç bulgu yoksa - Bu normal, yapay bulgu üretme!
-        if len(state.findings) == 0:
-            logger.debug("Hiç bulgu bulunamadı - Bu normal bir durum.")
-            # Bulgu yoksa bulgu yok - yapay bulgu üretme!
-                    
+        # Eğer hiç bulgu yoksa - scan_results'tan detaylı analiz yap
+        if findings_added == 0:
+            logger.debug("İlk aşamada bulgu bulunamadı, scan_results detaylı analiz ediliyor")
+            # Scan results'tan tool data'larını tekrar kontrol et
+            if isinstance(scan_results, dict):
+                for key, value in scan_results.items():
                     # Dict ve success kontrolü
                     if isinstance(value, dict):
                         # Success varsa data'dan çıkar
@@ -1450,6 +1419,7 @@ Detaylı rapor oluşturulurken teknik bir sorun oluştu. Tarama verileri kaydedi
                                                 'technology': 'Web Server'
                                             }
                                             state.findings.append(finding)
+                                            findings_added += 1
                                             logger.info(f"🔍 CRITICAL dizin bulgusu: {item.get('path')}")
                                     
                                     # High risk directories (admin, config, etc.)
@@ -1469,6 +1439,7 @@ Detaylı rapor oluşturulurken teknik bir sorun oluştu. Tarama verileri kaydedi
                                                 'technology': 'Web Server'
                                             }
                                             state.findings.append(finding)
+                                            findings_added += 1
                                             logger.info(f"🔍 HIGH dizin bulgusu: {item.get('path')}")
                                     
                                     # Informational directories
@@ -1488,6 +1459,7 @@ Detaylı rapor oluşturulurken teknik bir sorun oluştu. Tarama verileri kaydedi
                                             'technology': 'Web Server'
                                         }
                                         state.findings.append(finding)
+                                        findings_added += 1
                                         logger.info(f"🔍 INFO dizin bulgusu: {info_count} dizin")
                                 
                                 # API Endpoints tespit edildi mi?
@@ -1517,6 +1489,7 @@ Detaylı rapor oluşturulurken teknik bir sorun oluştu. Tarama verileri kaydedi
                                             'technology': 'API'
                                         }
                                         state.findings.append(finding)
+                                        findings_added += 1
                                         logger.info(f"🔍 API Endpoint bulgusu eklendi: {endpoint_count} endpoint ({high_risk_count} yüksek riskli)")
                                 
                                 # Web Crawler sonuçları (pages, paths, forms)
@@ -1548,6 +1521,7 @@ Detaylı rapor oluşturulurken teknik bir sorun oluştu. Tarama verileri kaydedi
                                             'technology': 'Web Application'
                                         }
                                         state.findings.append(finding)
+                                        findings_added += 1
                                         logger.info(f"🔍 Web Crawler bulgusu eklendi: {page_count} sayfa, {path_count} yol, {form_count} form")
                                 
                                 # Teknoloji tespit edildi mi?
@@ -1569,6 +1543,7 @@ Detaylı rapor oluşturulurken teknik bir sorun oluştu. Tarama verileri kaydedi
                                             'technology': 'Technology Detection'
                                         }
                                         state.findings.append(finding)
+                                        findings_added += 1
                                         logger.info(f"🔍 Teknoloji bulgusu eklendi: {tech_count} teknoloji")
                                 
                                 # Port taraması var mı?
@@ -1596,6 +1571,7 @@ Detaylı rapor oluşturulurken teknik bir sorun oluştu. Tarama verileri kaydedi
                                             'technology': 'Network Services'
                                         }
                                         state.findings.append(finding)
+                                        findings_added += 1
                                         logger.info(f"🔍 Port bulgusu eklendi: {port_count} port")
                                 
                                 # Subdomain var mı?
@@ -1605,18 +1581,19 @@ Detaylı rapor oluşturulurken teknik bir sorun oluştu. Tarama verileri kaydedi
                                     if subdomain_count > 0:
                                         finding = {
                                             'title': f'Subdomain Keşfi: {subdomain_count} subdomain bulundu',
-                            'severity': 'medium',
+                                            'severity': 'medium',
                                             'description': f'{subdomain_count} subdomain tespit edildi, saldırı yüzeyi genişledi',
-                            'cvss_score': '5.0',
-                            'cve_id': None,
+                                            'cvss_score': '5.0',
+                                            'cve_id': None,
                                             'evidence': f'Subdomains: {subdomains[:10]}',
                                             'recommendation_summary': 'Tüm subdomainlerin güvenliğini kontrol edin',
                                             'business_impact': 'Genişletilmiş saldırı yüzeyi',
-                            'exploitability': 'Medium',
+                                            'exploitability': 'Medium',
                                             'target': target,
                                             'technology': 'DNS'
                                         }
                                         state.findings.append(finding)
+                                        findings_added += 1
                                         logger.info(f"🔍 Subdomain bulgusu eklendi: {subdomain_count} subdomain")
                                 
                                 # Endpoint var mı?
@@ -1641,6 +1618,7 @@ Detaylı rapor oluşturulurken teknik bir sorun oluştu. Tarama verileri kaydedi
                                             'technology': 'Web Application'
                                         }
                                         state.findings.append(finding)
+                                        findings_added += 1
                                         logger.info(f"🔍 Endpoint bulgusu eklendi: {endpoint_count} endpoint")
                                 
                                 # Form var mı?
@@ -1665,6 +1643,7 @@ Detaylı rapor oluşturulurken teknik bir sorun oluştu. Tarama verileri kaydedi
                                             'technology': 'Web Application'
                                         }
                                         state.findings.append(finding)
+                                        findings_added += 1
                                         logger.info(f"🔍 Form bulgusu eklendi: {form_count} form")
                         
                         # Success olmasa bile data varsa genel bulgu oluştur
@@ -1679,13 +1658,17 @@ Detaylı rapor oluşturulurken teknik bir sorun oluştu. Tarama verileri kaydedi
                                 'recommendation_summary': 'Tool sonuçlarını inceleyin',
                                 'business_impact': 'Bilgi toplama aşaması',
                                 'exploitability': 'Low',
-                            'target': target,
-                            'technology': 'Security Tool'
-                        }
-                        state.findings.append(finding)
-                        logger.info(f"🔍 Genel bulgu eklendi: {key}")
+                                'target': target,
+                                'technology': 'Security Tool'
+                            }
+                            state.findings.append(finding)
+                            findings_added += 1
+                            logger.info(f"🔍 Genel bulgu eklendi: {key}")
             
             # Bulgu yoksa bulgu yok - yapay bulgu üretme!
+            if findings_added == 0:
+                logger.debug("Scan results'tan hiç bulgu çıkarılamadı - Bu normal bir durum")
+                logger.info(f"✅ Detaylı analiz sonrası toplam bulgu: {len(state.findings)}")
         
         # all_findings'i güncelle - SADECE TOOL BULGULARI (CVE referansları risk skorunu çok artırmasın)
         all_findings = state.findings.copy() if hasattr(state, 'findings') and isinstance(state.findings, list) else []
