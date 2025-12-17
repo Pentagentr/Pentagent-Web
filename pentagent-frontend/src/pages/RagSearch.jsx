@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Search, AlertCircle, Shield, Calendar, ExternalLink } from 'lucide-react';
+import { Search, AlertCircle, Calendar, ExternalLink } from 'lucide-react';
 import AppNavbar from '../components/layout/AppNavbar';
 import Button from '../components/common/Button/Button';
 import Card from '../components/common/Card/Card';
@@ -18,24 +18,11 @@ const RagSearch = () => {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [stats, setStats] = useState(null);
   const [selectedCve, setSelectedCve] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [optimizedQuery, setOptimizedQuery] = useState(null);
 
-  // Sayfa yüklendiğinde stats al
-  useEffect(() => {
-    fetchStats();
-  }, []);
-
-  const fetchStats = async () => {
-    try {
-      const data = await pentagentAPI.getRagStats();
-      setStats(data.stats);
-    } catch (err) {
-      console.error('Stats yüklenemedi:', err);
-    }
-  };
+  useEffect(() => {}, []);
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -107,19 +94,7 @@ const RagSearch = () => {
               </p>
             </div>
             
-            {/* Stats */}
-            {stats?.available && (
-              <div className="flex items-center gap-3 text-xs">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500/10 border border-green-500/20 rounded-lg">
-                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                  <span className="text-green-400">Live</span>
-                </div>
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/10 border border-purple-500/20 rounded-lg">
-                  <Shield className="w-3.5 h-3.5 text-purple-400" />
-                  <span className="text-purple-300">{stats.total_cves?.toLocaleString()} CVE</span>
-                </div>
-              </div>
-            )}
+            {/* Stats removed (previously mock/incorrect) */}
           </div>
         </div>
 

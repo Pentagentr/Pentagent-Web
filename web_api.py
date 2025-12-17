@@ -34,11 +34,16 @@ app = FastAPI(title="Pentagent API", version="1.0.0")
 
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 if allowed_origins == ["*"]:
-
     allowed_origins = ["*"]
 else:
-
-    allowed_origins = [origin.strip() for origin in allowed_origins]
+    allowed_origins = [origin.strip() for origin in allowed_origins if origin.strip()]
+    required_origins = [
+        "https://pentagentr.com",
+        "https://www.pentagentr.com",
+    ]
+    for origin in required_origins:
+        if origin not in allowed_origins:
+            allowed_origins.append(origin)
 
 app.add_middleware(
     CORSMiddleware,
@@ -1149,6 +1154,46 @@ async def rag_search(request: Dict[str, Any]):
 
         results = _filter_cve_results(results, query_info)
         
+        if not results:
+            relaxed_query_info = dict(query_info or {})
+            relaxed_query_info["year"] = None
+            relaxed_query_info["exact_product_match"] = False
+            results = _filter_cve_results(
+                rag_service.search_cve(
+                    optimized_query,
+                    limit=limit * 4,
+                    severity=severity,
+                    use_reranker=True,
+                    query_info=relaxed_query_info
+                ),
+                relaxed_query_info
+            )
+        
+        if not results:
+            relaxed_query_info_2 = dict(query_info or {})
+            relaxed_query_info_2["year"] = None
+            relaxed_query_info_2["vendor"] = None
+            relaxed_query_info_2["negative_keywords"] = []
+            relaxed_query_info_2["exact_product_match"] = False
+            results = _filter_cve_results(
+                rag_service.search_cve(
+                    optimized_query,
+                    limit=limit * 5,
+                    severity=severity,
+                    use_reranker=True,
+                    query_info=relaxed_query_info_2
+                ),
+                relaxed_query_info_2
+            )
+        
+        if not results:
+            results = rag_service.search_cve(
+                optimized_query,
+                limit=limit,
+                severity=severity,
+                use_reranker=True,
+                query_info=query_info
+            )
 
         results = results[:limit]
         

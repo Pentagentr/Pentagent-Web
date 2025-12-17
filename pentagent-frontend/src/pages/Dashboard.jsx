@@ -1,117 +1,37 @@
 import React from 'react';
 import { 
-  Shield, 
-  Zap, 
-  AlertTriangle, 
-  TrendingUp,
-  Clock,
-  CheckCircle
+  Zap
 } from 'lucide-react';
 import {
   DashboardLayout,
-  StatsCard,
-  ActiveScansTable,
-  VulnerabilityChart, 
-  SecurityTrendChart,
-  AIRecommendations
 } from '../components/dashboard';
 import Button from '../components/common/Button';
 
 const Dashboard = () => {
-  // Mock data - would come from API/context in real implementation
-  const statsData = [
-    {
-      title: 'Active Scans',
-      value: 12,
-      subtitle: '3 completing soon',
-      icon: Zap,
-      trend: 'up',
-      trendValue: '+25%',
-      color: 'amber'
-    },
-    {
-      title: 'Vulnerabilities Found',
-      value: 247,
-      subtitle: 'Last 7 days',
-      icon: AlertTriangle,
-      trend: 'down',
-      trendValue: '-12%',
-      color: 'red'
-    },
-    {
-      title: 'Security Score',
-      value: '8.4/10',
-      subtitle: 'Excellent rating',
-      icon: Shield,
-      trend: 'up',
-      trendValue: '+0.3',
-      color: 'green'
-    },
-    {
-      title: 'Resolution Rate',
-      value: '94%',
-      subtitle: 'This month',
-      icon: CheckCircle,
-      trend: 'up',
-      trendValue: '+8%',
-      color: 'blue'
-    }
-  ];
-
-  const handleViewScan = (scanId) => {
-    console.log('Viewing scan:', scanId);
-    // Navigate to scan details
-  };
-
-  const handleControlScan = (scanId, action) => {
-    console.log('Scan control:', scanId, action);
-    // Handle scan control actions
-  };
-
   const handleStartNewScan = () => {
     console.log('Starting new scan');
     // Navigate to chat interface or scan setup
+    window.location.href = '/chat';
   };
 
   return (
     <DashboardLayout>
-      {/* Stats Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statsData.map((stat, index) => (
-          <StatsCard
-            key={index}
-            title={stat.title}
-            value={stat.value}
-            subtitle={stat.subtitle}
-            icon={stat.icon}
-            trend={stat.trend}
-            trendValue={stat.trendValue}
-            color={stat.color}
-            onClick={() => console.log(`Clicked ${stat.title}`)}
-          />
-        ))}
-      </div>
-
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Left Column - Active Scans */}
-        <div className="lg:col-span-2 space-y-8">
-          <ActiveScansTable 
-            onViewScan={handleViewScan}
-            onControlScan={handleControlScan}
-          />
-          
-          {/* Charts Row */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <VulnerabilityChart />
-            <SecurityTrendChart />
+      <div className="bg-obsidian-900 border border-obsidian-700 rounded-xl p-6">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-platinum-500/10 border border-platinum-500/20 flex items-center justify-center">
+              <Zap className="w-5 h-5 text-platinum-500" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-text-primary">Dashboard</h2>
+              <p className="text-sm text-text-tertiary">
+                Analytics widgets were removed because they were not backed by real data.
+              </p>
+            </div>
           </div>
-        </div>
-        
-        {/* Right Column - AI Recommendations */}
-        <div className="lg:col-span-1">
-          <AIRecommendations />
+          <Button onClick={handleStartNewScan} variant="primary">
+            Start new scan
+          </Button>
         </div>
       </div>
 
