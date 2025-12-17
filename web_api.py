@@ -583,42 +583,49 @@ async def optimize_rag_query(user_query: str) -> Dict[str, Any]:
 KULLANICI SORGUSU: "{user_query}"
 
 GÖREV:
-1. Kullanıcının sorgusunu CVE araması için OPTIMIZE ET
-2. Sorgudan YIL, ÜRÜN ADI, VENDOR, DOMAIN ve NEGATIVE KEYWORDS bilgilerini çıkar
+1. Kullanıcının sorgusunu CVE araması için OPTIMIZE ET - AMA TÜM ÖNEMLİ DETAYLARI KORU
+2. Sorgudan YIL, ÜRÜN ADI, VENDOR, DOMAIN ve NEGATIVE KEYWORDS bilgilerini çıkar (metadata için)
 3. Kesin eşleşme gerekip gerekmediğini belirle
 
-KURALLAR:
-1. KISA ve NET sorgu (max 5-7 kelime)
-2. YIL varsa MUTLAKA çıkar (örn: "2021", "2024") - CVE ID'den veya published date'ten
-3. ÜRÜN ADI varsa çıkar (örn: "Log4j", "WordPress", "Kubernetes", "Django")
-4. VENDOR varsa çıkar (örn: "Apache", "Microsoft", "TP-Link")
-5. DOMAIN belirle: container/kubernetes → "container", os/kernel → "os", cloud → "cloud", iot/router → "iot"
-6. LANGUAGE/ECOSYSTEM belirle:
-   - Django/Flask/FastAPI → "python"
-   - Spring/Dubbo → "java"
-   - ThinkPHP/Laravel → "php"
-   - React/Vue/Angular → "javascript"
-7. PICKLE QUERY tespiti:
-   - Eğer query'de "pickle" geçiyorsa → is_pickle_query: true
-   - Bu durumda sadece Python pickle CVE'leri kabul edilir
-8. NEGATIVE KEYWORDS: Benzer ama farklı ürünleri belirle
-   - Log4j → ["logback", "slf4j", "java.util.logging"]
-   - Kubernetes → ["windows kernel", "linux kernel"]
-   - Core → [".NET Core", "ASP.NET Core"] (eğer query'de "core" başka bir şeyse)
-9. Kesin eşleşme: Eğer spesifik ürün adı varsa (örn: "Apache Log4j"), sadece o ürüne ait CVE'ler isteniyor demektir
-10. Gereksiz kelimeleri kaldır ("nasıl", "neden", "ne", vb.)
-11. İngilizce terimleri tercih et
+KRİTİK KURALLAR - TÜM DETAYLARI KORU:
+1. ✅ YIL BİLGİSİNİ MUTLAKA KORU: Query'de yıl varsa (örn: "2021", "2024", "CVE-2021", "CVE-2024") MUTLAKA query string'inde tut
+2. ✅ VERSİYON NUMARALARINI KORU: Tüm versiyon numaralarını koru (örn: "2.4.49", "5.8.1", "1.18.0")
+3. ✅ KOD NUMARALARINI KORU: CVE ID'leri, bug numaraları, commit hash'leri koru
+4. ✅ TEKNİK DETAYLARI KORU: Ürün adları, vendor adları, protokol adları, teknoloji adları TAM OLARAK koru
+5. ✅ SPESİFİK BİLGİLERİ KORU: Path'ler, dosya adları, fonksiyon adları gibi spesifik bilgileri koru
+6. ❌ SADECE FİLLER KELİMELERİ KALDIR: "nasıl", "neden", "ne", "hakkında", "ile ilgili" gibi filler kelimeleri çıkar
+7. ❌ GENEL KELİMELERİ ÇIKARMA: "authentication", "authorization", "security" gibi kelimeler teknik bağlamda önemliyse KORU
 
-ÖRNEKLER:
-"Apache Log4j 2021" → query: "Apache Log4j", product: "Log4j", vendor: "Apache", year: 2021, exact_product_match: true, negative_keywords: ["logback", "slf4j"]
+METADATA ÇIKARMA (query'den bağımsız):
+- YIL varsa year field'ına ekle (örn: 2021, 2024)
+- ÜRÜN ADI varsa product field'ına ekle (örn: "Log4j", "WordPress", "Kubernetes", "Django")
+- VENDOR varsa vendor field'ına ekle (örn: "Apache", "Microsoft", "TP-Link")
+- DOMAIN belirle: container/kubernetes → "container", os/kernel → "os", cloud → "cloud", iot/router → "iot"
+- LANGUAGE/ECOSYSTEM belirle:
+  - Django/Flask/FastAPI → "python"
+  - Spring/Dubbo → "java"
+  - ThinkPHP/Laravel → "php"
+  - React/Vue/Angular → "javascript"
+- PICKLE QUERY tespiti:
+  - Eğer query'de "pickle" geçiyorsa → is_pickle_query: true
+  - Bu durumda sadece Python pickle CVE'leri kabul edilir
+- NEGATIVE KEYWORDS: Benzer ama farklı ürünleri belirle
+  - Log4j → ["logback", "slf4j", "java.util.logging"]
+  - Kubernetes → ["windows kernel", "linux kernel"]
+- Kesin eşleşme: Eğer spesifik ürün adı varsa (örn: "Apache Log4j"), sadece o ürüne ait CVE'ler isteniyor demektir
+
+ÖRNEKLER (DETAYLARI KORUYAN):
+"Apache Log4j 2021" → query: "Apache Log4j 2021", product: "Log4j", vendor: "Apache", year: 2021, exact_product_match: true
+"WordPress XSS 2024" → query: "WordPress XSS 2024", product: "WordPress", year: 2024, exact_product_match: true
+"Apache HTTP Server 2.4.49 path traversal" → query: "Apache HTTP Server 2.4.49 path traversal", product: "Apache HTTP Server", vendor: "Apache", exact_product_match: true
+"CVE-2021-44228" → query: "CVE-2021-44228", year: 2021, exact_product_match: false
 "TP-Link router authentication bypass" → query: "TP-Link router authentication bypass", vendor: "TP-Link", product: "router", exact_product_match: true, domain: "iot"
 "Kubernetes privilege escalation" → query: "Kubernetes privilege escalation", product: "Kubernetes", exact_product_match: true, domain: "container", negative_keywords: ["windows kernel", "linux kernel"]
-"WordPress XSS 2024" → query: "WordPress XSS", product: "WordPress", year: 2024, exact_product_match: true
 "SQL injection" → query: "SQL injection", exact_product_match: false
 
 JSON formatında döndür:
 {{
-    "query": "optimize edilmiş sorgu (genel kelimeler çıkarılmış)",
+    "query": "optimize edilmiş sorgu - TÜM ÖNEMLİ DETAYLAR KORUNMUŞ (yıl, versiyon, kod numaraları dahil)",
     "year": yıl sayısı veya null,
     "product": "ürün/protokol adı" veya null,
     "vendor": "vendor adı" veya null,
@@ -631,9 +638,10 @@ JSON formatında döndür:
 }}
 
 ÖNEMLİ:
-- "authentication", "authorization", "security" gibi genel kelimeleri query'den ÇIKAR
-- Sorguda geçmeyen vendor/product/domain keyword'lerini negative_keywords'a ekle
+- Query string'inde YIL, VERSİYON, KOD NUMARALARI gibi teknik detayları ASLA çıkarma
+- Sadece gerçekten gereksiz filler kelimeleri çıkar ("nasıl", "neden", "ne" gibi)
 - OAuth2 gibi protokoller için domain="web" ve negative_keywords=["Windows", "Kernel", "OLE"] olmalı
+- Query'yi kısaltmak için önemli bilgileri çıkarma - uzun olsa bile detayları koru
 }}"""
 
         response = await llm_model.generate_content_async(optimization_prompt)
@@ -694,15 +702,16 @@ JSON formatında döndür:
                 exact_match = parsed.get('exact_product_match', False)
                 
 
-                general_words = ['authentication', 'authorization', 'security', 'vulnerability', 'exploit']
-                query_words = optimized_query.lower().split()
-                optimized_query = ' '.join([w for w in query_words if w not in general_words])
+                filler_words = ['nasıl', 'neden', 'ne', 'hakkında', 'ile ilgili', 'how', 'why', 'what', 'about', 'regarding']
+                query_words = optimized_query.split()
+                optimized_query = ' '.join([w for w in query_words if w.lower() not in filler_words])
                 if not optimized_query.strip():
-                    optimized_query = user_query  # Eğer hepsi çıkarıldıysa orijinali kullan
+                    optimized_query = user_query
                 
 
-                if len(optimized_query) > 100:
-                    optimized_query = optimized_query[:100]
+                if len(optimized_query) > 300:
+                    logger.warning(f"Query çok uzun ({len(optimized_query)} karakter), kısaltılıyor ama önemli detaylar korunuyor")
+                    optimized_query = optimized_query[:300]
                 
                 result = {
                     'query': optimized_query,
@@ -725,8 +734,9 @@ JSON formatında döndür:
         
 
         optimized_query = response_text.strip('"\'` ')
-        if len(optimized_query) > 100:
-            optimized_query = optimized_query[:100]
+        if len(optimized_query) > 300:
+            logger.warning(f"Query çok uzun ({len(optimized_query)} karakter), kısaltılıyor ama önemli detaylar korunuyor")
+            optimized_query = optimized_query[:300]
         
 
         import re
@@ -740,9 +750,9 @@ JSON formatında döndür:
         fallback_is_pickle = False
         
 
-        general_words = ['authentication', 'authorization', 'security', 'vulnerability', 'exploit']
-        query_words = optimized_query.lower().split()
-        optimized_query_clean = ' '.join([w for w in query_words if w not in general_words])
+        filler_words = ['nasıl', 'neden', 'ne', 'hakkında', 'ile ilgili', 'how', 'why', 'what', 'about', 'regarding']
+        query_words = optimized_query.split()
+        optimized_query_clean = ' '.join([w for w in query_words if w.lower() not in filler_words])
         if optimized_query_clean.strip():
             optimized_query = optimized_query_clean
         

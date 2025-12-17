@@ -766,18 +766,21 @@ class RAGService:
 🔍 DETAYLI ANALİZ GÖREVİN:
 1. **TEKNOLOJİ TESPİTİ**: Hangi yazılımlar, versiyonlar, servisler tespit edildi?
 2. **GÜVENLİK AÇIKLARI**: Hangi zafiyetler, misconfigurations, vulnerabilities bulundu?
-3. **ATTACK VECTOR'LER**: Hangi saldırı yolları ortaya çıktı?
-4. **KRİTİK BULGULAR**: En önemli güvenlik riskleri neler?
+3. **KRİTİK BULGULAR**: En önemli güvenlik riskleri neler?
 
-🎯 SPESİFİK QUERY OLUŞTURMA KURALLARI:
-- MUTLAKA tespit edilen teknoloji ve versiyonu kullan
-- Eğer versiyon yoksa, teknoloji adını + zafiyet türünü kullan
-- Tespit edilen zafiyet türünü belirt (XSS, SQLi, LFI, RCE, vb.)
-- CVE veritabanında bulunabilir format kullan
-- Max 150 karakter, ÖZLÜ ama DETAYLI
+🎯 SPESİFİK QUERY OLUŞTURMA KURALLARI - TÜM DETAYLARI KORU:
+- ✅ MUTLAKA tespit edilen teknoloji ve versiyonu kullan - VERSİYON NUMARALARINI ASLA ÇIKARMA
+- ✅ Eğer versiyon yoksa, teknoloji adını + zafiyet türünü kullan
+- ✅ Tespit edilen zafiyet türünü belirt (XSS, SQLi, LFI, RCE, vb.)
+- ✅ CVE veritabanında bulunabilir format kullan
+- ✅ YIL BİLGİSİ VARSA MUTLAKA QUERY'DE TUT (CVE-2021, 2024, vb.) - YILI ASLA KALDIRMA!
+- ✅ KOD NUMARALARINI KORU: CVE ID'leri, bug numaraları, commit hash'leri koru
+- ✅ PATH'LERİ VE DOSYA ADLARINI KORU: Spesifik path'ler ve dosya adları varsa koru
+- ✅ TEKNİK DETAYLARI KORU: Ürün adları, vendor adları, protokol adları TAM OLARAK koru
+- ❌ SADECE FİLLER KELİMELERİ KALDIR: "nasıl", "neden", "ne", "hakkında" gibi filler kelimeleri çıkar
 - SADECE query string döndür, açıklama YAPMA
 - Teknoloji adını tam olarak yaz (kısaltma kullanma)
-- YIL BİLGİSİ VARSA MUTLAKA QUERY'DE TUT (CVE-2021, 2024, vb.) - YILI KALDIRMA!
+- Uzun olsa bile önemli detayları koru - karakter limiti yok, detaylar öncelikli
 
 💡 SPESİFİK QUERY ÖRNEKLERİ (İYİ):
 - "Apache HTTP Server 2.4.49 path traversal directory listing CVE-2021"
