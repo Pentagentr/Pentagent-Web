@@ -582,10 +582,30 @@ async def optimize_rag_query(user_query: str) -> Dict[str, Any]:
 
 KULLANICI SORGUSU: "{user_query}"
 
-GÖREV:
-1. Kullanıcının sorgusunu CVE araması için OPTIMIZE ET - AMA TÜM ÖNEMLİ DETAYLARI KORU
-2. Sorgudan YIL, ÜRÜN ADI, VENDOR, DOMAIN ve NEGATIVE KEYWORDS bilgilerini çıkar (metadata için)
-3. Kesin eşleşme gerekip gerekmediğini belirle
+ANA GÖREV: Normal/günlük dildeki sorguyu TEKNİK SİBER GÜVENLİK JARGONU sorgusuna çevir!
+
+GÖREV ADIMLARI:
+1. ✅ NORMAL DİLİ TEKNİK JARGONA ÇEVİR:
+   - "WordPress güvenlik açığı" → "WordPress vulnerability CVE"
+   - "Log4j sorunu" → "Apache Log4j remote code execution CVE"
+   - "SQL injection hatası" → "SQL injection vulnerability CVE"
+   - "XSS açığı" → "cross-site scripting XSS vulnerability CVE"
+   - "authentication bypass" → "authentication bypass vulnerability CVE"
+   - Genel terimleri teknik terimlere çevir: "güvenlik açığı" → "vulnerability", "sorun" → "vulnerability CVE", "hata" → "security vulnerability"
+   
+2. ✅ TÜM ÖNEMLİ DETAYLARI KORU:
+   - YIL bilgisini koru (2021, 2024, CVE-2021, vb.)
+   - Versiyon numaralarını koru (2.4.49, 5.8.1, vb.)
+   - Kod numaralarını koru (CVE ID'leri, bug numaraları)
+   - Teknik detayları koru (ürün adları, vendor adları, protokol adları)
+   - Spesifik bilgileri koru (path'ler, dosya adları, fonksiyon adları)
+   
+3. ✅ METADATA ÇIKARMA (query'den bağımsız):
+   - YIL varsa year field'ına ekle
+   - ÜRÜN ADI varsa product field'ına ekle
+   - VENDOR varsa vendor field'ına ekle
+   - DOMAIN, LANGUAGE, PROTOCOL_TYPE belirle
+   - NEGATIVE KEYWORDS ve kesin eşleşme gereksinimini belirle
 
 KRİTİK KURALLAR - TÜM DETAYLARI KORU:
 1. ✅ YIL BİLGİSİNİ MUTLAKA KORU: Query'de yıl varsa (örn: "2021", "2024", "CVE-2021", "CVE-2024") MUTLAKA query string'inde tut
@@ -614,14 +634,17 @@ METADATA ÇIKARMA (query'den bağımsız):
   - Kubernetes → ["windows kernel", "linux kernel"]
 - Kesin eşleşme: Eğer spesifik ürün adı varsa (örn: "Apache Log4j"), sadece o ürüne ait CVE'ler isteniyor demektir
 
-ÖRNEKLER (DETAYLARI KORUYAN):
-"Apache Log4j 2021" → query: "Apache Log4j 2021", product: "Log4j", vendor: "Apache", year: 2021, exact_product_match: true
-"WordPress XSS 2024" → query: "WordPress XSS 2024", product: "WordPress", year: 2024, exact_product_match: true
-"Apache HTTP Server 2.4.49 path traversal" → query: "Apache HTTP Server 2.4.49 path traversal", product: "Apache HTTP Server", vendor: "Apache", exact_product_match: true
+ÖRNEKLER - NORMAL DİL → TEKNİK JARGON:
+"WordPress güvenlik açığı" → query: "WordPress vulnerability CVE", product: "WordPress", exact_product_match: true
+"Log4j sorunu 2021" → query: "Apache Log4j remote code execution vulnerability CVE 2021", product: "Log4j", vendor: "Apache", year: 2021, exact_product_match: true
+"SQL injection hatası" → query: "SQL injection vulnerability CVE", exact_product_match: false
+"XSS açığı" → query: "cross-site scripting XSS vulnerability CVE", exact_product_match: false
+"WordPress XSS 2024" → query: "WordPress cross-site scripting XSS vulnerability CVE 2024", product: "WordPress", year: 2024, exact_product_match: true
+"Apache HTTP Server 2.4.49 path traversal" → query: "Apache HTTP Server 2.4.49 path traversal vulnerability CVE", product: "Apache HTTP Server", vendor: "Apache", exact_product_match: true
 "CVE-2021-44228" → query: "CVE-2021-44228", year: 2021, exact_product_match: false
-"TP-Link router authentication bypass" → query: "TP-Link router authentication bypass", vendor: "TP-Link", product: "router", exact_product_match: true, domain: "iot"
-"Kubernetes privilege escalation" → query: "Kubernetes privilege escalation", product: "Kubernetes", exact_product_match: true, domain: "container", negative_keywords: ["windows kernel", "linux kernel"]
-"SQL injection" → query: "SQL injection", exact_product_match: false
+"TP-Link router authentication bypass" → query: "TP-Link router authentication bypass vulnerability CVE", vendor: "TP-Link", product: "router", exact_product_match: true, domain: "iot"
+"Kubernetes privilege escalation" → query: "Kubernetes privilege escalation vulnerability CVE", product: "Kubernetes", exact_product_match: true, domain: "container", negative_keywords: ["windows kernel", "linux kernel"]
+"SQL injection" → query: "SQL injection vulnerability CVE", exact_product_match: false
 
 JSON formatında döndür:
 {{
@@ -637,11 +660,15 @@ JSON formatında döndür:
     "exact_product_match": true/false
 }}
 
-ÖNEMLİ:
-- Query string'inde YIL, VERSİYON, KOD NUMARALARI gibi teknik detayları ASLA çıkarma
-- Sadece gerçekten gereksiz filler kelimeleri çıkar ("nasıl", "neden", "ne" gibi)
-- OAuth2 gibi protokoller için domain="web" ve negative_keywords=["Windows", "Kernel", "OLE"] olmalı
-- Query'yi kısaltmak için önemli bilgileri çıkarma - uzun olsa bile detayları koru
+KRİTİK KURALLAR:
+- ✅ NORMAL DİLİ TEKNİK JARGONA ÇEVİR: "güvenlik açığı", "sorun", "hata" → "vulnerability CVE"
+- ✅ CVE VERİTABANI İÇİN OPTİMİZE ET: Query'nin sonuna "CVE" veya "vulnerability CVE" ekle (eğer yoksa)
+- ✅ Query string'inde YIL, VERSİYON, KOD NUMARALARI gibi teknik detayları ASLA çıkarma
+- ✅ Sadece gerçekten gereksiz filler kelimeleri çıkar ("nasıl", "neden", "ne", "hakkında" gibi)
+- ✅ OAuth2 gibi protokoller için domain="web" ve negative_keywords=["Windows", "Kernel", "OLE"] olmalı
+- ✅ Query'yi kısaltmak için önemli bilgileri çıkarma - uzun olsa bile detayları koru
+- ✅ Teknik terimleri İngilizce'ye çevir: "güvenlik açığı" → "vulnerability", "sorun" → "vulnerability"
+- ✅ CVE veritabanında arama yapılacağı için query'nin teknik ve spesifik olması ŞART
 }}"""
 
         response = await llm_model.generate_content_async(optimization_prompt)
@@ -708,6 +735,12 @@ JSON formatında döndür:
                 if not optimized_query.strip():
                     optimized_query = user_query
                 
+                
+                query_lower_check = optimized_query.lower()
+                if 'cve' not in query_lower_check and 'vulnerability' not in query_lower_check:
+                    if not any(word in query_lower_check for word in ['exploit', 'attack', 'bypass', 'injection', 'xss', 'rce', 'lfi', 'rfi', 'cve-']):
+                        optimized_query = f"{optimized_query} vulnerability CVE"
+                
 
                 if len(optimized_query) > 300:
                     logger.warning(f"Query çok uzun ({len(optimized_query)} karakter), kısaltılıyor ama önemli detaylar korunuyor")
@@ -755,6 +788,26 @@ JSON formatında döndür:
         optimized_query_clean = ' '.join([w for w in query_words if w.lower() not in filler_words])
         if optimized_query_clean.strip():
             optimized_query = optimized_query_clean
+        
+        
+        query_lower_clean = optimized_query.lower()
+        if 'cve' not in query_lower_clean and 'vulnerability' not in query_lower_clean:
+            turkish_to_tech = {
+                'güvenlik açığı': 'vulnerability CVE',
+                'güvenlik sorunu': 'security vulnerability CVE',
+                'sorun': 'vulnerability CVE',
+                'hata': 'security vulnerability CVE',
+                'açık': 'vulnerability CVE',
+                'zafiyet': 'vulnerability CVE'
+            }
+            
+            for turkish, tech in turkish_to_tech.items():
+                if turkish in query_lower_clean:
+                    optimized_query = f"{optimized_query} vulnerability CVE"
+                    break
+            else:
+                if not any(word in query_lower_clean for word in ['exploit', 'attack', 'bypass', 'injection', 'xss', 'rce', 'lfi', 'rfi']):
+                    optimized_query = f"{optimized_query} vulnerability CVE"
         
 
         year_match = re.search(r'\b(19|20)\d{2}\b', user_query)
